@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { Request, Response, RequestHandler, Router } from 'express';
 import { PoolClient } from 'pg';
 import { z } from 'zod';
-import { HttpError, withUser } from './core.js';
+import type { AuthUser } from './auth-types.js';
+import { HttpError } from './http-error.js';
 import { InsuranceJournalLineInput, validateInsuranceJournalLines } from './insurance-ledger-validation.js';
 
-export const insuranceLedgerRouter = Router();
+type WithUser = <T>(user: AuthUser, fn: (client: PoolClient) => Promise<T>) => Promise<T>;
+export function createInsuranceLedgerRouter(withUser: WithUser) {
+  const insuranceLedgerRouter = Router();
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { fn(req, res).catch(next); };
@@ -252,3 +255,6 @@ insuranceLedgerRouter.post('/journals/:journalId/reversal', h(async (req, res) =
   });
   res.status(created.replayed ? 200 : 201).json(created);
 }));
+
+  return insuranceLedgerRouter;
+}

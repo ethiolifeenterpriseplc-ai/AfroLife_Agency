@@ -2,13 +2,11 @@ import pg from 'pg';
 import type { PoolClient } from 'pg';
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
+import type { AuthUser } from './auth-types.js';
+import { HttpError } from './http-error.js';
+export { HttpError } from './http-error.js';
 
-export interface AuthUser { id: string; role: string; rst?: string }
-declare global { namespace Express { interface Request { user?: AuthUser } } }
-
-export class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
-}
+export type { AuthUser } from './auth-types.js';
 
 pg.types.setTypeParser(1082, (v: string) => v); // keep DATE columns as 'YYYY-MM-DD' text (no timezone shifts)
 export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });

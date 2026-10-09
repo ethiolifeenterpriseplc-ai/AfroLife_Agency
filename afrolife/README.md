@@ -113,6 +113,30 @@ enrollment, collection, claims, or regulatory-approval workflow. Do not record
 real insurance activity until the insurer, products, accounting policy,
 authorization matrix, and operating controls have been approved.
 
+### Independent service deployment
+
+The insurance ledger can be deployed independently while the existing AfroLife
+API remains the identity authority and backward-compatible gateway. With
+`INSURANCE_SERVICE_URL` unset, requests continue to use the in-process ledger.
+To cut over, deploy the `services/insurance-ledger` container behind a private
+network, provision a dedicated empty PostgreSQL database and restricted
+runtime/migration roles, apply its schema with
+`INSURANCE_MIGRATION_DATABASE_URL`, `INSURANCE_RUNTIME_DB_ROLE`, and
+`npm run migrate:insurance`, then configure the gateway with the service URL
+and the same randomly generated `INSURANCE_GATEWAY_SECRET` used by the service.
+The gateway signs each authenticated identity and request; the service rejects
+unsigned, modified, or expired assertions. Keep the service private and use
+TLS between network boundaries.
+
+Build the container from the `afrolife/` directory with
+`docker build -f services/insurance-ledger/Dockerfile -t afrolife-insurance-ledger .`.
+The service uses `INSURANCE_DATABASE_URL` for runtime access; the migration
+connection and runtime role must be distinct, and the runtime role must neither
+own its RLS-protected tables nor have superuser or `BYPASSRLS` privileges. The
+service schema stores actor UUIDs as opaque identities and does not copy central
+user records into its database. Do not point the service at the legacy shared
+database if a database-per-service boundary is intended.
+
 ## Android app
 
 The Android app wraps the existing `public/` web UI with Capacitor. From this project directory:

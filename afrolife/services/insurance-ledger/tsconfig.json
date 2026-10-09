@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "../..",
+    "outDir": "../../dist",
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": [
+    "*.ts",
+    "../../src/auth-types.ts",
+    "../../src/env.ts",
+    "../../src/http-error.ts",
+    "../../src/insurance-ledger.ts",
+    "../../src/insurance-ledger-validation.ts",
+    "../../src/insurance-service-gateway.ts"
+  ]
+}

@@ -12,7 +12,8 @@ import { createApiRateLimiter } from './rate-limit-store.js';
 import { audit, feeSnapshot, loadRules, post, transition } from './domain.js';
 import { supply } from './supply.js';
 import { mfiRouter } from './mfi.js';
-import { insuranceLedgerRouter } from './insurance-ledger.js';
+import { createInsuranceLedgerRouter } from './insurance-ledger.js';
+import { createInsuranceServiceGateway } from './insurance-service-gateway.js';
 import { loginRouter, adminRouter } from './admin.js';
 import { ops } from './ops.js';
 import { notify } from './notify.js';
@@ -81,7 +82,12 @@ api.get('/features', (_req, res) => res.json({ mfiPilotEnabled: runtimeConfig.mf
 api.use(adminRouter);
 api.use(ops);
 api.use(supply);
-api.use('/insurance/ledger', insuranceLedgerRouter);
+api.use('/insurance/ledger', process.env.INSURANCE_SERVICE_URL
+  ? createInsuranceServiceGateway({
+    baseUrl: process.env.INSURANCE_SERVICE_URL,
+    secret: process.env.INSURANCE_GATEWAY_SECRET ?? '',
+  })
+  : createInsuranceLedgerRouter(withUser));
 if (runtimeConfig.mfiPilotEnabled) {
   if (runtimeConfig.isProduction) console.warn('SACCO/MFI pilot is enabled; do not use for public deposits or regulated lending');
   api.use('/mfi', mfiRouter);
