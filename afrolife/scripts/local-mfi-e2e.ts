@@ -1,0 +1,235 @@
+import '../src/env.js';
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import pg from 'pg';
+
+const lines = readFileSync(`${process.env.LOCALAPPDATA}/AfroLife/local-test-users.txt`, 'utf8').split(/\r?\n/);
+const credentials = new Map<string, { phone: string; password: string }>();
+for (const line of lines) {
+  const match = line.match(/^([^|]+?)\s*\|\s*(\+\d+)\s*\|\s*(.+)$/);
+  if (match) credentials.set(match[1].trim(), { phone: match[2], password: match[3] });
+}
+const apiBase = new URL(process.env.API_URL ?? 'http://127.0.0.1:3000');
+assert.ok(['127.0.0.1','localhost','::1'].includes(apiBase.hostname) && apiBase.port === '3000', 'Local SACCO E2E refuses non-local API hosts');
+const fixtureDbUrl = new URL(process.env.MIGRATION_DATABASE_URL ?? '');
+assert.ok(['127.0.0.1','localhost','::1'].includes(fixtureDbUrl.hostname) && fixtureDbUrl.port === '5433'
+  && fixtureDbUrl.pathname === '/afrolife', 'Local SACCO E2E refuses non-local fixture databases');
+const api = `${apiBase.origin}/api/v1`;
+async function login(role: string) {
+  const account = credentials.get(role);
+  assert.ok(account, `Missing local ${role} credentials`);
+  const response = await fetch(`${api}/auth/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(account),
+  });
+  const result = await response.json() as { token?: string; error?: string };
+  assert.equal(response.status, 200, `${role} login: ${JSON.stringify(result)}`);
+  return { token: result.token! };
+}
+async function call<T = any>(user: { token: string }, method: string, path: string, body?: unknown, expected = 200): Promise<T> {
+  const response = await fetch(api + path, {
+    method,
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${user.token}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null) as any;
+  assert.equal(response.status, expected, `${method} ${path}: expected ${expected}, got ${response.status}: ${JSON.stringify(result)}`);
+  return result as T;
+}
+
+const admin = await login('super_admin');
+const admin2 = await login('super_admin (second account for four-eyes review)');
+const teller = await login('finance');
+const creditManager = await login('finance_manager');
+const compliance = await login('compliance');
+const feature = await call<{ mfiPilotEnabled: boolean }>(admin, 'GET', '/features');
+assert.equal(feature.mfiPilotEnabled, true);
+
+const suffix = Date.now().toString().slice(-7);
+const institution = await call<{ id: string; institution_code: string }>(admin, 'POST', '/mfi/institutions', {
+  institution_code: `QA${suffix}`, name: `Local SACCO E2E ${suffix}`,
+}, 201);
+const otherInstitution = await call<{ id: string; institution_code: string }>(admin2, 'POST', '/mfi/institutions', {
+  institution_code: `QB${suffix}`, name: `Other Local SACCO E2E ${suffix}`,
+}, 201);
+const base = `/mfi/institutions/${institution.id}`;
+const policy = {
+  scorecard: { minimum_score: 55, maximum_debt_service_pct: 40, savings_coverage_target_pct: 20,
+    membership_tenure_target_days: 365, new_borrower_score: 50,
+    weights: { affordability: 40, savings: 20, tenure: 20, repayment_history: 20 } },
+  delinquency: { watch_days: 1, substandard_days: 91, doubtful_days: 181, loss_days: 366 },
+};
+const policyDraft = await call<{ id: string }>(admin, 'POST', `${base}/credit-policy`, {
+  policy, change_reason: 'Initial local QA credit and delinquency policy',
+}, 201);
+await call(admin, 'POST', `${base}/credit-policy/${policyDraft.id}/approve`, {
+  decision: 'approve', reason: 'Independent local QA policy approval',
+}, 409);
+await call(admin2, 'POST', `${base}/credit-policy/${policyDraft.id}/approve`, {
+  decision: 'approve', reason: 'Independent local QA policy approval',
+}, 200);
+const platformInstitutions = await call<Array<{ id: string; role: string }>>(admin, 'GET', '/mfi/institutions');
+assert.equal(platformInstitutions.find((item) => item.id === otherInstitution.id)?.role, 'platform_super_admin');
+await call(admin, 'GET', `/mfi/institutions/${otherInstitution.id}/staff`, undefined, 200);
+await call(admin, 'POST', `${base}/staff`, { phone: credentials.get('finance')!.phone, role: 'teller' }, 201);
+await call(admin, 'POST', `${base}/staff`, { phone: credentials.get('finance_manager')!.phone, role: 'credit_manager' }, 201);
+await call(admin, 'GET', `${base}/staff`, undefined, 200);
+await call(creditManager, 'GET', `${base}/staff`, undefined, 403);
+await call(creditManager, 'POST', `${base}/credit-policy`, {
+  policy, change_reason: 'Non-administrator policy change must be rejected',
+}, 403);
+await call(admin, 'POST', `${base}/staff`, { phone: credentials.get('super_admin (second account for four-eyes review)')!.phone, role: 'finance_manager' }, 201);
+await call(admin, 'POST', `${base}/staff`, { phone: credentials.get('compliance')!.phone, role: 'compliance' }, 201);
+await call(teller, 'GET', `${base}/staff`, undefined, 403);
+await call(creditManager, 'GET', `${base}/staff`, undefined, 403);
+await call(admin, 'GET', `/mfi/institutions/${otherInstitution.id}/overview`, undefined, 200);
+await call(teller, 'GET', `/mfi/institutions/${otherInstitution.id}/overview`, undefined, 404);
+await call(admin2, 'GET', `/mfi/institutions/${otherInstitution.id}/overview`, undefined, 200);
+
+const member = await call<{ id: string; phone: string }>(admin, 'POST', `${base}/members`, {
+  full_name: `QA Member ${suffix}`, phone: `+2519${suffix}1`,
+}, 201);
+await call(admin, 'POST', `${base}/members/${member.id}/review`, {
+  decision: 'activate', reason: 'Self approval must be rejected',
+}, 409);
+const active = await call<{ status: string }>(compliance, 'POST', `${base}/members/${member.id}/review`, {
+  decision: 'activate', reason: 'QA member review completed',
+});
+assert.equal(active.status, 'active');
+await call(admin2, 'POST', `${base}/members/${member.id}/lifecycle`, {
+  action: 'suspend', reason: 'Temporary QA suspension for lifecycle controls',
+}, 200);
+const reactivated = await call<{ status: string }>(admin2, 'POST', `${base}/members/${member.id}/lifecycle`, {
+  action: 'reactivate', reason: 'Restore QA member after lifecycle suspension',
+}, 200);
+assert.equal(reactivated.status, 'active');
+const tellerMembers = await call<Array<{ id: string; phone?: string; email?: string | null }>>(teller, 'GET', `${base}/members`);
+assert.equal(tellerMembers.find((item) => item.id === member.id)?.phone, undefined);
+assert.equal(tellerMembers.find((item) => item.id === member.id)?.email, undefined);
+const servicingMembers = await call<Array<{ id: string; phone: string }>>(admin, 'GET', `${base}/members`);
+assert.equal(servicingMembers.find((item) => item.id === member.id)?.phone, member.phone);
+
+const products = await call<Array<{ id: string; product_code: string }>>(admin, 'GET', `${base}/products`);
+const savings = products.find((item) => item.product_code === 'SAV-ORD')!;
+const loanProduct = products.find((item) => item.product_code === 'LON-GEN')!;
+assert.ok(savings && loanProduct);
+const account = await call<{ id: string }>(admin, 'POST', `${base}/members/${member.id}/accounts`, { product_id: savings.id }, 201);
+const depositKey = randomUUID();
+await call(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
+  transaction_type: 'savings_deposit', amount: '5000.00', idempotency_key: depositKey,
+}, 201);
+const replay = await call<{ replayed: boolean }>(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
+  transaction_type: 'savings_deposit', amount: '5000.00', idempotency_key: depositKey,
+});
+assert.equal(replay.replayed, true);
+await call(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
+  transaction_type: 'savings_deposit', amount: '6000.00', idempotency_key: depositKey,
+}, 409);
+const withdrawal = await call<{ id: string }>(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
+  transaction_type: 'savings_withdrawal', amount: '100.00', idempotency_key: randomUUID(),
+}, 201);
+await call(admin, 'POST', `${base}/journals/${withdrawal.id}/reverse`, {
+  idempotency_key: randomUUID(), reason: 'Reverse QA withdrawal transaction',
+}, 201);
+
+const loan = await call<{ id: string }>(admin, 'POST', `${base}/loans`, {
+  member_id: member.id, product_id: loanProduct.id, principal_amount: '1000.00', term_months: 6,
+  purpose: 'Working capital for a small local shop', monthly_income: '10000.00', monthly_expenses: '1000.00', monthly_debt: '0.00',
+}, 201);
+const tellerLoanView = await call<Array<{ id: string; monthly_income: string | null; credit_score_factors: unknown }>>(teller, 'GET', `${base}/loans`);
+assert.equal(tellerLoanView.find((item) => item.id === loan.id)?.monthly_income, null);
+assert.equal(tellerLoanView.find((item) => item.id === loan.id)?.credit_score_factors, null);
+const creditLoanView = await call<Array<{ id: string; monthly_income: string | null; credit_score_factors: unknown }>>(creditManager, 'GET', `${base}/loans`);
+assert.equal(Number(creditLoanView.find((item) => item.id === loan.id)?.monthly_income), 10000);
+await call(admin, 'POST', `${base}/loans/${loan.id}/decision`, {
+  decision: 'approve', reason: 'Self approval must be rejected',
+}, 409);
+await call(creditManager, 'POST', `${base}/loans/${loan.id}/decision`, {
+  decision: 'approve', reason: 'Independent QA credit approval',
+});
+const disbursement = await call<{ account: { account_type: string } }>(admin2, 'POST', `${base}/loans/${loan.id}/disburse`, {
+  idempotency_key: randomUUID(),
+}, 201);
+assert.equal(disbursement.account.account_type, 'loan');
+const installments = await call<Array<{ id: string; status: string; principal_due: string }>>(admin, 'GET', `${base}/loans/${loan.id}/installments`);
+assert.equal(installments.length, 6);
+assert.equal(installments.reduce((sum, row) => sum + Math.round(Number(row.principal_due) * 100), 0), 100000);
+const partialRepayment = await call<{ id: string }>(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
+  amount: '100.00', idempotency_key: randomUUID(),
+}, 201);
+await call(admin, 'POST', `${base}/journals/${partialRepayment.id}/reverse`, {
+  idempotency_key: randomUUID(), reason: 'Reverse QA partial loan repayment',
+}, 201);
+const afterRepaymentReversal = await call<Array<{ id: string; status: string; principal_repaid: string }>>(admin, 'GET', `${base}/loans`);
+assert.equal(afterRepaymentReversal.find((item) => item.id === loan.id)?.status, 'disbursed');
+assert.equal(Number(afterRepaymentReversal.find((item) => item.id === loan.id)?.principal_repaid), 0);
+const scheduleAfterReversal = await call<Array<{ status: string; principal_paid: string }>>(admin, 'GET', `${base}/loans/${loan.id}/installments`);
+assert.equal(scheduleAfterReversal.every((row) => row.status === 'due' && Number(row.principal_paid) === 0), true);
+const fixturePool = new pg.Pool({ connectionString: fixtureDbUrl.toString() });
+await fixturePool.query(
+  `UPDATE mfi_loan_installments SET due_on=current_date-100
+   WHERE institution_id=$1 AND loan_id=$2 AND installment_no=1`, [institution.id, loan.id],
+);
+await fixturePool.end();
+await call(compliance, 'POST', `${base}/loans/${loan.id}/npl-classification`, {
+  status: 'watch', reason: 'The 100 day QA delinquency requires a stronger classification',
+}, 409);
+const nplProposal = await call<{ id: string; status: string }>(compliance, 'POST', `${base}/loans/${loan.id}/npl-classification`, {
+  status: 'substandard', reason: 'The 100 day QA delinquency meets the policy substandard band',
+}, 201);
+assert.equal(nplProposal.status, 'pending_approval');
+await call(admin2, 'POST', `${base}/npl-events/${nplProposal.id}/decision`, {
+  decision: 'approve', reason: 'The loan disburser must not approve the risk classification',
+}, 409);
+await call(creditManager, 'POST', `${base}/npl-events/${nplProposal.id}/decision`, {
+  decision: 'approve', reason: 'Independent QA risk classification approval',
+}, 200);
+const riskEvents = await call<Array<{ status: string; next_status: string }>>(admin, 'GET', `${base}/npl-events`);
+assert.equal(riskEvents.find((row) => row.id === nplProposal.id)?.status, 'approved');
+const collection = await call<{ id: string }>(admin, 'POST', `${base}/loans/${loan.id}/collections`, {
+  reason: 'Open a local QA servicing case to verify follow-up workflow',
+}, 201);
+await call(admin, 'POST', `${base}/collections/${collection.id}/events`, {
+  event_type: 'promise_to_pay', outcome: 'Member confirmed a proposed payment date for local QA',
+  promised_amount: '100.00', promised_on: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10),
+}, 201);
+const collectionList = await call<Array<{ id: string; status: string; events: unknown[] }>>(admin, 'GET', `${base}/collections`);
+assert.equal(collectionList.find((row) => row.id === collection.id)?.status, 'promise_to_pay');
+assert.equal(collectionList.find((row) => row.id === collection.id)?.events.length, 2);
+await call(admin2, 'POST', `${base}/collections/${collection.id}/close`, {
+  status: 'resolved', reason: 'Resolve local QA case before closing repayment test',
+}, 200);
+await call(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
+  amount: '1000.00', idempotency_key: randomUUID(),
+}, 201);
+await call(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
+  amount: '0.01', idempotency_key: randomUUID(),
+}, 409);
+
+const loans = await call<Array<{ id: string; status: string }>>(admin, 'GET', `${base}/loans`);
+assert.equal(loans.find((item) => item.id === loan.id)?.status, 'repaid');
+const journals = await call<Array<{ lines: Array<{ debit: string; credit: string }> }>>(admin, 'GET', `${base}/transactions`);
+assert.ok(journals.length >= 5);
+for (const journal of journals) {
+  const debit = journal.lines.reduce((sum, line) => sum + Number(line.debit), 0);
+  const credit = journal.lines.reduce((sum, line) => sum + Number(line.credit), 0);
+  assert.equal(debit, credit, 'Every posted journal must balance');
+}
+const audit = await call<unknown[]>(compliance, 'GET', `${base}/audit`);
+assert.ok(audit.length >= 8);
+const overview = await call<{ members: Record<string, number>; cash_balance: string }>(admin, 'GET', `${base}/overview`);
+assert.equal(overview.members.active, 1);
+assert.equal(Number(overview.cash_balance), 5000);
+
+console.log(JSON.stringify({
+  result: 'PASS', feature_flag: feature.mfiPilotEnabled, institution_code: institution.institution_code,
+  member_status: active.status, savings_balance: '5000.00', loan_status: loans.find((item) => item.id === loan.id)?.status,
+  balanced_journals: journals.length, audit_events: audit.length,
+  verified: ['institution and staff setup', 'separate member review', 'savings deposit and idempotency',
+    'withdrawal and four-eyes reversal', 'loan application, independent approval and disbursement',
+    'credit policy maker-checker, affordability scoring, and role-based personal/financial-data visibility', 'principal-only origination schedule',
+    'partial repayment reversal and principal balance recalculation', 'policy-threshold NPL classification and independent approval',
+    'collection promise and resolution lifecycle',
+    'principal repayment and overpayment rejection', 'balanced ledger and audit trail',
+    'institution tenant isolation', 'role authorization', 'administrator-only staff and credit-policy configuration'],
+}, null, 2));

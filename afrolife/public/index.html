@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#102b27">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="description" content="AfroLife agency, marketplace, workforce, and SACCO/MFI operations">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/styles.css">
+    <title>AfroLife Super App | AfroLife Agency</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency">
+        <img src="/icon.svg" alt="" width="38" height="38">
+        <span>አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency<small>AGENCY · FINANCIAL SERVICES</small></span>
+      </a>
+      <label class="language-picker">
+        <span class="visually-hidden">Language</span>
+        <select id="language-select" aria-label="Language">
+          <option value="en">English</option>
+          <option value="am">አማርኛ</option>
+          <option value="om">Afaan Oromoo</option>
+          <option value="ti">ትግርኛ</option>
+          <option value="so">Soomaali</option>
+          <option value="ar">العربية</option>
+          <option value="sw">Kiswahili</option>
+        </select>
+      </label>
+      <button id="install-app" class="button button-outline install-app" type="button" hidden>Install app</button>
+      <div id="account-tools" class="account-tools" hidden>
+        <span id="account-name" class="account-name"></span>
+        <button id="logout" class="button button-quiet" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section id="login-view" class="login-layout">
+        <div class="welcome-panel">
+          <p class="eyebrow">PEOPLE · SERVICES · OPPORTUNITY</p>
+          <h1>One trusted place to get work moving.</h1>
+          <p>Coordinate leads, verified workers and service requests with clear ownership at every step.</p>
+          <div class="trust-points">
+            <span><i></i> Verified workforce</span>
+            <span><i></i> Accountable agent network</span>
+            <span><i></i> Central matching oversight</span>
+          </div>
+          <section class="member-benefits" aria-labelledby="member-benefits-title">
+            <p class="eyebrow">WORKER &amp; COMMUNITY BENEFITS</p>
+            <h2 id="member-benefits-title">Build security together</h2>
+            <div class="benefit-item"><strong>Worker pension boost</strong><span>Proposed 5% AfroLife match on eligible worker pension deposits.</span></div>
+            <div class="benefit-item"><strong>AfroLife Edir</strong><span>Open to Guaranteed Category A employees and AfroLife users, subject to program rules. Proposed ETB 2,000 joining fee + ETB 200 monthly for group accident and health cover.</span></div>
+            <div class="benefit-item"><strong>Optional life cover</strong><span>ETB 5,000 annual contribution for proposed ETB 1 million member or spouse life cover.</span></div>
+            <div class="benefit-item"><strong>Home protection</strong><span>Tenants and property owners may request household fire, accidental damage and burglary cover for an additional ETB 200 premium.</span></div>
+            <p class="benefit-disclaimer">Choose your interests during sign-up. No payment is taken and no match or insurance cover is active until AfroLife confirms eligibility, funding, insurer terms and a start date.</p>
+          </section>
+        </div>
+        <form id="login-form" class="panel login-card">
+          <p class="eyebrow">SECURE WORKSPACE</p>
+          <h2>Welcome back</h2>
+          <p class="muted">Sign in with your registered Ethiopian phone number.</p>
+          <label>Phone number<input name="phone" type="tel" autocomplete="username" placeholder="+251 9…" required minlength="8"></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label>
+          <label id="mfa-field" hidden>Authenticator code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></label>
+          <p id="login-error" class="form-error" role="alert"></p>
+          <button class="button button-primary button-wide" type="submit">Sign in <span aria-hidden="true">→</span></button>
+          <div class="login-links">
+            <button id="show-signup" class="text-button" type="button">Sign up</button>
+            <button id="show-agent-plans" class="text-button" type="button">Agent subscription plans</button>
+            <button id="change-server" class="text-button" type="button" hidden>Change server</button>
+          </div>
+          <p class="fine-print">Access is limited to approved AfroLife accounts.</p>
+        </form>
+        <form id="signup-form" class="panel signup-card" hidden>
+          <p class="eyebrow">AFROLIFE REGISTRATION</p>
+          <h2>Apply to join AfroLife</h2>
+          <p class="muted">Staff approval is required before sign-in. Your account will remain inactive until compliance review and activation are complete.</p>
+          <label>Full name<input name="legal_name" autocomplete="name" required minlength="2" maxlength="160"></label>
+          <label>Phone number<input name="phone" type="tel" autocomplete="tel" placeholder="+251 9…" required minlength="8"></label>
+          <label>Email (optional)<input name="email" type="email" autocomplete="email"></label>
+          <label>Password<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="72"></label>
+          <label>Password confirmation<input name="password_confirmation" type="password" autocomplete="new-password" required minlength="12" maxlength="72"></label>
+          <label>Choose account type
+            <select id="signup-account-type" name="account_type" required>
+              <option value="">Select an account type</option>
+              <option value="worker">I want to join as a worker</option>
+              <option value="customer">I want to join as a buyer / customer</option>
+              <option value="property_owner">I want to join as a seller / property owner</option>
+              <option value="agent">I want to join as an agent</option>
+            </select>
+          </label>
+          <section class="signup-benefits" aria-labelledby="signup-benefits-title">
+            <h3 id="signup-benefits-title">Benefit interests (no charge today)</h3>
+          <label class="benefit-check" id="pension-interest-field" hidden><input type="checkbox" name="pension_match_interest"><span><strong>Worker pension match</strong><small>Request the proposed 5% match on eligible pension deposits from income. Eligibility and payroll funding must be confirmed.</small></span></label>
+            <label class="benefit-check" id="worker-enterprise-field" hidden><input type="checkbox" name="option_a_enterprise_interest"><span><strong>Enterprise Option A staff service</strong><small>For workers seeking an Option A placement with the Enterprise service pathway. Enrollment, employer terms, pension matching and Edir benefits require confirmation before activation.</small></span></label>
+            <label class="benefit-check"><input type="checkbox" name="edir_member_interest"><span><strong>Join AfroLife Edir</strong><small>Proposed ETB 2,000 joining fee and ETB 200 per month for member group accident and health cover.</small></span></label>
+            <label class="benefit-check"><input type="checkbox" name="edir_life_interest"><span><strong>Add life cover</strong><small>Proposed extra ETB 5,000 per year for ETB 1 million cover for the direct member or spouse; subject to insurer acceptance and policy terms.</small></span></label>
+            <label class="benefit-check"><input type="checkbox" name="household_cover_interest"><span><strong>Add household cover</strong><small>For tenants or property owners: proposed additional ETB 200 household premium for fire, accidental damage and burglary cover.</small></span></label>
+            <p class="benefit-disclaimer">These are non-binding requests for information. Selecting a benefit does not enroll you, collect money or start insurance coverage.</p>
+          </section>
+          <label>KYC identity document (PDF, JPEG, PNG · max 10 MB)
+            <input id="signup-national-id" name="national_id_file" type="file" accept="application/pdf,image/jpeg,image/png" capture="environment" required>
+          </label>
+          <label id="signup-police-clearance-field" hidden>Police clearance (required for worker applicants)
+            <input id="signup-police-clearance" name="police_clearance_file" type="file" accept="application/pdf,image/jpeg,image/png" capture="environment">
+          </label>
+          <p class="muted upload-help">Documents are stored privately and reviewed by AfroLife compliance staff.</p>
+          <div id="agent-fields" hidden>
+            <label>Agent type
+              <select id="signup-agent-type" name="agent_type">
+                <option value="">Select an agent type</option>
+                <option value="master">Master agent</option>
+                <option value="field">Field agent</option>
+              </select>
+            </label>
+            <label>Your territory
+            <input id="signup-territory-search" type="search" list="signup-territory-options" autocomplete="off" placeholder="Start typing an area name" aria-describedby="signup-territory-help">
+            <datalist id="signup-territory-options"></datalist>
+            <select id="signup-territory" name="territory_id" hidden aria-hidden="true" tabindex="-1"></select>
+            <small id="signup-territory-help" class="field-hint">Type a city, sub-city, woreda, or kebele, then choose a matching suggestion.</small>
+            </label>
+            <label id="parent-agent-field" hidden>Master agent phone number
+              <input name="parent_agent_phone" type="tel" placeholder="+251 9…">
+            </label>
+          </div>
+          <div id="service-plan-fields" hidden>
+            <label>AfroLife service plan
+              <select name="requested_plan" id="signup-plan">
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </label>
+            <section class="plan-details" aria-live="polite">
+              <strong id="signup-plan-title">Free service</strong>
+              <p id="signup-plan-description">Core AfroLife tools for your role, including lead, worker, request, contract and listing workflows.</p>
+            </section>
+            <p class="plan-notice">The plan is recorded as a request. Paid features remain inactive until billing and plan activation are configured.</p>
+          </div>
+          <p id="signup-error" class="form-error" role="alert"></p>
+          <p id="signup-success" class="alert" role="status" hidden></p>
+          <button class="button button-primary button-wide" type="submit">Submit sign-up request</button>
+          <button id="show-login" class="text-button text-button-wide" type="button">Already have an account? Sign in</button>
+        </form>
+        <section id="server-setup" class="panel form-card server-setup" hidden>
+          <h2>Connect to AfroLife</h2>
+          <p class="muted">Enter the HTTPS address of your organization’s AfroLife server.</p>
+          <label>API server address<input id="api-server-url" type="url" inputmode="url" placeholder="https://afrolife.example.com" autocomplete="url" required></label>
+          <p id="server-error" class="form-error" role="alert"></p>
+          <button id="save-server" class="button button-primary button-wide" type="button">Save server address</button>
+        </section>
+      </section>
+
+      <section id="app-view" hidden>
+        <div class="page-heading">
+          <div><p class="eyebrow">AFROLIFE OPERATIONS</p><h1 id="page-title">Your workspace</h1><p id="page-subtitle" class="muted"></p></div>
+          <button id="refresh" class="button button-outline" type="button">↻ <span>Refresh</span></button>
+        </div>
+        <div id="alert" class="alert" role="status" hidden></div>
+        <div id="stat-grid" class="stat-grid"></div>
+        <nav class="tabs" aria-label="Workspace sections">
+          <button class="tab active" data-panel="overview" type="button">Overview</button>
+          <button class="tab" data-panel="leads" type="button">Leads</button>
+          <button class="tab" data-panel="workers" type="button">Workers</button>
+          <button class="tab" data-panel="requests" type="button">Requests & matching</button>
+          <button id="properties-tab" class="tab" data-panel="properties" type="button" hidden>Properties</button>
+          <button id="marketplace-tab" class="tab" data-panel="marketplace" type="button" hidden>Marketplace</button>
+          <button id="contracts-tab" class="tab" data-panel="contracts" type="button" hidden>Contracts</button>
+          <button id="agents-tab" class="tab" data-panel="agents" type="button" hidden>Agent management</button>
+          <button id="rent-tab" class="tab" data-panel="rent" type="button" hidden>Rent & deposits</button>
+          <button id="mfi-tab" class="tab" data-panel="mfi" type="button" hidden>SACCO / MFI</button>
+          <button class="tab" data-panel="security" type="button">Security</button>
+          <button id="admin-tab" class="tab" data-panel="admin" type="button" hidden>Admin & review</button>
+        </nav>
+        <section id="workspace" class="workspace" aria-live="polite"></section>
+      </section>
+    </main>
+    <dialog id="availability-dialog" class="panel form-card">
+      <form id="availability-form">
+        <h2>Choose a restored availability</h2>
+        <label>Worker availability
+          <select id="availability-select" name="availability" required>
+            <option value="immediate">immediate</option>
+            <option value="within_2_weeks">within_2_weeks</option>
+            <option value="later">later</option>
+          </select>
+        </label>
+        <div class="dialog-actions">
+          <button id="cancel-availability" class="button button-outline" type="button">Cancel</button>
+          <button class="button button-primary" type="submit">Release reservation</button>
+        </div>
+      </form>
+    </dialog>
+    <footer><span>አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency</span><span>Secure operations · Addis Ababa, Ethiopia</span></footer>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

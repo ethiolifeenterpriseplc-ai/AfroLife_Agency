@@ -1,0 +1,11 @@
+gradle.projectsLoaded {
+    def outputRoot = new File(
+        System.getenv('LOCALAPPDATA') ?: System.getProperty('java.io.tmpdir'),
+        'AfroLife/android-build'
+    )
+    gradle.rootProject.allprojects { project ->
+        project.layout.buildDirectory.set(
+            new File(outputRoot, project.path.replace(':', '_'))
+        )
+    }
+}

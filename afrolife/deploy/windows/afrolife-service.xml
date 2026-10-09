@@ -1,0 +1,13 @@
+<service>
+  <id>AfroLife</id>
+  <name>AfroLife Agency API</name>
+  <description>AfroLife Agency API and PWA</description>
+  <executable>C:\Program Files\nodejs\node.exe</executable>
+  <arguments>C:\AfroLife\app\dist\src\server.js</arguments>
+  <workingdirectory>C:\AfroLife\app</workingdirectory>
+  <env name="AFROLIFE_ENV_FILE" value="C:\ProgramData\AfroLife\runtime.env" />
+  <logpath>C:\ProgramData\AfroLife\logs</logpath>
+  <log mode="roll" />
+  <stoptimeout>30 sec</stoptimeout>
+  <onfailure action="restart" delay="10 sec" />
+</service>

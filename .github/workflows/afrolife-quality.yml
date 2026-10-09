@@ -1,0 +1,42 @@
+name: AfroLife quality checks
+
+on:
+  push:
+    paths:
+      - 'afrolife/**'
+      - '.github/workflows/afrolife-quality.yml'
+  pull_request:
+    paths:
+      - 'afrolife/**'
+      - '.github/workflows/afrolife-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: afrolife
+
+jobs:
+  unit-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: afrolife/package-lock.json
+      - run: npm ci
+      - name: Check browser JavaScript syntax
+        run: |
+          node --check public/app.js
+          node --check public/mfi.js
+          node --check public/i18n.js
+          node --check public/sw.js
+      - name: Validate app configuration JSON
+        run: |
+          node -e "for (const f of ['package.json','capacitor.config.json','public/manifest.webmanifest']) JSON.parse(require('node:fs').readFileSync(f,'utf8'))"
+      - run: npm run build
+      - run: npm run test:unit

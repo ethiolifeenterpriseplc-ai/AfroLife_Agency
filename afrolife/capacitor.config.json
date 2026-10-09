@@ -1,0 +1,8 @@
+{
+  "appId": "com.afrolife.agency",
+  "appName": "አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency",
+  "webDir": "public",
+  "server": {
+    "androidScheme": "https"
+  }
+}
