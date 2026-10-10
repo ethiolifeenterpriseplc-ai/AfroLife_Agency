@@ -34,6 +34,30 @@ button { cursor: pointer; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 main { width: min(1180px, calc(100% - 40px)); min-height: calc(100vh - 134px); margin: 0 auto; }
 .login-layout { min-height: 670px; display: grid; grid-template-columns: 1fr 420px; align-items: center; gap: clamp(40px, 9vw, 120px); padding: 66px 5%; }
+.public-hub { padding: 30px 0 72px; }
+.hub-heading { padding: clamp(24px, 5vw, 54px); border: 1px solid #dce6dc; border-radius: 20px; background: radial-gradient(circle at 90% 5%, #dce9d9 0, transparent 38%), linear-gradient(120deg, #fff, #f1f5ed); }
+.hub-heading h2 { max-width: 720px; margin: 0 0 12px; color: var(--green-dark); font-size: clamp(27px, 4vw, 42px); line-height: 1.15; letter-spacing: -1.5px; }
+.hub-heading > p:not(.eyebrow) { max-width: 700px; color: var(--muted); font-size: 14px; line-height: 1.75; }
+.hub-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.hub-actions a { text-decoration: none; }
+.hub-section { padding-top: 44px; }
+.hub-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 17px; }
+.hub-section-heading .eyebrow { margin-bottom: 7px; }
+.hub-section-heading h2 { margin: 0; color: var(--green-dark); font-size: clamp(21px, 3vw, 27px); letter-spacing: -.8px; }
+.hub-caption { color: var(--muted); font-size: 11px; }
+.service-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
+.service-card { min-height: 205px; display: flex; flex-direction: column; align-items: flex-start; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: white; color: inherit; text-decoration: none; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.service-card:hover, .news-card:hover { transform: translateY(-2px); border-color: #b7cbb9; box-shadow: 0 12px 30px #172b270d; }
+.service-icon { display: grid; width: 38px; height: 38px; margin-bottom: 15px; place-items: center; border-radius: 11px; background: #edf4eb; color: var(--green); font-size: 22px; }
+.service-card strong { margin-bottom: 7px; color: var(--green-dark); font-size: 15px; }
+.service-card > span:not(.service-icon) { color: var(--muted); font-size: 12px; line-height: 1.65; }
+.service-card small { margin-top: auto; padding-top: 15px; color: #8a6928; font-size: 10px; font-weight: 700; }
+.news-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.news-card { min-height: 130px; display: flex; flex-direction: column; gap: 10px; padding: 17px; border: 1px solid var(--line); border-radius: 12px; background: white; color: inherit; text-decoration: none; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.news-card > span { color: #a27a2b; font-size: 9px; font-weight: 800; letter-spacing: 1.1px; }
+.news-card strong { color: var(--green-dark); font-size: 13px; }
+.news-card small { margin-top: auto; color: var(--muted); font-size: 10px; }
+.hub-disclaimer { margin: 12px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .welcome-panel { max-width: 570px; }
 .eyebrow { margin: 0 0 14px; color: #a27a2b; font-size: 10px; font-weight: 700; letter-spacing: 1.7px; }
 h1, h2, h3, p { margin-top: 0; }
@@ -98,6 +122,14 @@ textarea { min-height: 84px; resize: vertical; }
 .tab { flex: 0 0 auto; padding: 12px 15px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #74827c; font-size: 12px; font-weight: 700; }
 .tab.active { border-bottom-color: var(--gold); color: var(--green); }
 .workspace { min-height: 300px; padding: 25px 0 50px; }
+.service-launcher { display: grid; gap: 12px; margin: 0 0 22px; }
+.service-launcher-heading h2 { margin: 0 0 5px; color: var(--green-dark); font-size: 17px; }
+.service-launcher-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.service-launcher-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.service-launcher-card { display: grid; align-content: start; gap: 9px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.service-launcher-card h3 { margin: 0; color: var(--green-dark); font-size: 13px; }
+.service-launcher-card p { flex: 1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.service-launcher-card .button { justify-self: start; width: auto; min-height: 38px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .section-heading h2 { margin: 0 0 5px; font-size: 20px; letter-spacing: -.6px; }
 .section-heading p { margin: 0; color: var(--muted); font-size: 12px; }
@@ -139,6 +171,15 @@ textarea { min-height: 84px; resize: vertical; }
 .mfi-role-copy p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .mfi-role-badge { flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: #e6eee4; color: var(--green); font-size: 10px; font-weight: 700; text-align: center; }
 .mfi-module-nav { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.edir-service-nav { display: grid; gap: 10px; margin: 16px 0 20px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.edir-service-nav > h2 { margin: 0; color: var(--green-dark); font-size: 17px; }
+.edir-service-nav > p { margin: -5px 0 0; color: var(--muted); font-size: 11px; }
+.edir-service-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.edir-service-card { display: grid; align-content: start; gap: 9px; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfa; }
+.edir-service-card h3 { margin: 0; color: var(--green-dark); font-size: 12px; }
+.edir-service-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.edir-service-card .button { width: auto; min-height: 38px; justify-self: start; }
+#edir-membership, #edir-member-groups, #edir-governance, #edir-group-management, #edir-finance, #edir-credit, #edir-master-registration, #edir-master-applications, #edir-master-organizations, #edir-master-staff, #edir-master-insurance { scroll-margin-top: 112px; }
 .mfi-service-search { grid-column: 1 / -1; gap: 5px; margin: 0; font-size: 11px; }
 .mfi-service-search input { min-height: 44px; }
 .mfi-search-status { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 10px; }
@@ -429,6 +470,8 @@ footer { padding: 20px max(22px, calc((100vw - 1360px) / 2)); padding-block-end:
 @media (max-width: 920px) {
   main { width: min(760px, calc(100% - 36px)); }
   .login-layout { min-height: auto; grid-template-columns: minmax(0, 1fr); gap: 22px; padding: 26px 0 42px; }
+  .service-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .news-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .welcome-panel { padding: clamp(24px, 5vw, 42px); }
   .welcome-panel h1 { max-width: 700px; font-size: clamp(2.4rem, 7vw, 3.8rem); }
   .login-card, .signup-card { max-width: 600px; justify-self: center; }
@@ -438,6 +481,7 @@ footer { padding: 20px max(22px, calc((100vw - 1360px) / 2)); padding-block-end:
   .topbar { padding-inline: 14px; }
   main { width: calc(100% - 28px); }
   .welcome-panel { border-radius: 22px; }
+  .hub-section-heading { align-items: flex-start; flex-direction: column; }
   .welcome-panel h1 { font-size: clamp(2.1rem, 9vw, 3.1rem); }
   .trust-points { grid-template-columns: 1fr; }
   .benefit-item { grid-template-columns: 1fr; gap: 3px; }
@@ -457,6 +501,10 @@ footer { padding: 20px max(22px, calc((100vw - 1360px) / 2)); padding-block-end:
   .marketplace-config fieldset label { flex: 1 1 130px; }
   input, select, textarea { font-size: 16px; }
   footer { padding: 18px 16px; }
+}
+@media (max-width: 480px) {
+  .service-grid, .news-grid { grid-template-columns: minmax(0, 1fr); }
+  .service-card { min-height: 180px; }
 }
 @media (max-width: 420px) {
   .topbar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand language" "install account"; gap: 8px; }

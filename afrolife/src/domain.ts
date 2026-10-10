@@ -1,7 +1,7 @@
 import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { AuthUser, HttpError } from './core.js';
+import { AuthUser, HttpError, isPlatformAdminRole } from './core.js';
 import { notify } from './notify.js';
 
 type Rules = Record<string, number>;
@@ -61,12 +61,12 @@ export function commissionFor(k: any, rl: Rules) {
 
 const PaymentIn = z.object({ channel: z.string().min(2), reference: z.string().min(3), amount: z.number().positive() });
 
-const AGENTS = ['super_admin', 'master_agent', 'field_agent'];
-const CONTRACT_SIGNERS = ['super_admin', 'corporate_business_manager'];
+const AGENTS = ['global_admin', 'super_admin', 'master_agent', 'field_agent'];
+const CONTRACT_SIGNERS = ['global_admin', 'super_admin', 'corporate_business_manager'];
 export const TRANSITIONS: Record<string, { from: string; to: string; roles: string[] }> = {
   submit:         { from: 'draft',             to: 'compliance_review', roles: AGENTS },
   verify_kyc:     { from: 'compliance_review', to: 'approval_pending',  roles: ['compliance'] },
-  approve:        { from: 'approval_pending',  to: 'signature_pending', roles: ['super_admin'] },
+  approve:        { from: 'approval_pending',  to: 'signature_pending', roles: ['global_admin', 'super_admin'] },
   sign:           { from: 'signature_pending', to: 'payment_pending',   roles: CONTRACT_SIGNERS },
   record_payment: { from: 'payment_pending',   to: 'payment_received',  roles: ['finance'] },
   reconcile:      { from: 'payment_received',  to: 'active',            roles: ['finance', 'finance_manager'] },
@@ -76,7 +76,7 @@ export async function transition(c: PoolClient, user: AuthUser, contractId: stri
   if (action === 'cancel' || action === 'reject') {
     const b = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(body);
     if (action === 'reject' && user.role !== 'compliance') throw new HttpError(403, 'Only Compliance can reject a contract during KYC review');
-    if (action === 'cancel' && !['super_admin', 'master_agent', 'field_agent'].includes(user.role)) throw new HttpError(403, 'Your role cannot cancel this contract');
+    if (action === 'cancel' && !isPlatformAdminRole(user.role) && !['master_agent', 'field_agent'].includes(user.role)) throw new HttpError(403, 'Your role cannot cancel this contract');
     const contract = (await c.query('SELECT * FROM contracts WHERE id = $1 FOR UPDATE', [contractId])).rows[0];
     if (!contract) throw new HttpError(404, 'Contract not found');
     const cancellable = ['draft', 'compliance_review', 'approval_pending', 'signature_pending', 'payment_pending'];
@@ -164,6 +164,9 @@ export async function transition(c: PoolClient, user: AuthUser, contractId: stri
 async function onActivated(c: PoolClient, user: AuthUser, k: any) {
   const rl = await loadRules(c);
   const { initial, guar, eligible, rate, amount } = commissionFor(k, rl);
+  const heldAmount = Math.round(amount * (rl.commission_holdback_pct ?? 0)) / 100;
+  const immediateAmount = Math.round((amount - heldAmount) * 100) / 100;
+  const holdbackDays = Math.round(rl.commission_holdback_days ?? 0);
   await post(c, 'contract', k.id, [['Cash', initial, 0], ['Service Revenue', 0, initial - guar], ['Guarantee Liability', 0, guar]]);
 
   if (k.is_renewal) return; // renewals earn no first-contract commission
@@ -171,11 +174,20 @@ async function onActivated(c: PoolClient, user: AuthUser, k: any) {
   if (prior.rowCount) return;
 
   const ins = await c.query(
-    `INSERT INTO commission_events (agent_id, lead_id, contract_id, rate_pct, eligible_revenue, amount, qualified_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-    [k.source_agent_id, k.lead_id, k.id, rate, eligible, amount, user.id],
+    `INSERT INTO commission_events
+       (agent_id, lead_id, contract_id, rate_pct, eligible_revenue, amount, qualified_by,
+        held_amount, holdback_release_on, held_status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,
+        CASE WHEN $8::numeric > 0 THEN current_date + $9::int ELSE NULL END,
+        CASE WHEN $8::numeric > 0 THEN 'held' ELSE 'none' END)
+     RETURNING id`,
+    [k.source_agent_id, k.lead_id, k.id, rate, eligible, amount, user.id, heldAmount, holdbackDays],
   );
   const id = ins.rows[0].id;
-  await post(c, 'commission', id, [['Commission Expense', amount, 0], ['Commission Payable', 0, amount]]);
-  await audit(c, user.id, 'commission_qualified', 'commission', id, null, { amount, eligible, rate });
+  await post(c, 'commission', id, [
+    ['Commission Expense', amount, 0],
+    ['Commission Payable', 0, immediateAmount],
+    ['Commission Held Payable', 0, heldAmount],
+  ]);
+  await audit(c, user.id, 'commission_qualified', 'commission', id, null, { amount, eligible, rate, held_amount: heldAmount, holdback_release_days: holdbackDays });
 }

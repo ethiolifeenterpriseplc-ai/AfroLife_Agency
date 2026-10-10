@@ -3,13 +3,36 @@ import { isAbsolute, relative, resolve, sep, win32 } from 'node:path';
 export interface RuntimeConfig {
   isProduction: boolean;
   mfiPilotEnabled: boolean;
+  sessionIdleTimeoutMinutes: number;
 }
 
 type Environment = Record<string, string | undefined>;
 
 const isPlaceholder = (value: string) => /^(replace|change|example|your[_-])/i.test(value);
 
-function productionConfig(env: Environment): RuntimeConfig {
+export function sessionIdleTimeoutMinutes(env: Environment): number {
+  const timeout = Number(env.SESSION_IDLE_TIMEOUT_MINUTES ?? 30);
+  if (!Number.isInteger(timeout) || timeout < 5 || timeout > 480) {
+    throw new Error('SESSION_IDLE_TIMEOUT_MINUTES must be an integer between 5 and 480');
+  }
+  return timeout;
+}
+
+function validateInsuranceServiceCutover(env: Environment) {
+  const serviceUrl = env.INSURANCE_SERVICE_URL?.trim();
+  const readiness = env.INSURANCE_SERVICE_CUTOVER_READY;
+  if (readiness !== undefined && !['0', '1'].includes(readiness)) {
+    throw new Error('INSURANCE_SERVICE_CUTOVER_READY must be 0 or 1');
+  }
+  if (serviceUrl && readiness !== '1') {
+    throw new Error('INSURANCE_SERVICE_CUTOVER_READY=1 is required before enabling the Insurance service gateway');
+  }
+  if (readiness === '1' && !serviceUrl) {
+    throw new Error('INSURANCE_SERVICE_URL is required when Insurance service cutover readiness is enabled');
+  }
+}
+
+function productionConfig(env: Environment, idleTimeout: number): RuntimeConfig {
   const requiredSecret = (key: 'JWT_SECRET' | 'MFA_ENC_KEY') => {
     const value = env[key]?.trim();
     if (!value || value.length < 32 || isPlaceholder(value)) {
@@ -78,14 +101,16 @@ function productionConfig(env: Environment): RuntimeConfig {
   }
   const pilotSetting = env.MFI_PILOT_ENABLED ?? '1';
   if (!['0', '1'].includes(pilotSetting)) throw new Error('MFI_PILOT_ENABLED must be 0 or 1');
-
-  return { isProduction: true, mfiPilotEnabled: pilotSetting === '1' };
+  return { isProduction: true, mfiPilotEnabled: pilotSetting === '1', sessionIdleTimeoutMinutes: idleTimeout };
 }
 
 export function loadRuntimeConfig(env: Environment): RuntimeConfig {
-  if (env.NODE_ENV === 'production') return productionConfig(env);
+  validateInsuranceServiceCutover(env);
+  const idleTimeout = sessionIdleTimeoutMinutes(env);
+  if (env.NODE_ENV === 'production') return productionConfig(env, idleTimeout);
   return {
     isProduction: false,
     mfiPilotEnabled: env.MFI_PILOT_ENABLED === undefined ? true : env.MFI_PILOT_ENABLED === '1',
+    sessionIdleTimeoutMinutes: idleTimeout,
   };
 }

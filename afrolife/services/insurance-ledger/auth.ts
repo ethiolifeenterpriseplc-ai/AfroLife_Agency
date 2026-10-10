@@ -16,6 +16,6 @@ export const authenticateGateway: RequestHandler = (req, res, next) => {
     res.status(401).json({ error: 'Invalid or expired gateway identity assertion' });
     return;
   }
-  req.user = { id: user.userId, role: user.role };
+  req.user = { id: user.userId, role: user.role, edir_id: user.organizationId };
   next();
 };

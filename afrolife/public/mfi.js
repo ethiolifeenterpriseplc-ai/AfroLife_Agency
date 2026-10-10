@@ -1,5 +1,7 @@
 import { t } from './i18n.js';
 
+const isPlatformAdmin = (role) => role === 'global_admin' || role === 'super_admin';
+
 const $ = (tag, text, className) => {
   const element = document.createElement(tag);
   if (text !== undefined && text !== null) element.textContent = t(String(text));
@@ -266,7 +268,7 @@ export function createMfiWorkspace(api, user) {
   }
 
   function renderNoInstitution() {
-    if (user.role === 'super_admin') {
+    if (isPlatformAdmin(user.role)) {
       renderInstitutionSetup();
     } else {
       root.append($('p', 'No SACCO/MFI institution has been assigned to your account. Ask a Super Admin to create one and provision your institution role.', 'empty-state'));
@@ -857,10 +859,10 @@ export function createMfiWorkspace(api, user) {
       localStorage.setItem('afrolife.mfi-institution', state.institutionId);
       const id = encodeURIComponent(state.institutionId);
       const membership = state.institutions.find((item) => item.id === state.institutionId);
-      const canManageStaff = user.role === 'super_admin' || ['institution_admin', 'finance_manager'].includes(membership?.role);
-      const canReadAudit = user.role === 'super_admin' || ['institution_admin', 'finance_manager', 'compliance', 'auditor'].includes(membership?.role);
-      const canReadCollections = user.role === 'super_admin' || ['institution_admin','finance_manager','credit_manager','loan_officer','compliance','auditor'].includes(membership?.role);
-      const canReadNpl = user.role === 'super_admin' || ['institution_admin','finance_manager','credit_manager','compliance','auditor'].includes(membership?.role);
+      const canManageStaff = isPlatformAdmin(user.role) || ['institution_admin', 'finance_manager'].includes(membership?.role);
+      const canReadAudit = isPlatformAdmin(user.role) || ['institution_admin', 'finance_manager', 'compliance', 'auditor'].includes(membership?.role);
+      const canReadCollections = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','loan_officer','compliance','auditor'].includes(membership?.role);
+      const canReadNpl = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','compliance','auditor'].includes(membership?.role);
       const [overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents] = await Promise.all([
         api(`/mfi/institutions/${id}/overview`),
         api(`/mfi/institutions/${id}/members`),

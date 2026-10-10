@@ -66,7 +66,14 @@ exact HTTPS `CORS_ORIGINS`, an absolute private `FILE_STORAGE_DIR`, a valid
 PostgreSQL must use `sslmode=verify-full`; loopback PostgreSQL may be used for
 single-host deployment. Startup fails if the database role is superuser, has
 `BYPASSRLS`, or owns an RLS-protected table. Do not use the migration account
-for the running service.
+for the running service. `SESSION_IDLE_TIMEOUT_MINUTES` defaults to 30 and must
+be set to an integer from 5 to 480. Authenticated requests update a server-side
+session record; sessions that exceed this inactivity window, are revoked, or
+reach their eight-hour absolute token expiry are rejected. The PWA/native
+workspace also signs out locally after inactivity and sends a heartbeat while
+the user is active. Apply migration `040_auth_sessions.sql` before deploying
+this version; all previously issued tokens lack a server session ID and require
+users to sign in again.
 
 `MFI_PILOT_ENABLED` defaults to `1` in production so authorized AfroLife staff
 can access the institution-scoped workspace. Set it to `0` to disable the MFI
@@ -209,10 +216,37 @@ evidence.
 - [ ] Apply all migrations, including `007_property_owner_listings.sql`, to a
   staging database first; verify the migration record and run the unit and
   integration suites against staging.
-- [ ] Apply migration `021_shared_auth_rate_limits.sql` before production
-  startup. Verify the three authentication rate-limit namespaces increment and
-  reset across separate API instances. Keep the API on one instance until this
-  shared store has been load-tested for the intended traffic profile.
+- [ ] Keep `INSURANCE_SERVICE_URL` unset until a historical-data migration has
+  completed, legacy and service balances have been reconciled, rollback and
+  recovery procedures have been rehearsed, and an independent accounting owner
+  has approved the cutover. The schema migration provisions an empty ledger;
+  `INSURANCE_SERVICE_CUTOVER_READY=1` is an operator attestation, not an
+  automated readiness check.
+- [ ] Apply migrations `021_shared_auth_rate_limits.sql` and
+  `036_auth_rate_limit_runtime_access.sql` before production startup. Verify
+  the runtime role has the explicit bucket-table permissions and that all three
+  authentication rate-limit namespaces increment and reset across separate
+  API instances. Keep the API on one instance until this shared store has been
+  load-tested for the intended traffic profile.
+- [ ] Apply migrations `032_privacy_requests_and_incidents.sql` and
+  `037_global_admin_privacy_access.sql` before enabling the privacy workspace.
+  Verify requesters see only their own personal-data requests, while Compliance,
+  Super Admin, and Global Admin users can perform their authorized case review
+  through the non-owner runtime role.
+- [ ] Apply `038_global_admin_insurance_access.sql` when deploying the central
+  Insurance ledger. Verify Global Admin access through the runtime role while
+  preserving organization scoping for all non-platform users and independent
+  journal review controls.
+- [ ] Apply `039_insurance_ledger_runtime_grants.sql` and verify the restricted
+  central runtime role has only the account, journal, line, audit, and identity
+  sequence privileges needed by the central Insurance routes. Do not rely on
+  database-owner or default-privilege grants.
+- [ ] Run `npm run db:check-runtime-acls` with migration-owner and runtime
+  connection URLs aimed at the same staging database. It checks the effective
+  ACLs (including inherited/default grants), role safety, and RLS table ownership.
+- [ ] Apply `040_auth_sessions.sql` before deploying session-enforcement code.
+  Verify login, idle expiry, absolute expiry, logout revocation, password/MFA
+  reauthentication, and runtime-role permissions using a disposable database.
 - [ ] Provision PostgreSQL with TLS and a dedicated runtime account. Keep the
   migration owner separate from the API runtime account; the runtime account
   must not own tables and must not have `BYPASSRLS`.
@@ -230,7 +264,10 @@ evidence.
   platform's secret manager. Generate unique random keys; never reuse the sample
   values, commit secrets, or expose them in logs.
 - [ ] Keep `REQUIRE_MFA_FOR_STAFF=1`; enroll and test at least two Super Admins
-  and a documented recovery process before launch.
+  and a documented recovery process before launch. Verify Global Admin
+  promotion requires two different active, MFA-enabled Super Admins and that
+  neither Global Admin access nor the promotion workflow bypasses financial
+  maker-checker controls.
 - [ ] Keep the role-gated MFI workspace enabled with `MFI_PILOT_ENABLED=1` only
   for authorized staff and controlled pilot use. Any controlled MFI pilot must
   have a named institution, invited users, approved accounting and safeguarding

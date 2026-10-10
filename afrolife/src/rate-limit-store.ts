@@ -102,6 +102,15 @@ export function createApiRateLimiter(namespace: string, limit: number, windowMs 
     limit,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
+    handler: (req, res) => {
+      const resetTime = (req as typeof req & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
+      const retryAfterSeconds = Math.max(1, Math.ceil(((resetTime?.getTime() ?? Date.now() + windowMs) - Date.now()) / 1000));
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      res.status(429).json({
+        error: 'Too many requests. Please try again in {{seconds}} seconds.',
+        retry_after_seconds: retryAfterSeconds,
+      });
+    },
     ...(process.env.NODE_ENV === 'production'
       ? { store: new PostgresRateLimitStore(pool, namespace, JWT_SECRET) }
       : {}),

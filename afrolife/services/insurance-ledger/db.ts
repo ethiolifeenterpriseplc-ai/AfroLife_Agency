@@ -12,8 +12,8 @@ export async function withUser<T>(user: AuthUser, callback: (client: PoolClient)
   try {
     await client.query('BEGIN');
     await client.query(
-      "SELECT set_config('app.user_id',$1,true), set_config('app.role',$2,true)",
-      [user.id, user.role],
+      "SELECT set_config('app.user_id',$1,true), set_config('app.role',$2,true), set_config('app.edir_id',$3,true)",
+      [user.id, user.role, user.edir_id ?? '00000000-0000-4000-8000-000000000002'],
     );
     const result = await callback(client);
     await client.query('COMMIT');

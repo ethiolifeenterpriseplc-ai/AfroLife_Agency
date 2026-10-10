@@ -1,16 +1,26 @@
 ﻿import { initializeLocale, t } from './i18n.js';
+import { ApiError, optionalApiFallback } from './api-errors.js';
 import { createMfiWorkspace } from './mfi.js';
+import { createEdirWorkspace } from './edir.js';
+import { createPrivacyWorkspace } from './privacy.js';
 
 const WEB_API_ROOT = '/api/v1';
 let API_ROOT = WEB_API_ROOT;
 const TOKEN_KEY = 'afrolife.session';
 const API_URL_KEY = 'afrolife.api-base';
 const SIGNUP_UPLOAD_KEY = 'afrolife.signup-upload';
-const STAFF = new Set(['super_admin', 'compliance', 'finance', 'finance_manager']);
+const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
+const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
+const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false }, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], territories: [], commissions: [], summary: null, users: [], team: [], businessRules: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [] };
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
+let sessionIdleTimer = null;
+let sessionHeartbeatTimer = null;
+let sessionActivityHandler = null;
+let sessionIdleTimeoutMs = 30 * 60 * 1000;
+let lastSessionActivityAt = Date.now();
 const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.())
   || (window.location.protocol === 'https:' && window.location.hostname === 'localhost');
 
@@ -27,6 +37,7 @@ function apiRoot() {
 
 function roleLabel(role) {
   const labels = {
+    global_admin: 'Global Admin',
     super_admin: 'Super Agent / Super Admin',
     compliance: 'Compliance',
     finance: 'Finance',
@@ -54,6 +65,10 @@ function setLocalizedText(element, message, values = {}) {
   element.textContent = t(message, values);
 }
 
+function isPlatformAdmin(role = state.user?.role) {
+  return role === 'global_admin' || role === 'super_admin';
+}
+
 function showAlert(message, error = false, values = {}) {
   const box = $('#alert');
   setLocalizedText(box, message, values);
@@ -63,14 +78,19 @@ function showAlert(message, error = false, values = {}) {
 
 async function api(path, options = {}) {
   const headers = new Headers(options.headers ?? {});
+  headers.set('x-afrolife-edir-id', state.edirOrganizationId);
   const token = sessionStorage.getItem(TOKEN_KEY);
   if (token) headers.set('authorization', `Bearer ${token}`);
   if (options.body && !(options.body instanceof Blob)) headers.set('content-type', 'application/json');
   const response = await fetch(`${apiRoot()}${path}`, { ...options, headers });
   const result = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
-    if (response.status === 401 && token) signOut();
-    throw new Error(t(result?.error ?? 'Request failed ({{status}})', { status: response.status }));
+    if (response.status === 401 && token) signOut({ revoke: false, message: 'Your session expired or is no longer active. Please sign in again.' });
+    const retryAfter = Number(result?.retry_after_seconds ?? response.headers.get('retry-after'));
+    if (response.status === 429 && Number.isFinite(retryAfter) && retryAfter > 0) {
+      throw new Error(t(result?.error ?? 'Too many requests. Please try again in {{seconds}} seconds.', { seconds: Math.ceil(retryAfter) }));
+    }
+    throw new ApiError(t(result?.error ?? 'Request failed ({{status}})', { status: response.status }), response.status);
   }
   return result;
 }
@@ -214,11 +234,15 @@ function updateSignupFields() {
   const isWorker = $('#signup-account-type').value === 'worker';
   $('#pension-interest-field').hidden = !isWorker;
   $('#worker-enterprise-field').hidden = !isWorker;
+  $('#worker-document-consent-field').hidden = !isWorker;
+  $('#worker-document-consent').required = isWorker;
   $('#agent-fields').hidden = !isAgent;
   $('#service-plan-fields').hidden = !(isAgent || isSeller);
   $('#parent-agent-field').hidden = !isFieldAgent;
   $('#signup-police-clearance-field').hidden = !isWorker;
   $('#signup-police-clearance').required = isWorker;
+  $('#worker-date-of-birth-field').hidden = !isWorker;
+  $('#worker-date-of-birth').required = isWorker;
   $('#signup-agent-type').required = isAgent;
   $('#signup-territory-search').required = isAgent;
   if (!isAgent) $('#signup-territory-search').setCustomValidity('');
@@ -274,6 +298,8 @@ async function submitSignup(event) {
     password: values.password,
     password_confirmation: values.password_confirmation,
     account_type: values.account_type,
+    ...(values.account_type === 'worker' ? { date_of_birth: values.date_of_birth } : {}),
+    worker_document_consent: values.worker_document_consent === 'on',
     pension_match_interest: values.pension_match_interest === 'on',
     edir_member_interest: values.edir_member_interest === 'on',
     edir_life_interest: values.edir_life_interest === 'on',
@@ -359,43 +385,125 @@ function saveNativeServer() {
   }
 }
 
-function signOut() {
+function stopSessionActivity() {
+  clearTimeout(sessionIdleTimer);
+  clearInterval(sessionHeartbeatTimer);
+  sessionIdleTimer = null;
+  sessionHeartbeatTimer = null;
+  if (sessionActivityHandler) {
+    for (const eventName of ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel', 'focus']) {
+      document.removeEventListener(eventName, sessionActivityHandler);
+    }
+    sessionActivityHandler = null;
+  }
+}
+
+function scheduleSessionExpiry() {
+  clearTimeout(sessionIdleTimer);
+  const remaining = sessionIdleTimeoutMs - (Date.now() - lastSessionActivityAt);
+  sessionIdleTimer = setTimeout(() => {
+    if (Date.now() - lastSessionActivityAt >= sessionIdleTimeoutMs) {
+      signOut({ message: 'Your session ended after inactivity. Please sign in again.' });
+    } else {
+      scheduleSessionExpiry();
+    }
+  }, Math.max(remaining, 0));
+}
+
+function startSessionActivity(idleTimeoutMinutes) {
+  stopSessionActivity();
+  sessionIdleTimeoutMs = idleTimeoutMinutes * 60 * 1000;
+  lastSessionActivityAt = Date.now();
+  sessionActivityHandler = (event) => {
+    if (!event.isTrusted) return;
+    lastSessionActivityAt = Date.now();
+    scheduleSessionExpiry();
+  };
+  for (const eventName of ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel', 'focus']) {
+    document.addEventListener(eventName, sessionActivityHandler, { passive: true });
+  }
+  scheduleSessionExpiry();
+  sessionHeartbeatTimer = setInterval(() => {
+    if (sessionStorage.getItem(TOKEN_KEY) && Date.now() - lastSessionActivityAt < 60_000) {
+      api('/auth/session').catch((error) => {
+        if (!(error instanceof ApiError && error.status === 401)) {
+          console.error('The active AfroLife session could not be refreshed.', error);
+        }
+      });
+    }
+  }, 60_000);
+}
+
+function signOut({ revoke = true, message = '' } = {}) {
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (revoke && token) {
+    let endpoint;
+    try {
+      endpoint = `${apiRoot()}/auth/logout`;
+      const headers = new Headers();
+      headers.set('authorization', ['Bearer', token].join(' '));
+      void fetch(endpoint, { method: 'POST', headers })
+        .then((response) => {
+          if (!response.ok && response.status !== 401) console.warn('AfroLife could not revoke the signed-out server session.', response.status);
+        })
+        .catch((error) => console.warn('AfroLife could not reach the server to revoke the signed-out session.', error));
+    } catch (error) {
+      console.warn('AfroLife could not resolve the server to revoke the signed-out session.', error);
+    }
+  }
+  stopSessionActivity();
   sessionStorage.removeItem(TOKEN_KEY);
   state.user = null;
   $('#app-view').hidden = true;
   $('#account-tools').hidden = true;
   $('#login-view').hidden = false;
+  $('#public-hub').hidden = false;
   $('#login-form').reset();
   $('#mfa-field').hidden = true;
+  $('#retry-session').hidden = true;
+  $('#login-error').textContent = message;
   showAlert('');
 }
 
 async function loadWorkspace() {
   state.user = await api('/auth/me');
-  state.features = await getOptional('/features', { mfiPilotEnabled: false });
+  startSessionActivity(state.user.session_idle_timeout_minutes ?? 30);
+  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false });
+  state.edirMe = state.features.edirEnabled && state.user.kyc_status === 'verified'
+    ? await getOptional('/edir/me', null) : null;
   $('#login-view').hidden = true;
+  $('#public-hub').hidden = true;
   $('#app-view').hidden = false;
   $('#account-tools').hidden = false;
+  $('#login-error').textContent = '';
+  $('#retry-session').hidden = true;
   $('#account-name').textContent = `${state.user.legal_name} · ${roleLabel(state.user.role)}`;
   $('#page-subtitle').textContent = t('Signed in as {{role}}. Your access is limited to your assigned role and territory.', { role: roleLabel(state.user.role) });
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.hidden = false;
   });
-  $('#admin-tab').hidden = !['super_admin', 'compliance', 'corporate_business_manager'].includes(state.user.role);
-  const canUseListings = ['super_admin','corporate_business_manager','customer','master_agent','field_agent','property_owner'].includes(state.user.role);
+  $('#admin-tab').hidden = !['global_admin', 'super_admin', 'compliance', 'corporate_business_manager'].includes(state.user.role);
+  const canUseListings = ['global_admin', 'super_admin', 'corporate_business_manager', 'customer', 'master_agent', 'field_agent', 'property_owner'].includes(state.user.role);
   $('#properties-tab').hidden = !canUseListings;
   const canUseMarketplace = canUseListings;
   $('#marketplace-tab').hidden = !canUseMarketplace;
   if (!canUseListings && state.panel === 'properties') state.panel = 'overview';
   if (!canUseMarketplace && state.panel === 'marketplace') state.panel = 'overview';
   $('#contracts-tab').hidden = ['customer', 'worker', 'property_owner'].includes(state.user.role);
-  $('#agents-tab').hidden = !['super_admin', 'master_agent'].includes(state.user.role);
+  const canUseCommissions = ['global_admin','super_admin','finance','finance_manager','master_agent','field_agent'].includes(state.user.role);
+  $('#commissions-tab').hidden = !canUseCommissions;
+  if (!canUseCommissions && state.panel === 'commissions') state.panel = 'overview';
+  $('#agents-tab').hidden = !['global_admin', 'super_admin', 'master_agent'].includes(state.user.role);
   $('#rent-tab').hidden = ['customer', 'worker', 'property_owner', 'compliance'].includes(state.user.role);
   $('#mfi-tab').hidden = !STAFF.has(state.user.role) || !state.features.mfiPilotEnabled;
+  $('#edir-tab').hidden = !state.features.edirEnabled;
   if ($('#mfi-tab').hidden && state.panel === 'mfi') state.panel = 'overview';
+  if ($('#edir-tab').hidden && state.panel === 'edir') state.panel = 'overview';
   document.querySelectorAll('.tab').forEach((tab) => {
     if (['property_owner', 'customer'].includes(state.user.role)) {
-      tab.hidden = !['overview', 'properties', 'marketplace', 'security'].includes(tab.dataset.panel);
+      tab.hidden = !['overview', 'properties', 'marketplace', 'security', 'edir', 'privacy'].includes(tab.dataset.panel);
+    } else if (['worker', 'corporate_business_manager', 'master_agent', 'field_agent'].includes(state.user.role)) {
+      tab.hidden = !['overview', 'leads', 'workers', 'requests', 'contracts', 'commissions', 'agents', 'security', 'edir', 'privacy'].includes(tab.dataset.panel);
     }
   });
   if (state.user.must_change_password) {
@@ -414,8 +522,8 @@ async function loadWorkspace() {
 async function getOptional(path, fallback) {
   try {
     return await api(path);
-  } catch {
-    return fallback;
+  } catch (error) {
+    return optionalApiFallback(error, fallback);
   }
 }
 
@@ -432,9 +540,12 @@ async function refresh() {
     state.leads = leads;
     state.workers = workers;
     state.requests = requests;
-    const canUseListings = ['super_admin','corporate_business_manager','customer','master_agent','field_agent','property_owner'].includes(state.user.role);
+    const canUseListings = ['global_admin','super_admin','corporate_business_manager','customer','master_agent','field_agent','property_owner'].includes(state.user.role);
     state.properties = canUseListings
       ? await api('/properties')
+      : [];
+    state.ownerStatements = state.user.role === 'property_owner'
+      ? (await getOptional('/owner/statements', { statements: [] })).statements ?? []
       : [];
     state.territories = territories;
     state.commissions = commissions;
@@ -445,14 +556,15 @@ async function refresh() {
     state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
       ? await getOptional('/reports/summary', null)
       : state.user.enterprise_features_enabled ? await getOptional('/reports/me', null) : null;
-    state.users = ['super_admin', 'compliance'].includes(state.user.role) ? await getOptional('/users', []) : [];
-    state.team = ['super_admin', 'master_agent'].includes(state.user.role) ? await getOptional('/agents/team', []) : [];
-    state.businessRules = state.user.role === 'super_admin' ? await api('/business-rules') : [];
+    state.users = ['global_admin', 'super_admin', 'compliance'].includes(state.user.role) ? await getOptional('/users', []) : [];
+    state.team = ['global_admin', 'super_admin', 'master_agent'].includes(state.user.role) ? await getOptional('/agents/team', []) : [];
+    state.businessRules = state.user.role === 'global_admin' ? await api('/business-rules') : [];
+    state.globalAdminPromotions = isPlatformAdmin() ? await api('/global-admin-promotions') : [];
     if (canUseListings) {
       [state.marketplaceConfig, state.marketplaceListings] = await Promise.all([
         getOptional('/marketplace/config', {}), getOptional('/marketplace/listings', []),
       ]);
-      state.marketplaceSellers = ['super_admin','corporate_business_manager'].includes(state.user.role)
+      state.marketplaceSellers = ['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)
         ? await getOptional('/marketplace/sellers', []) : [];
     }
     if (state.panel === 'password') state.panel = 'overview';
@@ -493,6 +605,17 @@ function card(title, details, status) {
 function renderOverview() {
   const wrap = node('div');
   wrap.append(sectionHeading('Your activity', 'Your latest records and work in progress.'));
+  wrap.append(renderServiceLauncher());
+  if (state.user.kyc_status === 'verified' && state.features.edirEnabled && !state.edirMe?.membership) {
+    const offer = node('section', undefined, 'panel form-card edir-offer');
+    offer.append(node('p', 'AFROLIFE EDIR · MEMBERSHIP OFFER', 'eyebrow'));
+    offer.append(node('h2', 'Explore Edir membership and available benefits'));
+    offer.append(node('p', 'Open to verified AfroLife users across worker, employer, landlord, tenant, seller, and buyer services. Review active community, savings, share, and contribution options before requesting membership. Lending, insurance, and benefit payouts are not live in this pilot.'));
+    const action = button('View Edir offer', 'open-edir-offer', 'button button-primary');
+    action.addEventListener('click', () => { state.panel = 'edir'; renderPanel(); });
+    offer.append(action);
+    wrap.append(offer);
+  }
   if (state.user.enterprise_features_enabled && state.summary) {
     const portfolio = node('section', undefined, 'panel form-card enterprise-snapshot');
     portfolio.append(node('h3', 'Enterprise team and portfolio insights'));
@@ -521,6 +644,45 @@ function renderOverview() {
   else recent.append(...items);
   wrap.append(recent);
   return wrap;
+}
+
+const serviceDescriptions = {
+  leads: 'Register and follow up on customer and business opportunities.',
+  workers: 'Review workforce profiles and service readiness.',
+  requests: 'Match service requests with available providers.',
+  properties: 'Manage property listings, units, and availability.',
+  marketplace: 'Discover and manage marketplace activity.',
+  contracts: 'Prepare, review, and track service agreements.',
+  commissions: 'Review earned commissions and payment status.',
+  agents: 'Oversee agent teams and service specialization.',
+  rent: 'Manage leases, rent receipts, and deposit workflows.',
+  edir: 'Open the central community membership and financial pilot.',
+  mfi: 'Open institution-scoped SACCO and MFI pilot operations.',
+};
+
+function renderServiceLauncher(panelNames) {
+  const allowed = new Set(panelNames ?? [...document.querySelectorAll('.tab:not([hidden])')]
+    .map((tab) => tab.dataset.panel)
+    .filter((panel) => panel && !['overview', 'privacy', 'security', 'admin'].includes(panel)));
+  const tabs = [...document.querySelectorAll('.tab:not([hidden])')]
+    .filter((tab) => allowed.has(tab.dataset.panel));
+  if (!tabs.length) return node('div');
+  const section = node('section', undefined, 'service-launcher');
+  section.setAttribute('aria-labelledby', 'service-launcher-title');
+  section.append(node('div', undefined, 'service-launcher-heading'));
+  section.firstChild.append(node('h2', 'Your service mini-apps'), node('p', 'Open an available service directly. Access is based on your role and enabled features.'));
+  section.firstChild.firstChild.id = 'service-launcher-title';
+  const grid = node('div', undefined, 'service-launcher-grid');
+  for (const tab of tabs) {
+    const panel = tab.dataset.panel;
+    const card = node('article', undefined, 'service-launcher-card');
+    card.append(node('h3', tab.textContent.trim()), node('p', serviceDescriptions[panel] ?? 'Open this role-based service workspace.'));
+    const open = button('Open mini app', 'open-panel', 'button button-outline', { panel });
+    card.append(open);
+    grid.append(card);
+  }
+  section.append(grid);
+  return section;
 }
 
 function renderLeads() {
@@ -577,7 +739,7 @@ function renderWorkers() {
       territory: state.territories.find((area) => area.id === worker.territory_id)?.name ?? worker.territory_id,
     }), worker.verification);
     if (['master_agent','field_agent'].includes(state.user.role)) item.append(button('Upload documents', 'worker-upload', 'button button-outline', { id: worker.id }));
-    if (['super_admin','compliance'].includes(state.user.role)) {
+    if (['global_admin','super_admin','compliance'].includes(state.user.role)) {
       item.append(button('Documents', 'worker-documents', 'button button-outline', { id: worker.id }));
       if (worker.verification !== 'verified' && state.user.role === 'compliance') item.append(button('Verify worker', 'worker-verify', 'button button-primary', { id: worker.id }));
     }
@@ -617,8 +779,8 @@ function renderRequests() {
       status: t(request.status),
     }), request.status);
     item.dataset.request = request.id;
-    if (state.user.role === 'super_admin' && request.status === 'open') item.append(button('Find candidates', 'candidates', 'button button-outline', { id: request.id }));
-    if (state.user.role === 'super_admin') item.append(button('Matches', 'matches', 'button button-outline', { id: request.id }));
+    if (isPlatformAdmin() && request.status === 'open') item.append(button('Find candidates', 'candidates', 'button button-outline', { id: request.id }));
+    if (isPlatformAdmin()) item.append(button('Matches', 'matches', 'button button-outline', { id: request.id }));
     list.append(item);
   }
   columns.append(form, list);
@@ -656,7 +818,7 @@ function renderProperties() {
       territory.input.append(option);
     }
     form.append(territory.label);
-    if(['super_admin','corporate_business_manager'].includes(state.user.role)){
+    if(['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)){
       const seller=field('Seller / agent represented','owner_user_id','select',false);const none=node('option','AfroLife managed listing');none.value='';seller.input.append(none);for(const user of state.marketplaceSellers){const option=node('option',`${user.legal_name} · ${roleLabel(user.role)}`);option.value=user.id;seller.input.append(option);}form.append(seller.label);
     }
     form.append(field('Description','description','textarea',false,{maxlength:5000,rows:3}).label);
@@ -703,12 +865,25 @@ function renderProperties() {
   }
   columns.append(listings);
   wrap.append(columns);
+  if (state.user.role === 'property_owner') {
+    const statements = node('section', undefined, 'panel form-card');
+    statements.append(node('h2','Owner rent & deposit statements'));
+    statements.append(node('p','These read-only records show lease charges and reconciled rent/deposit receipts. They do not initiate or confirm a payout to you.'));
+    if (!state.ownerStatements.length) statements.append(empty('No lease statements are available for your listings yet.'));
+    for (const item of state.ownerStatements) {
+      const statement = card(`${item.address} · ${item.unit_no}`, `Lease ${item.start_date} to ${item.end_date} · ${item.status}`);
+      statement.append(node('p',`Rent charged ETB ${item.rent_charged} · reconciled ETB ${item.rent_reconciled} · pending reconciliation ETB ${item.rent_pending_reconciliation}`));
+      statement.append(node('p',`Deposit received ETB ${item.deposit_reconciled} · refunded ETB ${item.deposit_refunded} · agreed deposit ETB ${item.agreed_deposit}`));
+      statements.append(statement);
+    }
+    wrap.append(statements);
+  }
   return wrap;
 }
 
 function renderMarketplace() {
   const wrap = node('div');
-  const manager = ['super_admin','corporate_business_manager'].includes(state.user.role);
+  const manager = ['global_admin','super_admin','corporate_business_manager'].includes(state.user.role);
   const config = state.marketplaceConfig ?? {};
   const enabled = config.system?.enabled_domains ?? ['products','services','equipment','properties'];
   wrap.append(sectionHeading('Marketplace', 'Post and discover products, services, equipment and property with private photo and video uploads.'));
@@ -775,14 +950,14 @@ function renderMarketplaceConfig() {
   const domains=['products','services','equipment','properties'];
   const domainsWrap=node('fieldset',undefined,'span-2');domainsWrap.append(node('legend','Enabled domains'));
   for(const domain of domains){const label=node('label',domain);const input=document.createElement('input');input.type='checkbox';input.name=`domain:${domain}`;input.checked=(cfg.system?.enabled_domains??[]).includes(domain);label.prepend(input);domainsWrap.append(label);}form.append(domainsWrap);
-  if(state.user.role==='super_admin'){
+  if(state.user.role==='global_admin'){
     const moderation=node('label','Require staff review before publishing');const check=document.createElement('input');check.type='checkbox';check.name='moderation_required';check.checked=cfg.system?.moderation_required!==false;moderation.prepend(check);form.append(moderation);
     form.append(field('Max photo size (MB)','image_max_mb','number',true,{min:0.25,max:20,step:0.25}).label,field('Max video size (MB)','video_max_mb','number',true,{min:1,max:100,step:1}).label,field('Max media per listing','max_media_per_listing','number',true,{min:1,max:30,step:1}).label);
   }
   for(const scope of ['products','services']){const area=field(`${scope[0].toUpperCase()+scope.slice(1)} categories (one key | label per line)`,`${scope}_categories`,'textarea',true,{rows:5});area.input.value=(cfg[scope]?.categories??[]).map((item)=>`${item.key} | ${item.label}`).join('\n');area.label.className='span-2';form.append(area.label);}
   const propertyTypes=field('Property types (one key | label per line)','property_types','textarea',true,{rows:3});propertyTypes.input.value=(cfg.properties?.property_types??[]).map((item)=>`${item.key} | ${item.label}`).join('\n');propertyTypes.label.className='span-2';form.append(propertyTypes.label);
   const rentalPeriods=field('Rental periods (one key | label per line)','rental_periods','textarea',true,{rows:2});rentalPeriods.input.value=(cfg.rentals?.periods??[]).map((item)=>`${item.key} | ${item.label}`).join('\n');rentalPeriods.label.className='span-2';form.append(rentalPeriods.label);
-  if(state.user.role==='super_admin'){
+  if(state.user.role==='global_admin'){
     const users=node('div',undefined,'span-2');users.append(node('h4','Self-registration account types and KYC'));
     const types=cfg.users?.account_types??[];for(const item of types){const label=node('label',item.label);const input=document.createElement('input');input.type='checkbox';input.name=`account:${item.key}`;input.checked=item.enabled;label.prepend(input);users.append(label);}
     users.append(node('h4','Required registration documents'));
@@ -796,7 +971,7 @@ function renderContracts() {
   const wrap = node('div');
   wrap.append(sectionHeading('Contracts', 'Move each contract through review, approval, signature, and two-person payment reconciliation.'));
   const columns = node('div', undefined, 'columns');
-  if (['super_admin', 'master_agent', 'field_agent'].includes(state.user.role)) {
+  if (['global_admin', 'super_admin', 'master_agent', 'field_agent'].includes(state.user.role)) {
     const form = node('form', undefined, 'panel form-card inline-form');
     form.dataset.form = 'contract';
     form.append(node('h3', 'Create a contract'));
@@ -826,7 +1001,7 @@ function renderContracts() {
       payment_received: [['reconcile', 'Reconcile payment', ['finance', 'finance_manager']]],
     }[contract.state] ?? [];
     for (const [action, label, roles] of steps) {
-      if (roles.includes(state.user.role)) {
+      if (roles.includes(state.user.role) || (state.user.role === 'global_admin' && roles.includes('super_admin'))) {
         const actionButton = button(label, 'contract-step', 'button button-outline', { id: contract.id, step: action });
         if (action === 'sign' && !(contract.documents ?? []).some((doc) => doc.document_stage === 'company_countersigned' && doc.uploaded_by === state.user.id)
           || action === 'sign' && !(contract.documents ?? []).some((doc) => doc.document_stage === 'party_signed')) actionButton.disabled = true;
@@ -838,7 +1013,7 @@ function renderContracts() {
       item.append(download);
     }
     if (contract.signature) item.append(node('p', `Company signature recorded by ${contract.signature.signer_name} (${roleLabel(contract.signature.signer_role)}).`));
-    if (contract.state === 'signature_pending' && ['master_agent', 'field_agent', 'super_admin', 'corporate_business_manager'].includes(state.user.role)) {
+    if (contract.state === 'signature_pending' && ['master_agent', 'field_agent', 'global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)) {
       const file = document.createElement('input');
       file.type = 'file'; file.accept = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
       const isAgent = ['master_agent', 'field_agent'].includes(state.user.role);
@@ -853,9 +1028,42 @@ function renderContracts() {
   return wrap;
 }
 
+function renderCommissions() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Commissions', 'Review earned commissions, current holdbacks, and eligible releases.'));
+  const list = node('div', undefined, 'list');
+  if (!state.commissions.length) list.append(empty('No commission events are available for your account.'));
+  for (const commission of state.commissions) {
+    const total = Number(commission.amount);
+    const held = Number(commission.held_amount ?? 0);
+    const immediate = Math.round((total - held) * 100) / 100;
+    let details = t('Contract {{contract}} · Total ETB {{total}} · First payment ETB {{immediate}} · Held ETB {{held}}', {
+      contract: commission.contract_no ?? commission.contract_id,
+      total: total.toLocaleString(document.documentElement.lang),
+      immediate: immediate.toLocaleString(document.documentElement.lang),
+      held: held.toLocaleString(document.documentElement.lang),
+    });
+    if (held) details += ` · ${t('Release date {{date}}', { date: commission.holdback_release_on })}`;
+    const item = card(commission.agent_name ?? commission.agent_id, details, commission.held_status === 'held' ? 'held' : commission.status);
+    if (commission.status === 'qualified' && ['finance','finance_manager'].includes(state.user.role)) {
+      item.append(button('Approve commission', 'commission-approve', 'button button-outline', { id: commission.id }));
+    }
+    if (commission.status === 'approved' && immediate > 0 && ['global_admin','super_admin'].includes(state.user.role)) {
+      item.append(button('Pay first installment', 'commission-pay', 'button button-outline', { id: commission.id }));
+    }
+    if (commission.held_status === 'held' && ['global_admin','super_admin'].includes(state.user.role)) {
+      item.append(button('Release eligible holdback', 'commission-release-held', 'button button-outline', { id: commission.id }));
+    }
+    list.append(item);
+  }
+  wrap.append(list);
+  return wrap;
+}
+
 function renderAgents() {
   const wrap = node('div');
   wrap.append(sectionHeading('Agent management', 'Review agent activity and assign specialist agency services across the Super Agent and Master Agent network.'));
+  wrap.append(renderServiceLauncher(['leads', 'workers', 'requests', 'properties', 'marketplace', 'contracts', 'commissions', 'rent']));
   const list = node('div', undefined, 'list');
   const services = {
     financial_service: 'Financial Service Agent',
@@ -865,7 +1073,7 @@ function renderAgents() {
   if (!state.team.length) list.append(empty('No agents are available in this management scope.'));
   for (const agent of state.team) {
     const item = card(agent.legal_name, `${roleLabel(agent.role)} · ${agent.active ? 'active' : 'inactive'} · Leads ${agent.lead_count} · Contracts ${agent.contract_count} · Listings ${agent.property_count}`, services[agent.service_specialization] ?? 'General agent');
-    if (agent.id !== state.user.id && (state.user.role === 'super_admin' || agent.parent_id === state.user.id)) {
+    if (agent.id !== state.user.id && (isPlatformAdmin() || agent.parent_id === state.user.id)) {
       const select = document.createElement('select');
       select.dataset.agentSpecialization = agent.id;
       for (const [value, label] of [['', 'General agent'], ...Object.entries(services)]) {
@@ -885,7 +1093,7 @@ function renderRent() {
   const wrap = node('div');
   wrap.append(sectionHeading('Rent & deposits', 'Record payments first. A different finance officer reconciles them into the ledger.'));
   const columns = node('div', undefined, 'columns');
-  if (['super_admin', 'master_agent', 'field_agent'].includes(state.user.role)) {
+  if (['global_admin', 'super_admin', 'master_agent', 'field_agent'].includes(state.user.role)) {
     const tenantForm = node('form', undefined, 'panel form-card inline-form');
     tenantForm.dataset.form = 'tenant';
     tenantForm.append(node('h3', 'Register a tenant'), field('Full name', 'name').label, field('Phone', 'phone', 'tel').label, field('National ID (optional)', 'national_id', 'text', false).label, button('Save tenant', 'submit', 'button button-primary'));
@@ -904,7 +1112,7 @@ function renderRent() {
     leaseForm.append(unit.label, tenant.label, field('Monthly rent (ETB)', 'rent', 'number', true, { min: '0.01', step: '0.01' }).label, field('Deposit (ETB)', 'deposit', 'number', false, { min: '0', step: '0.01', value: '0' }).label, field('Start date', 'start_date', 'date').label, field('Term (months)', 'months', 'number', true, { min: '1', max: '120', value: '12' }).label, button('Create lease', 'submit', 'button button-primary'));
     columns.append(leaseForm);
   }
-  if (['super_admin', 'finance_manager'].includes(state.user.role)) {
+  if (['global_admin', 'super_admin', 'finance_manager'].includes(state.user.role)) {
     const pending = node('section', undefined, 'panel form-card');
     pending.append(node('h3', 'Payments awaiting reconciliation'));
     if (!state.pendingRent.length) pending.append(empty('No rent or deposit payments are awaiting reconciliation.'));
@@ -921,9 +1129,9 @@ function renderRent() {
     const item = card(`${lease.address} · ${lease.unit_no}`, t('{{tenant}} · ETB {{rent}} monthly · {{status}}', { tenant: lease.tenant_name, rent: Number(lease.rent).toLocaleString(document.documentElement.lang), status: t(lease.status) }), lease.status);
     item.dataset.lease = lease.id;
     item.append(button('View charges & payments', 'lease-payments', 'button button-outline', { id: lease.id }));
-    if (['super_admin', 'master_agent', 'field_agent'].includes(state.user.role) && lease.status === 'active') item.append(button('End lease', 'lease-end', 'button button-outline', { id: lease.id }));
-    if (['finance', 'finance_manager', 'super_admin'].includes(state.user.role) && lease.status === 'active' && Number(lease.deposit) > 0) item.append(button('Record deposit', 'deposit-pay', 'button button-outline', { id: lease.id }));
-    if (['finance', 'finance_manager', 'super_admin'].includes(state.user.role) && lease.status === 'ended' && Number(lease.deposit) > 0) item.append(button('Return deposit', 'deposit-refund', 'button button-outline', { id: lease.id }));
+    if (['global_admin', 'super_admin', 'master_agent', 'field_agent'].includes(state.user.role) && lease.status === 'active') item.append(button('End lease', 'lease-end', 'button button-outline', { id: lease.id }));
+    if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && lease.status === 'active' && Number(lease.deposit) > 0) item.append(button('Record deposit', 'deposit-pay', 'button button-outline', { id: lease.id }));
+    if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && lease.status === 'ended' && Number(lease.deposit) > 0) item.append(button('Return deposit', 'deposit-refund', 'button button-outline', { id: lease.id }));
     leases.append(item);
   }
   columns.append(leases); wrap.append(columns); return wrap;
@@ -968,13 +1176,64 @@ function renderBusinessRules() {
   return panel;
 }
 
+function renderGlobalAdminPromotions() {
+  const section = node('section', undefined, 'panel form-card');
+  section.style.marginTop = '20px';
+  section.append(node('h3', 'Global Admin governance'));
+  section.append(node('p', 'Promotion requires two different active, MFA-enabled Super Admins. Global Admin access does not bypass financial maker-checker approvals.'));
+  if (state.user.role === 'super_admin') {
+    const candidates = state.users.filter((user) =>
+      user.id !== state.user.id && user.active && user.mfa_enabled && user.role === 'super_admin');
+    if (candidates.length) {
+      const form = node('form', undefined, 'inline-form');
+      form.dataset.form = 'global-admin-promotion';
+      const target = field('Nominate an eligible Super Admin', 'target_user_id', 'select');
+      const placeholder = node('option', 'Choose a Super Admin'); placeholder.value = ''; placeholder.disabled = true; placeholder.selected = true;
+      target.input.append(placeholder);
+      for (const candidate of candidates) {
+        const option = node('option', `${candidate.legal_name} · ${candidate.phone}`);
+        option.value = candidate.id;
+        target.input.append(option);
+      }
+      form.append(target.label, button('Request Global Admin promotion', 'submit', 'button button-primary'));
+      section.append(form);
+    } else {
+      section.append(node('p', 'No other active, MFA-enabled Super Admin is currently eligible for nomination.'));
+    }
+  }
+
+  const history = node('div', undefined, 'list');
+  history.append(node('h4', 'Promotion requests'));
+  if (!state.globalAdminPromotions.length) {
+    history.append(empty('No Global Admin promotion requests have been submitted.'));
+  } else {
+    for (const request of state.globalAdminPromotions) {
+      const item = card(request.target_name, `${request.status} · Requested by ${request.requester_name} · ${request.created_at}`, request.status);
+      if (request.approver_name) item.append(node('p', `Decision by ${request.approver_name}: ${request.decision_reason}`));
+      const canDecide = state.user.role === 'super_admin'
+        && request.status === 'pending'
+        && request.requested_by !== state.user.id
+        && request.target_user_id !== state.user.id;
+      if (canDecide) {
+        item.append(button('Approve promotion', 'global-promotion-approve', 'button button-primary', { id: request.id }));
+        item.append(button('Reject promotion', 'global-promotion-reject', 'button button-outline', { id: request.id }));
+      }
+      history.append(item);
+    }
+  }
+  section.append(history);
+  return section;
+}
+
 function renderAdmin() {
   const wrap = node('div');
-  const isAdmin = state.user.role === 'super_admin';
+  const isAdmin = isPlatformAdmin();
+  const isGlobalAdmin = state.user.role === 'global_admin';
   const isBusinessManager=state.user.role==='corporate_business_manager';
-  wrap.append(sectionHeading(isAdmin ? 'Administration' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? 'Provision accounts and review the operational summary.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
+  wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global administration' : 'Administration' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Manage system-wide configuration and review cross-module operations.' : 'Provision accounts and review the operational summary.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
   const columns = node('div', undefined, 'columns');
-  if (isAdmin) wrap.append(renderBusinessRules());
+  if (isGlobalAdmin) wrap.append(renderBusinessRules());
+  if (isAdmin) wrap.append(renderGlobalAdminPromotions());
   if (isAdmin) {
     const form = node('form', undefined, 'panel form-card inline-form');
     form.dataset.form = 'user';
@@ -1021,7 +1280,7 @@ function renderAdmin() {
       user.household_cover_interest && 'Household cover requested',
     ].filter(Boolean).join(' · ');
     const item = card(user.legal_name, [signupDetails, requestedBenefits].filter(Boolean).join(' · '), user.active ? 'active' : user.kyc_status);
-    if (user.signup_account_type && ['super_admin', 'compliance'].includes(state.user.role)) {
+    if (user.signup_account_type && ['global_admin', 'super_admin', 'compliance'].includes(state.user.role)) {
       item.append(button(`KYC documents (${user.kyc_document_count ?? 0})`, 'user-documents', 'button button-outline', { id: user.id }));
     }
     if (state.user.role === 'compliance' && ['uploaded','under_review'].includes(user.kyc_status) && user.id !== state.user.id) {
@@ -1095,6 +1354,19 @@ function renderPanel() {
     $('#workspace').replaceChildren(createMfiWorkspace(api, state.user));
     return;
   }
+  if (state.panel === 'edir') {
+    $('#workspace').replaceChildren(createEdirWorkspace(api, state.user, (organizationId) => {
+      state.edirOrganizationId = organizationId;
+      state.user.edir_id = organizationId;
+      localStorage.setItem(EDIR_ORGANIZATION_KEY, organizationId);
+      renderPanel();
+    }));
+    return;
+  }
+  if (state.panel === 'privacy') {
+    $('#workspace').replaceChildren(createPrivacyWorkspace(api, state.user));
+    return;
+  }
   const renderer = {
     overview: renderOverview,
     leads: renderLeads,
@@ -1104,6 +1376,7 @@ function renderPanel() {
     marketplace: renderMarketplace,
     admin: renderAdmin,
     contracts: renderContracts,
+    commissions: renderCommissions,
     agents: renderAgents,
     rent: renderRent,
     password: renderPasswordChange,
@@ -1257,6 +1530,14 @@ async function submitForm(form) {
       password: result.temp_password,
     });
     return;
+  } else if (form.dataset.form === 'global-admin-promotion') {
+    await api('/global-admin-promotions', {
+      method: 'POST',
+      body: JSON.stringify({ target_user_id: values.target_user_id }),
+    });
+    await refresh();
+    showAlert('Global Admin promotion request submitted for independent review.');
+    return;
   }
   form.reset();
   await refresh();
@@ -1269,11 +1550,13 @@ async function showCandidates(requestId, container) {
   const panel = node('div', undefined, 'candidate-results list');
   panel.style.gridColumn = '1 / -1';
   panel.append(node('h3', 'Eligible candidates'));
+  panel.append(node('p', 'Scores are recommendations based on the factors below. A staff member reviews each proposal. Confirm the worker’s willingness and terms directly before reserving.', 'muted'));
   try {
     const candidates = await api(`/requests/${requestId}/candidates`);
     if (!candidates.length) panel.append(empty('No verified available workers meet this request yet.'));
     for (const person of candidates) {
       const item = card(person.name, t('{{years}} years · match score {{score}}%', { years: person.experience_years, score: person.score }), 'verified');
+      item.append(matchBreakdown(person.parts));
       item.append(button('Propose match', 'propose', 'button button-primary', { id: requestId, worker: person.worker_id }));
       panel.append(item);
     }
@@ -1281,6 +1564,22 @@ async function showCandidates(requestId, container) {
     panel.append(empty(error.message));
   }
   container.append(panel);
+}
+
+function matchBreakdown(parts) {
+  const details = document.createElement('details');
+  details.className = 'match-breakdown';
+  const summary = node('summary', 'Score factors');
+  details.append(summary);
+  const labels = { skills: 'Skills', location: 'Location', availability: 'Availability', experience: 'Experience', rate: 'Expected rate', language: 'Languages' };
+  const list = node('ul');
+  for (const [key, label] of Object.entries(labels)) {
+    if (typeof parts?.[key] !== 'number') continue;
+    list.append(node('li', `${label}: ${Math.round(parts[key] * 100)}%`));
+  }
+  if (!list.children.length) list.append(node('li', 'Breakdown unavailable for this earlier match.'));
+  details.append(list);
+  return details;
 }
 
 async function showMatches(requestId, container) {
@@ -1294,8 +1593,9 @@ async function showMatches(requestId, container) {
     if (!matches.length) panel.append(empty('No matches have been proposed.'));
     for (const match of matches) {
       const item = card(match.worker_name, t('Match score {{score}}%', { score: match.score }), match.status);
+      item.append(matchBreakdown(match.score_breakdown));
       if (match.status === 'proposed') {
-        item.append(button('Accept & reserve', 'respond', 'button button-primary', { id: match.id, decision: 'accepted' }));
+        item.append(button('Confirm match & reserve', 'respond', 'button button-primary', { id: match.id, decision: 'accepted' }));
         item.append(button('Decline', 'respond', 'button button-outline', { id: match.id, decision: 'declined' }));
       } else if (match.status === 'accepted') {
         item.append(button('Release reservation', 'release', 'button button-outline', { id: match.id }));
@@ -1488,7 +1788,42 @@ document.addEventListener('click', async (event) => {
   const action = event.target.closest('button[data-action]');
   if (!action) return;
   const { action: name, id } = action.dataset;
+  if (name === 'open-panel') {
+    state.panel = action.dataset.panel;
+    renderPanel();
+    return;
+  }
   const container = action.closest('.list-card');
+  if (name === 'commission-approve' || name === 'commission-pay' || name === 'commission-release-held') {
+    const endpoint = name === 'commission-approve' ? 'approve' : name === 'commission-pay' ? 'pay' : 'release-held';
+    const reference = name === 'commission-approve' ? null : window.prompt(t('Enter the payment reference.'));
+    if (name !== 'commission-approve' && (!reference || reference.trim().length < 3)) return;
+    try {
+      await api(`/commissions/${id}/${endpoint}`, { method: 'POST', body: JSON.stringify(reference ? { reference: reference.trim() } : {}) });
+      await refresh();
+      showAlert(name === 'commission-approve' ? 'Commission approved.' : name === 'commission-pay' ? 'Commission installment paid.' : 'Commission holdback released.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'global-promotion-approve' || name === 'global-promotion-reject') {
+    const decision = name === 'global-promotion-approve' ? 'approve' : 'reject';
+    const prompt = decision === 'approve'
+      ? 'Enter the approval reason (at least 10 characters).'
+      : 'Enter the rejection reason (at least 10 characters).';
+    const reason = window.prompt(t(prompt));
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      await api(`/global-admin-promotions/${id}/${decision}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      await refresh();
+      showAlert(decision === 'approve' ? 'Global Admin promotion approved.' : 'Global Admin promotion rejected.');
+    } catch (error) {
+      showAlert(error.message, true);
+    }
+    return;
+  }
   if (name === 'contract-document-upload') {
     const file = container.querySelector('input[type="file"]')?.files?.[0];
     if (!file) { showAlert('Choose a signed contract document first.', true); return; }
@@ -1525,7 +1860,7 @@ document.addEventListener('click', async (event) => {
     const property_types=form.elements.namedItem('property_types').value.split('\n').map((line)=>line.trim()).filter(Boolean).map((line)=>{const [key,...rest]=line.split('|');return {key:key.trim(),label:rest.join('|').trim(),enabled:true};});
     const periods=form.elements.namedItem('rental_periods').value.split('\n').map((line)=>line.trim()).filter(Boolean).map((line)=>{const [key,...rest]=line.split('|');return {key:key.trim(),label:rest.join('|').trim(),enabled:true};});
     valuesToSave.push({scope:'properties',key:'property_types',value:property_types},{scope:'rentals',key:'periods',value:periods});
-    if(state.user.role==='super_admin'){
+    if(state.user.role==='global_admin'){
       valuesToSave.push({scope:'system',key:'moderation_required',value:form.elements.namedItem('moderation_required').checked});
       valuesToSave.push({scope:'system',key:'image_max_bytes',value:Math.round(number(form.elements.namedItem('image_max_mb').value)*1048576)});
       valuesToSave.push({scope:'system',key:'video_max_bytes',value:Math.round(number(form.elements.namedItem('video_max_mb').value)*1048576)});
@@ -1635,12 +1970,12 @@ document.addEventListener('click', async (event) => {
       details.append(node('h3', 'Charges and receipts'));
       for (const charge of charges) {
         const row = card(charge.period, t('Due {{due}} · ETB {{amount}}', { due: charge.due_on, amount: Number(charge.amount).toLocaleString(document.documentElement.lang) }), charge.status);
-        if (['finance', 'finance_manager', 'super_admin'].includes(state.user.role) && ['due', 'overdue'].includes(charge.status)) row.append(button('Record rent payment', 'rent-record', 'button button-outline', { id: charge.id }));
+        if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && ['due', 'overdue'].includes(charge.status)) row.append(button('Record rent payment', 'rent-record', 'button button-outline', { id: charge.id }));
         details.append(row);
       }
       for (const payment of payments) {
         const row = card(t(payment.kind), `${payment.reference} · ETB ${Number(payment.amount).toLocaleString(document.documentElement.lang)}`, payment.status);
-        if (payment.status === 'pending' && ['finance_manager', 'super_admin'].includes(state.user.role)) {
+        if (payment.status === 'pending' && ['finance_manager', 'global_admin', 'super_admin'].includes(state.user.role)) {
           row.append(button('Reconcile', 'rent-reconcile', 'button button-outline', { id: payment.id }));
           row.append(button('Void receipt', 'rent-void', 'button button-outline', { id: payment.id }));
         }
@@ -1758,6 +2093,26 @@ document.addEventListener('click', async (event) => {
 
 $('#login-form').addEventListener('submit', login);
 $('#signup-form').addEventListener('submit', submitSignup);
+$('#edir-registration-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = $('#edir-registration-error');
+  setLocalizedText(error, '');
+  $('#edir-registration-success').hidden = true;
+  const values = formData(form);
+  const payload = { ...values, accept_review_terms: values.accept_review_terms === 'on' };
+  for (const key of ['registration_reference','governance_reference','contact_email']) if (!payload[key]) delete payload[key];
+  try {
+    const result = await api('/edir/public/registration-applications', {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+    form.reset();
+    setLocalizedText($('#edir-registration-success'), 'Application received. AfroLife Master Edir will review it before an organization workspace is activated. Reference: {{id}}', { id: result.id });
+    $('#edir-registration-success').hidden = false;
+  } catch (reason) {
+    setLocalizedText(error, reason.message);
+  }
+});
 $('#availability-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const matchId = event.currentTarget.dataset.match;
@@ -1781,6 +2136,12 @@ $('#signup-territory-search').addEventListener('input', syncSignupTerritory);
 $('#signup-territory-search').addEventListener('change', syncSignupTerritory);
 $('#show-signup').addEventListener('click', () => openSignup());
 $('#show-agent-plans').addEventListener('click', () => openSignup(true));
+document.querySelectorAll('[data-open-edir-registration]').forEach((button) => button.addEventListener('click', () => {
+  const form = $('#edir-registration-form');
+  form.hidden = false;
+  form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  form.querySelector('input[name="display_name"]').focus({ preventScroll: true });
+}));
 $('#show-login').addEventListener('click', () => {
   $('#signup-form').hidden = true;
   $('#login-form').hidden = false;
@@ -1792,7 +2153,23 @@ $('#change-server').addEventListener('click', () => {
   $('#login-form').hidden = true;
   $('#signup-form').hidden = true;
 });
-$('#logout').addEventListener('click', signOut);
+$('#logout').addEventListener('click', () => signOut());
+$('#retry-session').addEventListener('click', async () => {
+  const button = $('#retry-session');
+  button.disabled = true;
+  try {
+    await loadWorkspace();
+  } catch (error) {
+    console.error('AfroLife could not restore the saved session.', error);
+    if (state.user && !$('#app-view').hidden) {
+      showAlert('Your session is still active, but some workspace data could not be loaded. Check the connection and reload the workspace.', true);
+      return;
+    }
+    $('#login-error').textContent = 'Unable to reconnect to your workspace. Your saved session is retained; check the connection and retry, or sign in again.';
+  } finally {
+    button.disabled = false;
+  }
+});
 $('#refresh').addEventListener('click', () => refresh().catch((error) => showAlert(error.message, true)));
 $('#install-app').addEventListener('click', async () => {
   if (!deferredInstallPrompt) return;
@@ -1801,6 +2178,16 @@ $('#install-app').addEventListener('click', async () => {
   deferredInstallPrompt = null;
   $('#install-app').hidden = true;
 });
+document.querySelectorAll('[data-install-pwa]').forEach((button) => button.addEventListener('click', async () => {
+  if (deferredInstallPrompt) {
+    await deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    $('#install-app').hidden = true;
+    return;
+  }
+  $('#install-help').hidden = false;
+}));
 
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
@@ -1836,4 +2223,16 @@ if (!isNativeApp && 'serviceWorker' in navigator) {
     console.error('AfroLife offline support could not be enabled.', error);
   }));
 }
-if (sessionStorage.getItem(TOKEN_KEY)) loadWorkspace().catch(() => signOut());
+if (sessionStorage.getItem(TOKEN_KEY)) {
+  loadWorkspace().catch((error) => {
+    console.error('AfroLife could not restore the saved session.', error);
+    if (sessionStorage.getItem(TOKEN_KEY)) {
+      if (state.user && !$('#app-view').hidden) {
+        showAlert('Your session is still active, but some workspace data could not be loaded. Check the connection and reload the workspace.', true);
+      } else {
+        $('#retry-session').hidden = false;
+        $('#login-error').textContent = 'Unable to reconnect to your workspace. Your saved session is retained; check the connection and retry, or sign in again.';
+      }
+    }
+  });
+}

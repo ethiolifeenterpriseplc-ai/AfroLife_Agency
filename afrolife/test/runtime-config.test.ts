@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import { loadRuntimeConfig } from '../src/runtime-config.js';
+import { loadRuntimeConfig, sessionIdleTimeoutMinutes } from '../src/runtime-config.js';
 
 const safeProductionEnvironment = {
   NODE_ENV: 'production',
@@ -54,7 +54,36 @@ test('production configuration rejects unsafe origins and proxy trust', () => {
   assert.throws(() => loadRuntimeConfig({ ...safeProductionEnvironment, LOGIN_RATE_LIMIT: '0' }), /between 1 and 1000/);
 });
 
+test('Insurance service routing requires an explicit cutover-readiness attestation', () => {
+  const serviceUrl = 'https://insurance.internal';
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_URL: serviceUrl }),
+    /INSURANCE_SERVICE_CUTOVER_READY=1/,
+  );
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_CUTOVER_READY: '1' }),
+    /INSURANCE_SERVICE_URL is required/,
+  );
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_URL: serviceUrl, INSURANCE_SERVICE_CUTOVER_READY: 'yes' }),
+    /must be 0 or 1/,
+  );
+  assert.doesNotThrow(() => loadRuntimeConfig({
+    ...safeProductionEnvironment,
+    INSURANCE_SERVICE_URL: serviceUrl,
+    INSURANCE_SERVICE_CUTOVER_READY: '1',
+  }));
+});
+
 test('development retains existing pilot behavior unless explicitly disabled', () => {
   assert.equal(loadRuntimeConfig({ NODE_ENV: 'development' }).mfiPilotEnabled, true);
   assert.equal(loadRuntimeConfig({ NODE_ENV: 'development', MFI_PILOT_ENABLED: '0' }).mfiPilotEnabled, false);
+});
+
+test('session inactivity timeout is configurable within safe bounds', () => {
+  assert.equal(sessionIdleTimeoutMinutes({}), 30);
+  assert.equal(sessionIdleTimeoutMinutes({ SESSION_IDLE_TIMEOUT_MINUTES: '45' }), 45);
+  assert.throws(() => sessionIdleTimeoutMinutes({ SESSION_IDLE_TIMEOUT_MINUTES: '4' }), /between 5 and 480/);
+  assert.throws(() => sessionIdleTimeoutMinutes({ SESSION_IDLE_TIMEOUT_MINUTES: '481' }), /between 5 and 480/);
+  assert.throws(() => sessionIdleTimeoutMinutes({ SESSION_IDLE_TIMEOUT_MINUTES: '30.5' }), /between 5 and 480/);
 });

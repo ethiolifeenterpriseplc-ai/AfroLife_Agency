@@ -12,7 +12,9 @@ import jwt from 'jsonwebtoken';
 
 const API = (process.env.API_URL ?? 'http://localhost:3000') + '/api/v1';
 const SECRET = process.env.JWT_SECRET!;
-const db = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL || process.env.DATABASE_URL });
+const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
+if (!testDatabaseUrl) throw new Error('TEST_DATABASE_URL must explicitly point to a disposable integration-test database');
+const db = new pg.Pool({ connectionString: testDatabaseUrl });
 const run = randomInt(0, 10_000_000).toString().padStart(7, '0');
 const uniquePhone = () => `+2519${randomInt(0, 100_000_000).toString().padStart(8, '0')}`;
 const PW = 'Passw0rd!test';
@@ -33,7 +35,9 @@ async function mkUser(role: string, n: number): Promise<U> {
     [`${role}-${n}`, phone, role, bcrypt.hashSync(PW, 4)],
   );
   const id = r.rows[0].id as string;
-  return { id, role, phone, token: jwt.sign({ sub: id, role }, SECRET) };
+  const sessionId = randomUUID();
+  await db.query('INSERT INTO auth_sessions (id,user_id,expires_at) VALUES ($1,$2,now()+interval \'8 hours\')', [sessionId, id]);
+  return { id, role, phone, token: jwt.sign({ sub: id, role, sid: sessionId }, SECRET, { expiresIn: '8h' }) };
 }
 
 async function call(u: Pick<U, 'token'>, method: string, path: string, body?: unknown) {
@@ -57,6 +61,7 @@ async function callFile(u: Pick<U, 'token'>, path: string, file: Buffer, content
 // ---- Setup: one user per role; two field agents under one master ----
 const tid = (await db.query("INSERT INTO territories (level, name) VALUES ('city', $1) RETURNING id", ['Test ' + run])).rows[0].id;
 const admin = await mkUser('super_admin', 1);
+const globalAdmin = await mkUser('global_admin', 10);
 const compliance = await mkUser('compliance', 2);
 const fin1 = await mkUser('finance', 3);
 const fin2 = await mkUser('finance_manager', 4);
@@ -93,7 +98,57 @@ let A: Awaited<ReturnType<typeof newContract>>;
 test('login returns a token for an active user', async () => {
   const r = await fetch(API + '/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone: admin.phone, password: PW }) });
   assert.equal(r.status, 200);
-  assert.ok((await r.json() as any).token);
+  const result = await r.json() as { token: string };
+  const claims = jwt.decode(result.token) as { sid?: string } | null;
+  assert.ok(claims?.sid);
+  assert.ok((await db.query('SELECT 1 FROM auth_sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL', [claims.sid, admin.id])).rowCount);
+});
+
+test('authenticated requests reject a session that exceeded its inactivity window', async () => {
+  const idle = await mkUser('customer', 90);
+  await db.query(
+    `UPDATE auth_sessions SET last_activity_at=now()-interval '9 hours',expires_at=now()+interval '1 hour'
+     WHERE user_id=$1`,
+    [idle.id],
+  );
+  assert.equal((await call(idle, 'GET', '/auth/me')).status, 401);
+});
+
+test('logout revokes the current server-side session', async () => {
+  const user = await mkUser('customer', 91);
+  await db.query("UPDATE auth_sessions SET last_activity_at=now()-interval '2 minutes' WHERE user_id=$1", [user.id]);
+  assert.equal((await call(user, 'GET', '/auth/session')).status, 204);
+  assert.ok((await db.query(
+    "SELECT 1 FROM auth_sessions WHERE user_id=$1 AND last_activity_at>now()-interval '1 minute'",
+    [user.id],
+  )).rowCount);
+  assert.equal((await call(user, 'POST', '/auth/logout')).status, 204);
+  assert.equal((await call(user, 'GET', '/auth/me')).status, 401);
+});
+
+test('privacy case events record safe before/after metadata for incident updates', async () => {
+  const created = await call(compliance, 'POST', '/privacy/incidents', {
+    incident_type: 'other',
+    severity: 'low',
+    summary: 'Synthetic privacy event test',
+    details: 'Synthetic details for the privacy event integration test',
+    affected_data: 'Synthetic records',
+    affected_people_estimate: 1,
+  });
+  assert.equal(created.status, 201);
+  const update = await call(compliance, 'PATCH', `/privacy/incidents/${created.body.id}`, {
+    status: 'contained',
+    assigned_to: compliance.id,
+    containment_actions: 'Synthetic containment details for the privacy event test',
+  });
+  assert.equal(update.status, 200);
+  const events = await call(compliance, 'GET', `/privacy/cases/privacy_incident/${created.body.id}/events`);
+  assert.equal(events.status, 200);
+  const event = events.body.find((item: any) => item.action === 'updated');
+  assert.equal(event.details.before.status, 'open');
+  assert.equal(event.details.after.status, 'contained');
+  assert.equal(event.details.containment_changed, true);
+  assert.doesNotMatch(JSON.stringify(event.details), /Synthetic containment details/);
 });
 
 test('public sign-up creates a pending account that cannot sign in before approval', async () => {
@@ -141,6 +196,8 @@ test('worker sign-up uploads private KYC documents and requires separate complia
       password: 'KycWorkerPass!2026',
       password_confirmation: 'KycWorkerPass!2026',
       account_type: 'worker',
+      worker_document_consent: true,
+      date_of_birth: '1990-01-01',
     }),
   });
   assert.equal(response.status, 201);
@@ -238,13 +295,13 @@ test('Gate 3: the same number written another way is still a duplicate', async (
   assert.equal((await call(fb, 'POST', '/leads', { lead_type: 'household', name: 'Bad', phone: '12345' })).status, 400);
 });
 
-test('business rules are Super Admin-only, audited, validated, and applied to unsigned contracts', async () => {
-  const settings = await call(admin, 'GET', '/business-rules');
+test('business rules are Global Admin-only, audited, validated, and applied to unsigned contracts', async () => {
+  const settings = await call(globalAdmin, 'GET', '/business-rules');
   assert.equal(settings.status, 200);
   const oldRate = Number(settings.body.find((rule: any) => rule.key === 'A_onboarding_pct').value);
   assert.equal((await call(fa, 'GET', '/business-rules')).status, 403);
-  assert.equal((await call(admin, 'PATCH', '/business-rules', { values: { A_onboarding_pct: 101 } })).status, 422);
-  assert.equal((await call(admin, 'PATCH', '/business-rules', {
+  assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', { values: { A_onboarding_pct: 101 } })).status, 422);
+  assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
     values: {
       match_w_skills: 0, match_w_location: 0, match_w_availability: 0,
       match_w_experience: 0, match_w_rate: 0, match_w_language: 0,
@@ -252,13 +309,13 @@ test('business rules are Super Admin-only, audited, validated, and applied to un
   })).status, 422);
 
   try {
-    const updated = await call(admin, 'PATCH', '/business-rules', { values: { A_onboarding_pct: 21 } });
+    const updated = await call(globalAdmin, 'PATCH', '/business-rules', { values: { A_onboarding_pct: 21 } });
     assert.equal(updated.status, 200);
     const contract = (await call(fa, 'GET', '/contracts')).body.find((item: any) => item.id === A.contract.id);
     assert.equal(Number(contract.onboarding_amt), 21000);
-    assert.ok((await db.query("SELECT 1 FROM audit_logs WHERE action = 'business_rules_updated' AND actor_id = $1", [admin.id])).rowCount);
+    assert.ok((await db.query("SELECT 1 FROM audit_logs WHERE action = 'business_rules_updated' AND actor_id = $1", [globalAdmin.id])).rowCount);
   } finally {
-    assert.equal((await call(admin, 'PATCH', '/business-rules', { values: { A_onboarding_pct: oldRate } })).status, 200);
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', { values: { A_onboarding_pct: oldRate } })).status, 200);
   }
 
   const restored = (await call(fa, 'GET', '/contracts')).body.find((item: any) => item.id === A.contract.id);
@@ -268,7 +325,7 @@ test('business rules are Super Admin-only, audited, validated, and applied to un
 test('public signup prices follow the current business rules', async () => {
   const [optionsResponse, rulesResponse] = await Promise.all([
     fetch(API + '/auth/signup/options'),
-    call(admin, 'GET', '/business-rules'),
+    call(globalAdmin, 'GET', '/business-rules'),
   ]);
   assert.equal(optionsResponse.status, 200);
   assert.equal(rulesResponse.status, 200);
@@ -279,7 +336,7 @@ test('public signup prices follow the current business rules', async () => {
 });
 
 test('rule changes update contracts awaiting signature, not signed contracts, and invoice timing', async () => {
-  const settings = await call(admin, 'GET', '/business-rules');
+  const settings = await call(globalAdmin, 'GET', '/business-rules');
   const value = (key: string) => Number(settings.body.find((rule: any) => rule.key === key).value);
   const oldRate = value('A_onboarding_pct');
   const oldDueDays = value('invoice_due_days');
@@ -291,7 +348,7 @@ test('rule changes update contracts awaiting signature, not signed contracts, an
     assert.equal((await transition(fa, 'submit')).status, 200);
     assert.equal((await transition(compliance, 'verify_kyc')).status, 200);
     assert.equal((await transition(admin, 'approve')).status, 200);
-    const awaitingSignature = await call(admin, 'PATCH', '/business-rules', {
+    const awaitingSignature = await call(globalAdmin, 'PATCH', '/business-rules', {
       values: { A_onboarding_pct: 22, invoice_due_days: 3 },
     });
     assert.equal(awaitingSignature.status, 200);
@@ -311,14 +368,14 @@ test('rule changes update contracts awaiting signature, not signed contracts, an
     )).rows[0];
     assert.equal(invoice.days_until_due, 3);
 
-    assert.equal((await call(admin, 'PATCH', '/business-rules', {
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
       values: { A_onboarding_pct: 23 },
     })).status, 200);
     const signed = (await call(fa, 'GET', '/contracts')).body.find((item: any) => item.id === created.contract.id);
     assert.equal(signed.state, 'payment_pending');
     assert.equal(Number(signed.onboarding_amt), 22000);
   } finally {
-    assert.equal((await call(admin, 'PATCH', '/business-rules', {
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
       values: { A_onboarding_pct: oldRate, invoice_due_days: oldDueDays },
     })).status, 200);
   }
@@ -411,12 +468,13 @@ test('Track B: 10% + 10% agency revenue, commission is 50% of it', async () => {
 });
 
 test('lease defaults and maximum duration follow business rules', async () => {
-  const settings = await call(admin, 'GET', '/business-rules');
+  const settings = await call(globalAdmin, 'GET', '/business-rules');
   const oldDueDay = Number(settings.body.find((rule: any) => rule.key === 'lease_default_due_day').value);
+  const oldMinMonths = Number(settings.body.find((rule: any) => rule.key === 'lease_min_term_months').value);
   const oldMaxMonths = Number(settings.body.find((rule: any) => rule.key === 'lease_max_months').value);
   try {
-    assert.equal((await call(admin, 'PATCH', '/business-rules', {
-      values: { lease_default_due_day: 12, lease_max_months: 2 },
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
+      values: { lease_default_due_day: 12, lease_min_term_months: 1, lease_max_months: 2 },
     })).status, 200);
     const property = await call(fa, 'POST', '/properties', {
       address: `Rule test property ${run}`,
@@ -447,8 +505,8 @@ test('lease defaults and maximum duration follow business rules', async () => {
     );
     assert.deepEqual(charges.rows.map((charge) => charge.due_on), ['2030-01-12', '2030-02-12']);
   } finally {
-    assert.equal((await call(admin, 'PATCH', '/business-rules', {
-      values: { lease_default_due_day: oldDueDay, lease_max_months: oldMaxMonths },
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
+      values: { lease_default_due_day: oldDueDay, lease_min_term_months: oldMinMonths, lease_max_months: oldMaxMonths },
     })).status, 200);
   }
 });

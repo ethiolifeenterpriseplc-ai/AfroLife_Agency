@@ -4,13 +4,16 @@ import '../src/env.js';
 // restricted DATABASE_URL role so the HTTP requests exercise row-level security.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const API = (process.env.API_URL ?? 'http://localhost:3000') + '/api/v1';
 const SECRET = process.env.JWT_SECRET!;
-const db = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL || process.env.DATABASE_URL });
+const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
+if (!testDatabaseUrl) throw new Error('TEST_DATABASE_URL must explicitly point to a disposable integration-test database');
+const db = new pg.Pool({ connectionString: testDatabaseUrl });
 const run = Date.now().toString().slice(-7);
 const SECTOR = 'domestic-' + run; // unique per run so candidate lists are not polluted by other data
 const SHA = 'a'.repeat(64);
@@ -23,7 +26,9 @@ async function mkUser(role: string, n: number): Promise<U> {
     [`${role}-${n}`, `+2517${run}${n}`, role, bcrypt.hashSync('Passw0rd!test', 4)],
   );
   const id = r.rows[0].id as string;
-  return { id, role, token: jwt.sign({ sub: id, role }, SECRET) };
+  const sessionId = randomUUID();
+  await db.query('INSERT INTO auth_sessions (id,user_id,expires_at) VALUES ($1,$2,now()+interval \'8 hours\')', [sessionId, id]);
+  return { id, role, token: jwt.sign({ sub: id, role, sid: sessionId }, SECRET, { expiresIn: '8h' }) };
 }
 
 async function call(u: U, method: string, path: string, body?: unknown) {
@@ -39,6 +44,7 @@ async function call(u: U, method: string, path: string, body?: unknown) {
 const parent = Number((await db.query("INSERT INTO territories (level, name) VALUES ('city', $1) RETURNING id", ['P' + run])).rows[0].id);
 const areaA = Number((await db.query("INSERT INTO territories (parent_id, level, name) VALUES ($1,'sub_city',$2) RETURNING id", [parent, 'A' + run])).rows[0].id);
 const admin = await mkUser('super_admin', 1);
+const globalAdmin = await mkUser('global_admin', 12);
 const compliance = await mkUser('compliance', 2);
 const complianceAlt = await mkUser('compliance', 8);
 const master = await mkUser('master_agent', 3);
@@ -131,18 +137,18 @@ test('matching: only verified, available workers are candidates, ranked by score
   assert.equal(c.body[0].score, 100);
 });
 
-test('matching: Super Admin can make verified certificates an additional eligibility requirement', async () => {
-  const settings = await call(admin, 'GET', '/business-rules');
+test('matching: Global Admin can make verified certificates an additional eligibility requirement', async () => {
+  const settings = await call(globalAdmin, 'GET', '/business-rules');
   const oldValue = Number(settings.body.find((rule: any) => rule.key === 'worker_requires_certificate').value);
   try {
-    assert.equal((await call(admin, 'PATCH', '/business-rules', {
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
       values: { worker_requires_certificate: 1 },
     })).status, 200);
-    const candidates = await call(admin, 'GET', `/requests/${request.id}/candidates`);
+    const candidates = await call(globalAdmin, 'GET', `/requests/${request.id}/candidates`);
     assert.equal(candidates.status, 200);
     assert.ok(!candidates.body.some((worker: any) => worker.worker_id === w1.id));
   } finally {
-    assert.equal((await call(admin, 'PATCH', '/business-rules', {
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
       values: { worker_requires_certificate: oldValue },
     })).status, 200);
   }

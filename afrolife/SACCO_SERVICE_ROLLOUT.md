@@ -66,6 +66,23 @@ for the actual release candidate and institution:
 6. Staging end-to-end results and an accountable business owner approve the
    precise service scope. Update the service catalog only after those checks.
 
+## Next implementation and assurance sequence
+
+1. Keep the current SACCO/MFI in controlled pilot status while the Very High
+   and High SRS requirements are mapped to an approved first-release scope.
+   Prioritize balanced accounting, ledger/subledger reconciliation, period
+   controls, member and product lifecycle, maker-checker, tenant isolation,
+   session security, and idempotent financial actions.
+2. Implement the domain workflows not currently in the application before
+   enabling their screens or accepting deposits, lending, payment, or
+   compliance cases. The table above is the backlog; Planned/Partial is not a
+   service availability claim.
+3. For the exact release candidate, complete independent ASVS-based security
+   verification, WCAG 2.2 AA assessment, applicable jurisdiction/licensing and
+   accounting approval, recovery rehearsal, and production-like end-to-end
+   tests. These activities require named external or institutional reviewers
+   and evidence; source changes alone cannot satisfy them.
+
 ## Release status
 
 The existing extended SACCO pilot is locally validated. It has not been

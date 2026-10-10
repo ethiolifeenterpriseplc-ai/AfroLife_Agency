@@ -54,11 +54,11 @@
           <section class="member-benefits" aria-labelledby="member-benefits-title">
             <p class="eyebrow">WORKER &amp; COMMUNITY BENEFITS</p>
             <h2 id="member-benefits-title">Build security together</h2>
-            <div class="benefit-item"><strong>Worker pension boost</strong><span>Proposed 5% AfroLife match on eligible worker pension deposits.</span></div>
-            <div class="benefit-item"><strong>AfroLife Edir</strong><span>Open to Guaranteed Category A employees and AfroLife users, subject to program rules. Proposed ETB 2,000 joining fee + ETB 200 monthly for group accident and health cover.</span></div>
-            <div class="benefit-item"><strong>Optional life cover</strong><span>ETB 5,000 annual contribution for proposed ETB 1 million member or spouse life cover.</span></div>
-            <div class="benefit-item"><strong>Home protection</strong><span>Tenants and property owners may request household fire, accidental damage and burglary cover for an additional ETB 200 premium.</span></div>
-            <p class="benefit-disclaimer">Choose your interests during sign-up. No payment is taken and no match or insurance cover is active until AfroLife confirms eligibility, funding, insurer terms and a start date.</p>
+            <div class="benefit-item"><strong>AfroLife Edir membership</strong><span>Available to registered AfroLife users after KYC review. Membership requests are reviewed before activation.</span></div>
+            <div class="benefit-item"><strong>Community groups</strong><span>Active members can be assigned to an Edir group by an administrator.</span></div>
+            <div class="benefit-item"><strong>Available products</strong><span>Approved savings, share, and contribution products appear in Edir when administrators activate them.</span></div>
+            <div class="benefit-item"><strong>More services</strong><span>Lending, insurance, and benefit payouts are not active in the current pilot.</span></div>
+            <p class="benefit-disclaimer">Membership requests do not collect money or guarantee access to a product. Product terms and availability are shown in the Edir workspace.</p>
           </section>
         </div>
         <form id="login-form" class="panel login-card">
@@ -69,6 +69,7 @@
           <label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label>
           <label id="mfa-field" hidden>Authenticator code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></label>
           <p id="login-error" class="form-error" role="alert"></p>
+          <button id="retry-session" class="button button-outline button-wide" type="button" hidden>Retry workspace connection</button>
           <button class="button button-primary button-wide" type="submit">Sign in <span aria-hidden="true">→</span></button>
           <div class="login-links">
             <button id="show-signup" class="text-button" type="button">Sign up</button>
@@ -96,12 +97,12 @@
             </select>
           </label>
           <section class="signup-benefits" aria-labelledby="signup-benefits-title">
-            <h3 id="signup-benefits-title">Benefit interests (no charge today)</h3>
-          <label class="benefit-check" id="pension-interest-field" hidden><input type="checkbox" name="pension_match_interest"><span><strong>Worker pension match</strong><small>Request the proposed 5% match on eligible pension deposits from income. Eligibility and payroll funding must be confirmed.</small></span></label>
+            <h3 id="signup-benefits-title">Service interests (no charge today)</h3>
+          <label class="benefit-check" id="pension-interest-field" hidden><input type="checkbox" name="pension_match_interest"><span><strong>Ask about worker savings options</strong><small>Request information about currently configured worker savings services. No match or pension contribution is promised.</small></span></label>
             <label class="benefit-check" id="worker-enterprise-field" hidden><input type="checkbox" name="option_a_enterprise_interest"><span><strong>Enterprise Option A staff service</strong><small>For workers seeking an Option A placement with the Enterprise service pathway. Enrollment, employer terms, pension matching and Edir benefits require confirmation before activation.</small></span></label>
-            <label class="benefit-check"><input type="checkbox" name="edir_member_interest"><span><strong>Join AfroLife Edir</strong><small>Proposed ETB 2,000 joining fee and ETB 200 per month for member group accident and health cover.</small></span></label>
-            <label class="benefit-check"><input type="checkbox" name="edir_life_interest"><span><strong>Add life cover</strong><small>Proposed extra ETB 5,000 per year for ETB 1 million cover for the direct member or spouse; subject to insurer acceptance and policy terms.</small></span></label>
-            <label class="benefit-check"><input type="checkbox" name="household_cover_interest"><span><strong>Add household cover</strong><small>For tenants or property owners: proposed additional ETB 200 household premium for fire, accidental damage and burglary cover.</small></span></label>
+            <label class="benefit-check"><input type="checkbox" name="edir_member_interest"><span><strong>Request AfroLife Edir membership</strong><small>After KYC verification, you can review the currently available community and financial products before requesting enrollment.</small></span></label>
+            <label class="benefit-check"><input type="checkbox" name="edir_life_interest"><span><strong>Ask about future insurance services</strong><small>Insurance is not active in the current Edir pilot.</small></span></label>
+            <label class="benefit-check"><input type="checkbox" name="household_cover_interest"><span><strong>Ask about future household protection</strong><small>Household cover is not active in the current AfroLife service.</small></span></label>
             <p class="benefit-disclaimer">These are non-binding requests for information. Selecting a benefit does not enroll you, collect money or start insurance coverage.</p>
           </section>
           <label>KYC identity document (PDF, JPEG, PNG · max 10 MB)
@@ -110,6 +111,10 @@
           <label id="signup-police-clearance-field" hidden>Police clearance (required for worker applicants)
             <input id="signup-police-clearance" name="police_clearance_file" type="file" accept="application/pdf,image/jpeg,image/png" capture="environment">
           </label>
+          <label id="worker-date-of-birth-field" hidden>Date of birth (required for worker applicants)
+            <input id="worker-date-of-birth" name="date_of_birth" type="date" autocomplete="bday">
+          </label>
+          <label class="benefit-check" id="worker-document-consent-field" hidden><input id="worker-document-consent" type="checkbox" name="worker_document_consent"><span><strong>Consent to worker document review</strong><small>AfroLife may use my National ID and police-clearance documents to verify my identity and assess eligibility for workforce services. Authorized compliance staff will review these documents, which are stored privately.</small></span></label>
           <p class="muted upload-help">Documents are stored privately and reviewed by AfroLife compliance staff.</p>
           <div id="agent-fields" hidden>
             <label>Agent type
@@ -157,6 +162,55 @@
         </section>
       </section>
 
+      <section id="public-hub" class="public-hub" aria-label="AfroLife services and industry news">
+        <div class="hub-heading">
+          <p class="eyebrow">AFROLIFE SUPER APP</p>
+          <h2>Services for work, homes, business, and community.</h2>
+          <p>Explore AfroLife’s connected services. Install the app for a home-screen shortcut and a cached public shell; sign in to access account-specific tools.</p>
+          <div class="hub-actions"><a class="button button-primary" href="#login-form">Sign in or register</a><button class="button button-outline" type="button" data-open-edir-registration>Register an Edir</button><button class="button button-outline" type="button" data-install-pwa>Install AfroLife</button></div>
+          <p id="install-help" class="hub-caption" role="status" hidden>Open your browser menu and choose Install app or Add to Home Screen.</p>
+        </div>
+        <section class="hub-section" aria-labelledby="services-title">
+          <div class="hub-section-heading"><div><p class="eyebrow">SERVICE MENU</p><h2 id="services-title">One app, useful services</h2></div><span class="hub-caption">Choose a service to continue</span></div>
+          <div class="service-grid">
+            <a class="service-card" href="#login-form"><span class="service-icon">⌂</span><strong>Homes &amp; rentals</strong><span>Browse property listings, connect landlords and tenants, and manage rent workflows where enabled.</span><small>Property mini app →</small></a>
+            <a class="service-card" href="#login-form"><span class="service-icon">◎</span><strong>Marketplace</strong><span>Discover products and services from registered sellers and local businesses.</span><small>Market mini app →</small></a>
+            <a class="service-card" href="#login-form"><span class="service-icon">✳</span><strong>Workforce</strong><span>Find work opportunities, verified worker profiles, and employer service requests.</span><small>Jobs mini app →</small></a>
+            <a class="service-card" href="#login-form"><span class="service-icon">◉</span><strong>AfroLife Edir</strong><span>Request community membership after KYC. Available membership products and terms are shown in the Edir workspace.</span><small>Community mini app →</small></a>
+            <a class="service-card" href="#login-form"><span class="service-icon">▤</span><strong>SACCO / MFI</strong><span>Financial cooperative tools appear only when the organization enables the pilot for your account.</span><small>Finance mini app →</small></a>
+            <a class="service-card" href="#login-form"><span class="service-icon">▣</span><strong>Agent services</strong><span>Manage referrals, service requests, contracts, and team activity based on your role.</span><small>Agency mini app →</small></a>
+          </div>
+        </section>
+        <section class="hub-section industry-news" aria-labelledby="industry-news-title">
+          <div class="hub-section-heading"><div><p class="eyebrow">INDUSTRY NEWS</p><h2 id="industry-news-title">Follow the sectors around you</h2></div><span class="hub-caption">Opens current reporting from external publishers</span></div>
+          <div class="news-grid">
+            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+housing+real+estate+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>PROPERTY</span><strong>Ethiopia housing &amp; real estate</strong><small>Latest coverage ↗</small></a>
+            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+jobs+labour+employment+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>WORK &amp; SKILLS</span><strong>Employment and workforce</strong><small>Latest coverage ↗</small></a>
+            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+business+finance+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>BUSINESS</span><strong>Business and finance</strong><small>Latest coverage ↗</small></a>
+            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+digital+economy+technology+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>DIGITAL</span><strong>Technology and digital economy</strong><small>Latest coverage ↗</small></a>
+          </div>
+          <p class="hub-disclaimer">News links are provided for convenience and are published by external sources. AfroLife does not endorse or verify third-party reporting.</p>
+        </section>
+        <form id="edir-registration-form" class="panel form-card edir-registration-form" hidden>
+          <p class="eyebrow">EDIR ONBOARDING</p>
+          <h2>Apply to register an independent Edir</h2>
+          <p class="muted">The umbrella Master Edir reviews applications. If approved, your Edir keeps its own governance, administration, and operational records.</p>
+          <div class="inline-form">
+            <label>Edir display name<input name="display_name" required minlength="2" maxlength="160"></label>
+            <label>Legal name<input name="legal_name" required minlength="2" maxlength="200"></label>
+            <label>Registration reference (optional)<input name="registration_reference" maxlength="100"></label>
+            <label>Bylaws or governance reference (optional)<input name="governance_reference" maxlength="500"></label>
+            <label>Contact person<input name="contact_name" required minlength="2" maxlength="160" autocomplete="name"></label>
+            <label>Contact phone<input name="contact_phone" type="tel" required minlength="7" maxlength="32" autocomplete="tel"></label>
+            <label>Email (optional)<input name="contact_email" type="email" maxlength="254" autocomplete="email"></label>
+            <label class="benefit-check span-2"><input type="checkbox" name="accept_review_terms" required><span><strong>Consent to application review</strong><small>I authorize AfroLife Master Edir to use these organization and contact details to review this registration application. Approval does not replace the Edir’s own legal or governance obligations.</small></span></label>
+          </div>
+          <p id="edir-registration-error" class="form-error" role="alert"></p>
+          <p id="edir-registration-success" class="alert" role="status" hidden></p>
+          <button class="button button-primary" type="submit">Submit Edir registration application</button>
+        </form>
+      </section>
+
       <section id="app-view" hidden>
         <div class="page-heading">
           <div><p class="eyebrow">AFROLIFE OPERATIONS</p><h1 id="page-title">Your workspace</h1><p id="page-subtitle" class="muted"></p></div>
@@ -172,9 +226,12 @@
           <button id="properties-tab" class="tab" data-panel="properties" type="button" hidden>Properties</button>
           <button id="marketplace-tab" class="tab" data-panel="marketplace" type="button" hidden>Marketplace</button>
           <button id="contracts-tab" class="tab" data-panel="contracts" type="button" hidden>Contracts</button>
+          <button id="commissions-tab" class="tab" data-panel="commissions" type="button" hidden>Commissions</button>
           <button id="agents-tab" class="tab" data-panel="agents" type="button" hidden>Agent management</button>
           <button id="rent-tab" class="tab" data-panel="rent" type="button" hidden>Rent & deposits</button>
           <button id="mfi-tab" class="tab" data-panel="mfi" type="button" hidden>SACCO / MFI</button>
+          <button id="edir-tab" class="tab" data-panel="edir" type="button" hidden>AfroLife Edir</button>
+          <button id="privacy-tab" class="tab" data-panel="privacy" type="button">Privacy requests &amp; incidents</button>
           <button class="tab" data-panel="security" type="button">Security</button>
           <button id="admin-tab" class="tab" data-panel="admin" type="button" hidden>Admin & review</button>
         </nav>

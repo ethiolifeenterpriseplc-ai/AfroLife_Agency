@@ -12,8 +12,8 @@ export function createInsuranceLedgerRouter(withUser: WithUser) {
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { fn(req, res).catch(next); };
-const ledgerRoles = ['super_admin', 'finance', 'finance_manager', 'compliance'];
-const postingRoles = ['super_admin', 'finance_manager'];
+const ledgerRoles = ['global_admin', 'super_admin', 'finance', 'finance_manager', 'compliance'];
+const postingRoles = ['global_admin', 'super_admin', 'finance_manager'];
 const accountType = z.enum(['asset', 'liability', 'equity', 'income', 'expense']);
 const decimalAmount = z.string().regex(/^\d{1,14}(?:\.\d{1,2})?$/);
 
@@ -48,12 +48,94 @@ async function audit(client: PoolClient, actorId: string, action: string, entity
   );
 }
 
-function requireRole(req: Request, allowed: string[]) {
-  if (!allowed.includes(req.user!.role)) throw new HttpError(403, 'Your role cannot access the insurance ledger');
+async function requireRole(req: Request, allowed: string[]) {
+  const globalRole = ['global_admin','super_admin'].includes(req.user!.role);
+  if (globalRole && allowed.some((role) => ['global_admin','super_admin'].includes(role))) return;
+  const localRoles = allowed.filter((role) => !['global_admin','super_admin'].includes(role));
+  // Insurance access is granted by an organization-scoped assignment. The
+  // user's platform role only determines whether a route is eligible to ask
+  // for that assignment; it does not itself grant local ledger access.
+  if (!localRoles.length) throw new HttpError(403, 'Your role cannot access the insurance ledger');
+  const matching = [...new Set([...localRoles, 'insurance_admin'])];
+  const permitted = await withUser(req.user!, async (client) => Boolean((await client.query(
+    'SELECT insurance_ledger_has_role($1::text[]) AS allowed', [matching],
+  )).rows[0]?.allowed));
+  if (!permitted) throw new HttpError(403, 'Insurance ledger staff access is required for this Edir');
 }
 
+async function requireInsuranceMaster(req: Request) {
+  if (['global_admin','super_admin'].includes(req.user!.role)) return;
+  const permitted = await withUser(req.user!, async (client) => Boolean((await client.query(
+    'SELECT insurance_ledger_is_master() AS allowed',
+  )).rows[0]?.allowed));
+  if (!permitted || req.user!.edir_id !== '00000000-0000-4000-8000-000000000001') {
+    throw new HttpError(403, 'Insurance umbrella administration access is required');
+  }
+}
+
+insuranceLedgerRouter.get('/organizations', h(async (req, res) => {
+  const rows = await withUser(req.user!, async (client) => (await client.query(
+    'SELECT id,parent_organization_id,organization_type,display_name,legal_name,status,created_at FROM insurance_ledger_organizations ORDER BY display_name',
+  )).rows);
+  res.json(rows);
+}));
+
+insuranceLedgerRouter.post('/organizations', h(async (req, res) => {
+  await requireInsuranceMaster(req);
+  const body = z.object({ id: z.string().uuid(), display_name: z.string().trim().min(2).max(160), legal_name: z.string().trim().min(2).max(200) }).strict().parse(req.body);
+  const row = await withUser(req.user!, async (client) => (await client.query(
+    `INSERT INTO insurance_ledger_organizations (id,parent_organization_id,organization_type,display_name,legal_name,status)
+     VALUES ($1,'00000000-0000-4000-8000-000000000001','independent_master',$2,$3,'active')
+     ON CONFLICT (id) DO UPDATE SET display_name=EXCLUDED.display_name,legal_name=EXCLUDED.legal_name
+     RETURNING id,display_name,legal_name,status`,
+    [body.id,body.display_name,body.legal_name],
+  )).rows[0]);
+  res.status(201).json(row);
+}));
+
+insuranceLedgerRouter.get('/master/summary', h(async (req, res) => {
+  await requireInsuranceMaster(req);
+  res.json(await withUser(req.user!, async (client) => (await client.query(
+    'SELECT * FROM insurance_ledger_consolidated_summary()',
+  )).rows));
+}));
+
+insuranceLedgerRouter.get('/master/access', h(async (req, res) => {
+  const allowed = ['global_admin','super_admin'].includes(req.user!.role)
+    || await withUser({ ...req.user!, edir_id: '00000000-0000-4000-8000-000000000001' }, async (client) => Boolean((await client.query(
+      'SELECT insurance_ledger_is_master() AS allowed',
+    )).rows[0]?.allowed));
+  res.json({ allowed });
+}));
+
+insuranceLedgerRouter.post('/organizations/:organizationId/staff', h(async (req, res) => {
+  await requireInsuranceMaster(req);
+  const organizationId = z.string().uuid().parse(req.params.organizationId);
+  const body = z.object({ user_id: z.string().uuid(), role: z.enum(['insurance_admin','finance','finance_manager','compliance','auditor']) }).strict().parse(req.body);
+  const row = await withUser(req.user!, async (client) => (await client.query(
+    `INSERT INTO insurance_ledger_staff (user_id,organization_id,role,assigned_by)
+     VALUES ($1,$2,$3,$4)
+     ON CONFLICT (user_id,organization_id) DO UPDATE SET role=EXCLUDED.role,active=true,assigned_by=EXCLUDED.assigned_by,created_at=now()
+     RETURNING user_id,organization_id,role,active,created_at`,
+    [body.user_id,organizationId,body.role,req.user!.id],
+  )).rows[0]);
+  res.status(201).json(row);
+}));
+
+insuranceLedgerRouter.post('/master/staff', h(async (req, res) => {
+  if (!['global_admin','super_admin'].includes(req.user!.role)) throw new HttpError(403, 'Platform administrator access is required');
+  const body = z.object({ user_id: z.string().uuid(), role: z.literal('insurance_master_admin') }).strict().parse(req.body);
+  const row = await withUser({ ...req.user!, edir_id: '00000000-0000-4000-8000-000000000001' }, async (client) => (await client.query(
+    `INSERT INTO insurance_ledger_staff (user_id,organization_id,role,assigned_by)
+     VALUES ($1,'00000000-0000-4000-8000-000000000001',$2,$3)
+     ON CONFLICT (user_id,organization_id) DO UPDATE SET role=EXCLUDED.role,active=true,assigned_by=EXCLUDED.assigned_by,created_at=now()
+     RETURNING user_id,organization_id,role,active,created_at`, [body.user_id,body.role,req.user!.id],
+  )).rows[0]);
+  res.status(201).json(row);
+}));
+
 insuranceLedgerRouter.get('/accounts', h(async (req, res) => {
-  requireRole(req, ledgerRoles);
+  await requireRole(req, ledgerRoles);
   const rows = await withUser(req.user!, async (client) => (await client.query(
     `SELECT a.id, a.account_code, a.name, a.account_type, a.created_at,
        COALESCE(sum(CASE WHEN j.status = 'posted' THEN l.debit - l.credit ELSE 0 END), 0)::numeric(16,2) AS balance
@@ -66,7 +148,7 @@ insuranceLedgerRouter.get('/accounts', h(async (req, res) => {
 }));
 
 insuranceLedgerRouter.post('/accounts', h(async (req, res) => {
-  requireRole(req, ['super_admin']);
+  await requireRole(req, ['global_admin', 'super_admin','insurance_admin']);
   const body = accountBody.parse(req.body);
   const account = await withUser(req.user!, async (client) => {
     const row = (await client.query(
@@ -81,13 +163,14 @@ insuranceLedgerRouter.post('/accounts', h(async (req, res) => {
 }));
 
 insuranceLedgerRouter.get('/journals', h(async (req, res) => {
-  requireRole(req, ledgerRoles);
+  await requireRole(req, ledgerRoles);
   const status = req.query.status === undefined ? null
     : z.enum(['draft', 'pending_approval', 'posted', 'rejected']).parse(req.query.status);
   const rows = await withUser(req.user!, async (client) => (await client.query(
     `SELECT j.*,
        COALESCE(jsonb_agg(jsonb_build_object(
-         'account_code', a.account_code, 'account_name', a.name, 'debit', l.debit, 'credit', l.credit
+         'account_code', a.account_code, 'account_name', a.name,
+         'debit', l.debit::text, 'credit', l.credit::text
        ) ORDER BY l.line_no) FILTER (WHERE l.id IS NOT NULL), '[]'::jsonb) AS lines
      FROM insurance_ledger_journals j
      LEFT JOIN insurance_ledger_lines l ON l.journal_id = j.id
@@ -185,14 +268,14 @@ async function createPendingJournal(
 }
 
 insuranceLedgerRouter.post('/journals', h(async (req, res) => {
-  requireRole(req, postingRoles);
+  await requireRole(req, postingRoles);
   const body = journalBody.parse(req.body);
   const journal = await createPendingJournal(req, { ...body, transaction_type: 'manual' });
   res.status(journal.replayed ? 200 : 201).json(journal);
 }));
 
 insuranceLedgerRouter.post('/journals/:journalId/decision', h(async (req, res) => {
-  requireRole(req, postingRoles);
+  await requireRole(req, postingRoles);
   const body = z.object({
     decision: z.enum(['approve', 'reject']),
     reason: z.string().trim().min(10).max(1000),
@@ -221,7 +304,7 @@ insuranceLedgerRouter.post('/journals/:journalId/decision', h(async (req, res) =
 }));
 
 insuranceLedgerRouter.post('/journals/:journalId/reversal', h(async (req, res) => {
-  requireRole(req, postingRoles);
+  await requireRole(req, postingRoles);
   const body = z.object({
     idempotency_key: z.string().uuid(),
     source_reference: z.string().trim().min(1).max(160),

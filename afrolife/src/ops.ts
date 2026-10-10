@@ -1,6 +1,6 @@
 import { Router, Request, Response, RequestHandler } from 'express';
 import { z } from 'zod';
-import { pool, withUser, requireRole, HttpError } from './core.js';
+import { pool, withUser, requireRole, HttpError, isPlatformAdminRole } from './core.js';
 import { audit, post } from './domain.js';
 import { notify } from './notify.js';
 import { rentSchedule, endDate } from './rent.js';
@@ -11,6 +11,23 @@ import { Phone } from './validators.js';
 export const ops = Router();
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const AGENT = ['master_agent', 'field_agent'];
+
+ops.get('/owner/statements', requireRole('property_owner'), h(async (req, res) => {
+  const statements = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT l.id AS lease_id,p.id AS property_id,p.address,u.unit_no,l.start_date,l.end_date,l.status,
+       l.rent::text AS monthly_rent,l.deposit::text AS agreed_deposit,
+       COALESCE((SELECT sum(c.amount) FROM rent_charges c WHERE c.lease_id=l.id AND c.status<>'waived'),0)::text AS rent_charged,
+       COALESCE((SELECT sum(t.amount) FROM rent_transactions t WHERE t.lease_id=l.id AND t.kind='rent' AND t.status='reconciled'),0)::text AS rent_reconciled,
+       COALESCE((SELECT sum(t.amount) FROM rent_transactions t WHERE t.lease_id=l.id AND t.kind='rent' AND t.status='pending'),0)::text AS rent_pending_reconciliation,
+       COALESCE((SELECT sum(t.amount) FROM rent_transactions t WHERE t.lease_id=l.id AND t.kind='deposit' AND t.status='reconciled'),0)::text AS deposit_reconciled,
+       COALESCE((SELECT sum(t.amount) FROM rent_transactions t WHERE t.lease_id=l.id AND t.kind='deposit_refund' AND t.status='reconciled'),0)::text AS deposit_refunded,
+       (SELECT max(t.reconciled_at) FROM rent_transactions t WHERE t.lease_id=l.id AND t.status='reconciled') AS last_reconciled_at
+     FROM leases l JOIN property_units u ON u.id=l.unit_id JOIN properties p ON p.id=u.property_id
+     WHERE p.owner_user_id=$1 ORDER BY l.created_at DESC LIMIT 500`,
+    [req.user!.id],
+  )).rows);
+  res.json({ statements, note: 'Shows recorded lease charges and reconciled receipts. This is not a payout, remittance, or trust-account statement.' });
+}));
 
 // ================= Disputes =================
 ops.post('/disputes', requireRole(...AGENT, 'super_admin', 'compliance'), h(async (req, res) => {
@@ -42,7 +59,7 @@ ops.post('/disputes/:id/assign', requireRole('super_admin'), h(async (req, res) 
 ops.post('/disputes/:id/resolve', requireRole('super_admin', 'compliance'), h(async (req, res) => {
   const b = z.object({ resolution: z.string().min(10), refund_amount: z.number().nonnegative().transform((x) => Math.round(x * 100) / 100).default(0), refund_kind: z.enum(['fee', 'guarantee']).optional() }).parse(req.body);
   if (b.refund_amount > 0 && !b.refund_kind) throw new HttpError(400, 'Say whether this refunds fees or the guarantee');
-  if (b.refund_amount > 0 && req.user!.role !== 'super_admin') throw new HttpError(403, 'Only a Super Admin can approve a refund');
+  if (b.refund_amount > 0 && !isPlatformAdminRole(req.user!.role)) throw new HttpError(403, 'Only a platform administrator can approve a refund');
   res.json(await withUser(req.user!, async (c) => {
     const d = (await c.query('SELECT * FROM disputes WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!d) throw new HttpError(404, 'Dispute not found');
@@ -97,7 +114,9 @@ ops.post('/leases', requireRole(...AGENT, 'super_admin'), h(async (req, res) => 
   const row = await withUser(req.user!, async (c) => {
     const b = LeaseIn.parse(req.body);
     const rules = await loadRules(c);
+    const minMonths = rules.lease_min_term_months ?? 24;
     const maxMonths = rules.lease_max_months ?? 24;
+    if (b.months < minMonths) throw new HttpError(422, `Lease term cannot be less than ${minMonths} months.`);
     if (b.months > maxMonths) throw new HttpError(422, `Lease term cannot exceed ${maxMonths} months.`);
     const dueDay = b.due_day ?? rules.lease_default_due_day ?? 5;
     const u = (await c.query('SELECT u.id, u.occupancy, p.source_agent_id FROM property_units u JOIN properties p ON p.id = u.property_id WHERE u.id = $1 FOR UPDATE OF u', [b.unit_id])).rows[0]; // RLS: must be your unit. The row lock stops two agents leasing the same vacant unit at once.

@@ -5,6 +5,8 @@ export const BUSINESS_RULES = [
   { key: 'B_employer_pct', group: 'Contract pricing', label: 'Track B employer fee (%)', min: 0, max: 100, step: 0.01 },
   { key: 'B_other_pct', group: 'Contract pricing', label: 'Track B other fee (%)', min: 0, max: 100, step: 0.01 },
   { key: 'first_contract_commission_pct', group: 'Contract pricing', label: 'First-contract commission (%)', min: 0, max: 100, step: 0.01 },
+  { key: 'commission_holdback_pct', group: 'Contract pricing', label: 'Commission holdback until guarantee review (%)', min: 0, max: 100, step: 0.01 },
+  { key: 'commission_holdback_days', group: 'Contract pricing', label: 'Commission holdback period (days)', min: 0, max: 365, step: 1 },
   { key: 'guarantee_commissionable', group: 'Contract pricing', label: 'Include guarantee in commission calculation', min: 0, max: 1, step: 1 },
   { key: 'agent_pro_monthly_etb', group: 'Agent plans', label: 'Pro monthly price (ETB)', min: 1, max: 10000000, step: 1 },
   { key: 'agent_enterprise_monthly_etb', group: 'Agent plans', label: 'Enterprise monthly price (ETB)', min: 1, max: 10000000, step: 1 },
@@ -23,7 +25,12 @@ export const BUSINESS_RULES = [
   { key: 'worker_requires_reference', group: 'Worker eligibility', label: 'Require a verified reference document', min: 0, max: 1, step: 1 },
   { key: 'worker_requires_certificate', group: 'Worker eligibility', label: 'Require a verified certificate', min: 0, max: 1, step: 1 },
   { key: 'lease_default_due_day', group: 'Property management', label: 'Default rent due day', min: 1, max: 28, step: 1 },
+  { key: 'lease_min_term_months', group: 'Property management', label: 'Minimum lease term (months)', min: 1, max: 120, step: 1 },
   { key: 'lease_max_months', group: 'Property management', label: 'Maximum lease term (months)', min: 1, max: 120, step: 1 },
+  { key: 'lease_max_advance_months', group: 'Property management', label: 'Maximum rent paid in advance (months)', min: 0, max: 12, step: 1 },
+  { key: 'lease_registration_deadline_days', group: 'Property management', label: 'Lease registration deadline (days)', min: 1, max: 365, step: 1 },
+  { key: 'rent_annual_increase_cap_pct', group: 'Property management', label: 'Annual rent increase cap (%)', min: 0, max: 100, step: 0.1 },
+  { key: 'worker_min_age_years', group: 'Worker eligibility', label: 'Minimum worker applicant age (years)', min: 14, max: 30, step: 1 },
   { key: 'invoice_due_days', group: 'Contract workflow', label: 'Invoice payment period (days)', min: 1, max: 90, step: 1 },
   { key: 'refund_fee_cap_pct', group: 'Refunds', label: 'Maximum fee refund (% of fees collected)', min: 0, max: 100, step: 0.01 },
   { key: 'refund_guarantee_cap_pct', group: 'Refunds', label: 'Maximum guarantee refund (% of guarantee held)', min: 0, max: 100, step: 0.01 },
@@ -59,6 +66,9 @@ export function validateBusinessRuleUpdates(
   }
 
   const next = { ...current, ...values };
+  if (Number(next.lease_min_term_months) > Number(next.lease_max_months)) {
+    errors.push('Minimum lease term cannot exceed the maximum lease term.');
+  }
   const weightKeys = [
     'match_w_skills', 'match_w_location', 'match_w_availability',
     'match_w_experience', 'match_w_rate', 'match_w_language',

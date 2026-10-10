@@ -1,7 +1,7 @@
 import express, { Router, Request, Response, RequestHandler } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { pool, withUser, requireRole, HttpError } from './core.js';
+import { pool, withUser, requireRole, HttpError, isPlatformAdminRole } from './core.js';
 import { sniff, sniffListingMedia } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { notify } from './notify.js';
@@ -15,7 +15,7 @@ const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandle
 const AGENT = ['master_agent', 'field_agent'];
 const num = (x: unknown) => (x == null ? null : Number(x));
 const requireListingPlan: RequestHandler = (req, _res, next) => {
-  if (req.user?.role === 'super_admin' || req.user?.role === 'customer') return next();
+  if (isPlatformAdminRole(req.user?.role ?? '') || req.user?.role === 'customer') return next();
   if (req.user?.role === 'corporate_business_manager' || req.user?.role === 'property_owner') return next();
   if (AGENT.includes(req.user!.role)) return next();
   pool.query(
@@ -89,7 +89,7 @@ supply.get('/documents/:id/file', requireRole(...AGENT, 'compliance', 'super_adm
   const d = await withUser(req.user!, async (c) => {
     const r = (await c.query('SELECT id, worker_id, storage_key, mime FROM documents WHERE id = $1', [req.params.id])).rows[0];
     if (!r) throw new HttpError(404, 'Document not found');
-    const privileged = ['compliance', 'super_admin'].includes(req.user!.role);
+    const privileged = ['compliance', 'super_admin', 'global_admin'].includes(req.user!.role);
     if (!privileged && !(await c.query('SELECT 1 FROM workers WHERE id = $1', [r.worker_id])).rowCount) throw new HttpError(404, 'Document not found');
     await audit(c, req.user!.id, 'document_downloaded', 'document', r.id);
     return r;
@@ -193,7 +193,7 @@ supply.post('/requests/:id/matches', requireRole('super_admin'), h(async (req, r
   const row = await withUser(req.user!, async (c) => {
     const cand = (await rank(c, String(req.params.id))).find((x) => x.worker_id === worker_id); // score is computed server-side
     if (!cand) throw new HttpError(409, 'Worker is not an eligible candidate (unverified, unavailable, wrong sector, or already proposed)');
-    const r = await c.query('INSERT INTO matches (request_id, worker_id, score, created_by) VALUES ($1,$2,$3,$4) RETURNING *', [req.params.id, worker_id, cand.score, req.user!.id]);
+    const r = await c.query('INSERT INTO matches (request_id, worker_id, score, score_breakdown, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING *', [req.params.id, worker_id, cand.score, cand.parts, req.user!.id]);
     await audit(c, req.user!.id, 'match_proposed', 'match', r.rows[0].id, null, { worker_id, score: cand.score });
     return r.rows[0];
   });
@@ -270,7 +270,7 @@ supply.post('/properties', requireRole(...AGENT, 'property_owner', 'super_admin'
     if (b.listing_mode === 'rent' && b.sale_price) throw new HttpError(422, 'Sale price is not used for rental-only listings.');
     const isAgent = AGENT.includes(req.user!.role);
     const isPropertyOwner = req.user!.role === 'property_owner';
-    const isManager = ['super_admin','corporate_business_manager'].includes(req.user!.role);
+    const isManager = isPlatformAdminRole(req.user!.role) || req.user!.role === 'corporate_business_manager';
     let sourceAgentId: string | null = isAgent ? req.user!.id : null;
     let ownerUserId: string | null = isPropertyOwner ? req.user!.id : null;
     if (isManager && b.owner_user_id) {
@@ -391,7 +391,7 @@ supply.post('/territories', requireRole('super_admin'), h(async (req, res) => {
 
 supply.get('/requests/:id/matches', requireRole('super_admin'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
-    'SELECT m.id, m.worker_id, m.score, m.status, w.name AS worker_name FROM matches m JOIN workers w ON w.id = m.worker_id WHERE m.request_id = $1 ORDER BY m.created_at', [req.params.id])).rows));
+    'SELECT m.id, m.worker_id, m.score, m.score_breakdown, m.status, w.name AS worker_name FROM matches m JOIN workers w ON w.id = m.worker_id WHERE m.request_id = $1 ORDER BY m.created_at', [req.params.id])).rows));
 }));
 
 // ================= Marketplace configuration and product/service listings =================
@@ -463,6 +463,9 @@ supply.patch('/marketplace/config', requireRole('super_admin','corporate_busines
       if (req.user!.role === 'corporate_business_manager' && !['products','services','properties','rentals'].includes(entry.scope)) {
         throw new HttpError(403, 'Corporate Business Managers can configure marketplace domains, not system or account-security settings.');
       }
+      if (req.user!.role === 'super_admin' && ['system','users'].includes(entry.scope)) {
+        throw new HttpError(403, 'System-wide marketplace and account-security settings require Global Admin access.');
+      }
       const nextValue = validateMarketplaceConfig(entry.scope, entry.key, entry.value);
       const current = (await c.query('SELECT config_value FROM marketplace_configuration WHERE scope=$1 AND config_key=$2 FOR UPDATE', [entry.scope, entry.key])).rows[0];
       if (!current) throw new HttpError(404, `Configuration ${entry.scope}.${entry.key} was not found.`);
@@ -519,7 +522,7 @@ supply.post('/marketplace/listings', requireRole(...AGENT,'property_owner','supe
     if ((b.transaction_mode === 'rental') !== Boolean(b.rent_period)) throw new HttpError(422, 'Choose a rental period for rental listings only.');
     let sellerId = req.user!.id;
     let sellerRole = req.user!.role;
-    if (['super_admin','corporate_business_manager'].includes(req.user!.role)) {
+    if (isPlatformAdminRole(req.user!.role) || req.user!.role === 'corporate_business_manager') {
       if (!b.seller_user_id) throw new HttpError(422, 'Select the seller this listing represents.');
       const seller = (await c.query("SELECT id,role FROM users WHERE id=$1 AND active=true AND role IN ('master_agent','field_agent','property_owner')", [b.seller_user_id])).rows[0];
       if (!seller) throw new HttpError(422, 'Select an active agent or seller account.');

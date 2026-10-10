@@ -14,12 +14,13 @@ import { BUSINESS_RULES, validateBusinessRuleUpdates } from './business-rules.js
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
+import { sessionIdleTimeoutMinutes } from './runtime-config.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
-const STAFF = ['super_admin', 'compliance', 'finance', 'finance_manager'];
+const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
 const MFA_STAFF = [...STAFF, 'corporate_business_manager'];
 const AGENT_ROLES = ['master_agent', 'field_agent'];
-const ALL_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner'] as const;
+const PROVISIONABLE_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner'] as const;
 const requireEnterprisePlan: RequestHandler = (req, _res, next) => {
   pool.query(
     `SELECT 1 FROM user_signups
@@ -38,9 +39,30 @@ const openSecret = (sealed: string) => openAny(sealed, MFA_KEYS);
 const DUMMY_HASH = bcrypt.hashSync('no-such-user-placeholder', 12);
 
 /** A restricted token can only reach the security step it must complete (see the guard in server.ts). */
-function issue(u: { id: string; role: string; must_change_password: boolean; mfa_enabled: boolean }) {
+async function issue(
+  u: { id: string; role: string; must_change_password: boolean; mfa_enabled: boolean },
+  replaceSessionId?: string,
+) {
   const rst = u.must_change_password ? 'password' : process.env.REQUIRE_MFA_FOR_STAFF === '1' && MFA_STAFF.includes(u.role) && !u.mfa_enabled ? 'mfa' : null;
-  return { token: jwt.sign({ sub: u.id, role: u.role, ...(rst ? { rst } : {}) }, JWT_SECRET, { expiresIn: '8h' }), restrict: rst };
+  const sessionId = randomUUID();
+  await pool.query(
+    `DELETE FROM auth_sessions WHERE expires_at < now() - interval '30 days'
+       OR revoked_at < now() - interval '30 days'`,
+  );
+  await pool.query(
+    `INSERT INTO auth_sessions (id,user_id,expires_at) VALUES ($1,$2,now()+interval '8 hours')`,
+    [sessionId, u.id],
+  );
+  if (replaceSessionId) {
+    await pool.query(
+      'UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL',
+      [replaceSessionId, u.id],
+    );
+  }
+  return {
+    token: jwt.sign({ sub: u.id, sid: sessionId, role: u.role, ...(rst ? { rst } : {}) }, JWT_SECRET, { expiresIn: '8h' }),
+    restrict: rst,
+  };
 }
 
 /** Five failures lock the account for 15 minutes. Once a lock has expired the count starts again at 1 (it used to stay at 5, so a single typo re-locked the account). */
@@ -77,7 +99,7 @@ loginRouter.post('/auth/login', h(async (req, res) => {
     if (!consumed.rowCount) { await recordFailure(u.id); throw new HttpError(401, 'Invalid code'); }
   }
   await pool.query('UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = $1', [u.id]);
-  res.json(issue(u));
+  res.json(await issue(u));
 }));
 
 loginRouter.get('/auth/signup/options', h(async (_req, res) => {
@@ -122,12 +144,35 @@ loginRouter.post('/auth/signup', h(async (req, res) => {
     edir_member_interest: z.boolean().default(false),
     edir_life_interest: z.boolean().default(false),
     household_cover_interest: z.boolean().default(false),
+    worker_document_consent: z.boolean().default(false),
+    date_of_birth: z.string().date().optional(),
     agent_type: z.enum(['master', 'field']).optional(),
     territory_id: z.coerce.number().int().positive().optional(),
     parent_agent_phone: Phone.optional(),
     requested_plan: z.enum(['free', 'pro', 'enterprise']).optional(),
     option_a_enterprise_interest: z.boolean().default(false),
   }).strict().parse(req.body);
+  if (b.account_type === 'worker' && !b.worker_document_consent) {
+    throw new HttpError(422, 'Worker applicants must consent to identity and eligibility document review before uploading KYC documents.');
+  }
+  if (b.account_type !== 'worker' && b.worker_document_consent) {
+    throw new HttpError(422, 'Worker document consent is only available for worker applicants.');
+  }
+  if (b.account_type === 'worker') {
+    if (!b.date_of_birth) throw new HttpError(422, 'Worker applicants must provide their date of birth.');
+    const configured = await pool.query("SELECT value FROM config_rules WHERE key = 'worker_min_age_years'");
+    const minimumAge = Number(configured.rows[0]?.value ?? 18);
+    const birth = new Date(`${b.date_of_birth}T00:00:00Z`);
+    const today = new Date();
+    let age = today.getUTCFullYear() - birth.getUTCFullYear();
+    if (today.getUTCMonth() < birth.getUTCMonth()
+      || (today.getUTCMonth() === birth.getUTCMonth() && today.getUTCDate() < birth.getUTCDate())) age -= 1;
+    if (birth > today || age < minimumAge) {
+      throw new HttpError(422, `Worker applicants must be at least ${minimumAge} years old.`);
+    }
+  } else if (b.date_of_birth) {
+    throw new HttpError(422, 'Date of birth is only collected for worker eligibility review.');
+  }
   if (b.password !== b.password_confirmation) throw new HttpError(422, 'Password confirmation does not match.');
   const passwordIssue = passwordProblem(b.password, b.phone);
   if (passwordIssue) throw new HttpError(422, passwordIssue);
@@ -204,8 +249,9 @@ loginRouter.post('/auth/signup', h(async (req, res) => {
     await client.query(
       `INSERT INTO user_signups
          (user_id, account_type, requested_plan, payment_status, agent_type, territory_id, parent_agent_id,
-          pension_match_interest, edir_member_interest, edir_life_interest, household_cover_interest)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          pension_match_interest, edir_member_interest, edir_life_interest, household_cover_interest,
+          worker_document_consent_at, worker_document_consent_version, date_of_birth)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [
         user.rows[0].id,
         b.account_type,
@@ -218,6 +264,9 @@ loginRouter.post('/auth/signup', h(async (req, res) => {
         b.edir_member_interest,
         b.edir_life_interest,
         b.household_cover_interest,
+        b.worker_document_consent ? new Date() : null,
+        b.worker_document_consent ? 'worker-document-review-v1' : null,
+        b.date_of_birth ?? null,
       ],
     );
     const uploadToken = randomBytes(32).toString('base64url');
@@ -297,7 +346,7 @@ export const adminRouter = Router();
 
 adminRouter.get('/auth/me', h(async (req, res) => {
   const r = await pool.query(`
-    SELECT u.legal_name, u.role, u.mfa_enabled, u.whatsapp_opt_in, u.must_change_password,
+    SELECT u.legal_name, u.role, u.kyc_status, u.mfa_enabled, u.whatsapp_opt_in, u.must_change_password,
            COALESCE(s.requested_plan, 'free') AS service_plan,
            COALESCE(s.payment_status, 'not_configured') AS service_payment_status,
            COALESCE(s.status = 'approved', false) AS service_plan_approved,
@@ -306,7 +355,18 @@ adminRouter.get('/auth/me', h(async (req, res) => {
     FROM users u LEFT JOIN user_signups s ON s.user_id = u.id
     WHERE u.id = $1
   `, [req.user!.id]);
-  res.json(r.rows[0]);
+  res.json({ ...r.rows[0], edir_id: req.user!.edir_id, session_idle_timeout_minutes: sessionIdleTimeoutMinutes(process.env) });
+}));
+
+adminRouter.get('/auth/session', (_req, res) => res.sendStatus(204));
+
+adminRouter.post('/auth/logout', h(async (req, res) => {
+  if (!req.user!.sessionId) throw new HttpError(401, 'Session is invalid; sign in again');
+  await pool.query(
+    'UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL',
+    [req.user!.sessionId, req.user!.id],
+  );
+  res.sendStatus(204);
 }));
 
 adminRouter.post('/auth/change-password', h(async (req, res) => {
@@ -320,7 +380,7 @@ adminRouter.post('/auth/change-password', h(async (req, res) => {
     await c.query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [u.id, await bcrypt.hash(b.next, 12)]);
     await audit(c, u.id, 'password_changed', 'user', u.id);
   });
-  res.json(issue({ ...u, must_change_password: false }));
+  res.json(await issue({ ...u, must_change_password: false }, req.user!.sessionId));
 }));
 
 adminRouter.post('/auth/mfa/setup', h(async (req, res) => {
@@ -345,7 +405,7 @@ adminRouter.post('/auth/mfa/enable', h(async (req, res) => {
     if (!enabled.rowCount) throw new HttpError(409, 'Two-factor setup changed. Start setup again.');
     await audit(c, u.id, 'mfa_enabled', 'user', u.id);
   });
-  res.json(issue({ ...u, mfa_enabled: true }));
+  res.json(await issue({ ...u, mfa_enabled: true }, req.user!.sessionId));
 }));
 
 adminRouter.post('/auth/mfa/disable', h(async (req, res) => {
@@ -389,7 +449,114 @@ adminRouter.get('/users', requireRole('super_admin', 'compliance'), h(async (_re
   res.json(users);
 }));
 
-adminRouter.get('/business-rules', requireRole('super_admin'), h(async (_req, res) => {
+async function lockEligibleSuperAdmins(c: import('pg').PoolClient, userIds: string[]) {
+  const uniqueIds = [...new Set(userIds)].sort();
+  const rows = (await c.query(
+    `SELECT id, role, active, mfa_enabled FROM users
+     WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
+    [uniqueIds],
+  )).rows;
+  return new Map(rows.map((user) => [user.id, user]));
+}
+
+const isEligibleSuperAdmin = (user?: { active: boolean; role: string; mfa_enabled: boolean }) =>
+  user?.active === true && user.role === 'super_admin' && user.mfa_enabled === true;
+
+adminRouter.get('/global-admin-promotions', requireRole('super_admin'), h(async (_req, res) => {
+  const rows = await withUser(_req.user!, async (c) => (await c.query(
+    `SELECT r.id, r.status, r.decision_reason, r.created_at, r.decided_at,
+            target.id AS target_user_id, target.legal_name AS target_name, target.phone AS target_phone,
+            requester.id AS requested_by, requester.legal_name AS requester_name,
+            approver.id AS approved_by, approver.legal_name AS approver_name
+     FROM global_admin_role_change_requests r
+     JOIN users target ON target.id = r.target_user_id
+     JOIN users requester ON requester.id = r.requested_by
+     LEFT JOIN users approver ON approver.id = r.approved_by
+     ORDER BY r.created_at DESC LIMIT 100`,
+  )).rows);
+  res.json(rows);
+}));
+
+adminRouter.post('/global-admin-promotions', requireRole('super_admin'), h(async (req, res) => {
+  const { target_user_id } = z.object({ target_user_id: z.string().uuid() }).strict().parse(req.body);
+  const request = await withUser(req.user!, async (c) => {
+    if (target_user_id === req.user!.id) throw new HttpError(422, 'A different administrator must nominate the target account');
+    const eligible = await lockEligibleSuperAdmins(c, [req.user!.id, target_user_id]);
+    if (!isEligibleSuperAdmin(eligible.get(req.user!.id))) {
+      throw new HttpError(403, 'Promotion requests require an active, MFA-enabled Super Admin');
+    }
+    const target = eligible.get(target_user_id);
+    if (!isEligibleSuperAdmin(target)) {
+      throw new HttpError(422, 'The target must be an active, MFA-enabled Super Admin');
+    }
+    const existing = await c.query(
+      "SELECT id FROM global_admin_role_change_requests WHERE target_user_id = $1 AND status = 'pending'",
+      [target_user_id],
+    );
+    if (existing.rowCount) throw new HttpError(409, 'A promotion request for this Super Admin is already pending');
+    const inserted = (await c.query(
+      `INSERT INTO global_admin_role_change_requests (requested_by, target_user_id)
+       VALUES ($1,$2) RETURNING id, status, target_user_id, created_at`,
+      [req.user!.id, target_user_id],
+    )).rows[0];
+    await audit(c, req.user!.id, 'global_admin_promotion_requested', 'user', target_user_id,
+      { role: 'super_admin' }, { role: 'global_admin', request_id: inserted.id });
+    return inserted;
+  });
+  res.status(201).json(request);
+}));
+
+async function decideGlobalAdminPromotion(req: Request, decision: 'approved' | 'rejected', reason: string) {
+  const requestId = z.string().uuid().parse(req.params.id);
+  const result = await withUser(req.user!, async (c) => {
+    const request = (await c.query(
+      'SELECT id, requested_by, target_user_id, status FROM global_admin_role_change_requests WHERE id = $1 FOR UPDATE',
+      [requestId],
+    )).rows[0];
+    if (!request) throw new HttpError(404, 'Promotion request not found');
+    if (request.status !== 'pending') throw new HttpError(409, 'Promotion request has already been decided');
+    if (request.requested_by === req.user!.id || request.target_user_id === req.user!.id) {
+      throw new HttpError(403, 'The requester and target cannot decide this promotion');
+    }
+    const eligible = await lockEligibleSuperAdmins(c, [req.user!.id, request.requested_by, request.target_user_id]);
+    if (!isEligibleSuperAdmin(eligible.get(req.user!.id))) {
+      throw new HttpError(403, 'Promotion decisions require an active, MFA-enabled Super Admin');
+    }
+    if (!isEligibleSuperAdmin(eligible.get(request.requested_by))) {
+      throw new HttpError(409, 'The requesting Super Admin is no longer eligible');
+    }
+    const target = eligible.get(request.target_user_id);
+    if (!isEligibleSuperAdmin(target)) {
+      throw new HttpError(409, 'The target no longer meets Global Admin eligibility requirements');
+    }
+    if (decision === 'approved') {
+      await c.query("UPDATE users SET role = 'global_admin' WHERE id = $1", [target.id]);
+    }
+    const updated = (await c.query(
+      `UPDATE global_admin_role_change_requests
+       SET status = $2, approved_by = $3, decision_reason = $4, decided_at = now()
+       WHERE id = $1 RETURNING id, status, target_user_id`,
+      [request.id, decision, req.user!.id, reason],
+    )).rows[0];
+    await audit(c, req.user!.id, `global_admin_promotion_${decision}`, 'user', target.id,
+      { role: target.role }, { role: decision === 'approved' ? 'global_admin' : target.role, request_id: request.id, reason });
+    return updated;
+  });
+  if (decision === 'approved') invalidateUser(result.target_user_id);
+  return result;
+}
+
+adminRouter.post('/global-admin-promotions/:id/approve', requireRole('super_admin'), h(async (req, res) => {
+  const { reason } = z.object({ reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  res.json(await decideGlobalAdminPromotion(req, 'approved', reason));
+}));
+
+adminRouter.post('/global-admin-promotions/:id/reject', requireRole('super_admin'), h(async (req, res) => {
+  const { reason } = z.object({ reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  res.json(await decideGlobalAdminPromotion(req, 'rejected', reason));
+}));
+
+adminRouter.get('/business-rules', requireRole('global_admin'), h(async (_req, res) => {
   const result = await pool.query(
     'SELECT key, value FROM config_rules WHERE key = ANY($1::text[]) ORDER BY key',
     [BUSINESS_RULES.map((rule) => rule.key)],
@@ -400,7 +567,7 @@ adminRouter.get('/business-rules', requireRole('super_admin'), h(async (_req, re
   res.json(BUSINESS_RULES.map((rule) => ({ ...rule, value: values[rule.key] })));
 }));
 
-adminRouter.patch('/business-rules', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.patch('/business-rules', requireRole('global_admin'), h(async (req, res) => {
   const { values } = z.object({
     values: z.record(z.string(), z.number().finite()),
   }).strict().parse(req.body);
@@ -458,7 +625,7 @@ adminRouter.patch('/business-rules', requireRole('super_admin'), h(async (req, r
 adminRouter.post('/users', requireRole('super_admin'), h(async (req, res) => {
   const b = z.object({
     legal_name: z.string().min(2), phone: Phone, email: z.string().email().optional(),
-    role: z.enum(ALL_ROLES), territory_id: z.number().int().optional(), parent_agent_id: z.string().uuid().optional(),
+    role: z.enum(PROVISIONABLE_ROLES), territory_id: z.number().int().optional(), parent_agent_id: z.string().uuid().optional(),
     service_specialization: z.enum(['financial_service', 'growth_partnership', 'workforce_property']).optional(),
   }).parse(req.body);
   if (AGENT_ROLES.includes(b.role) && !b.territory_id) throw new HttpError(422, 'Agents need an area');
@@ -489,9 +656,9 @@ adminRouter.get('/agents/team', requireRole('super_admin', 'master_agent'), h(as
             (SELECT count(*)::int FROM contracts k WHERE k.source_agent_id = a.id) AS contract_count,
             (SELECT count(*)::int FROM properties p WHERE p.source_agent_id = a.id) AS property_count
      FROM agents a JOIN users u ON u.id = a.id
-     WHERE ($1 = 'super_admin' OR a.id = $2 OR a.parent_id = $2)
+     WHERE ($1::boolean OR a.id = $2 OR a.parent_id = $2)
      ORDER BY a.agent_type, u.legal_name`,
-    [req.user!.role, req.user!.id],
+    [req.user!.role === 'super_admin' || req.user!.role === 'global_admin', req.user!.id],
   )).rows);
   res.json(team);
 }));
@@ -600,6 +767,9 @@ adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req
   res.json(await withUser(req.user!, async (c) => {
     const target = (await c.query('SELECT id, role, active, created_by FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!target) throw new HttpError(404, 'User not found');
+    if (target.role === 'global_admin' && req.user!.role !== 'global_admin') {
+      throw new HttpError(403, 'Only a different Global Admin can activate a Global Admin account');
+    }
     if (target.created_by === req.user!.id) throw new HttpError(403, 'A different Super Admin must activate an account you created');
     if (target.active) throw new HttpError(409, 'Account is already active');
     // The database refuses activation of non-staff accounts that are not KYC-verified.
@@ -635,6 +805,11 @@ adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req
 adminRouter.post('/users/:id/deactivate', requireRole('super_admin'), h(async (req, res) => {
   if (req.params.id === req.user!.id) throw new HttpError(409, 'You cannot deactivate yourself');
   res.json(await withUser(req.user!, async (c) => {
+    const target = (await c.query('SELECT role FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!target) throw new HttpError(404, 'User not found');
+    if (target.role === 'global_admin' && req.user!.role !== 'global_admin') {
+      throw new HttpError(403, 'Only a Global Admin can deactivate a Global Admin account');
+    }
     const r = await c.query('UPDATE users SET active = false WHERE id = $1 RETURNING id, active', [req.params.id]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
     await audit(c, req.user!.id, 'user_deactivated', 'user', String(req.params.id));
@@ -647,6 +822,11 @@ adminRouter.post('/users/:id/deactivate', requireRole('super_admin'), h(async (r
 adminRouter.post('/users/:id/mfa/reset', requireRole('super_admin'), h(async (req, res) => {
   if (req.params.id === req.user!.id) throw new HttpError(403, 'Ask another Super Admin to reset your two-factor sign-in');
   const out = await withUser(req.user!, async (c) => {
+    const target = (await c.query('SELECT role FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!target) throw new HttpError(404, 'User not found');
+    if (target.role === 'global_admin' && req.user!.role !== 'global_admin') {
+      throw new HttpError(403, 'Only a Global Admin can reset a Global Admin authenticator');
+    }
     const r = await c.query('UPDATE users SET mfa_enabled = false, mfa_secret = NULL, mfa_last_step = -1 WHERE id = $1 RETURNING id, role', [req.params.id]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
     await audit(c, req.user!.id, 'mfa_reset', 'user', String(req.params.id));
@@ -659,6 +839,11 @@ adminRouter.post('/users/:id/reset-password', requireRole('super_admin'), h(asyn
   if (req.params.id === req.user!.id) throw new HttpError(403, 'Ask another Super Admin to reset your password');
   const temp = randomPassword();
   await withUser(req.user!, async (c) => {
+    const target = (await c.query('SELECT role FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!target) throw new HttpError(404, 'User not found');
+    if (target.role === 'global_admin' && req.user!.role !== 'global_admin') {
+      throw new HttpError(403, 'Only a Global Admin can reset a Global Admin password');
+    }
     const r = await c.query('UPDATE users SET password_hash = $2, must_change_password = true, failed_logins = 0, locked_until = NULL WHERE id = $1', [req.params.id, await bcrypt.hash(temp, 12)]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
     await audit(c, req.user!.id, 'password_reset', 'user', String(req.params.id));
@@ -694,7 +879,7 @@ adminRouter.get('/reports/summary', requireRole('super_admin', 'finance', 'finan
       money: {
         revenue, commission_expense: commissionExpense, net_revenue: revenue - commissionExpense,
         guarantee_held: acc('Guarantee Liability').c - acc('Guarantee Liability').d,
-        commission_payable: acc('Commission Payable').c - acc('Commission Payable').d,
+        commission_payable: (acc('Commission Payable').c + acc('Commission Held Payable').c) - (acc('Commission Payable').d + acc('Commission Held Payable').d),
         cash: acc('Cash').d - acc('Cash').c,
       },
       pending_invoices: pending[0], open_disputes: disputes[0].n, open_maintenance: maint[0].n, overdue_rent: overdue[0],
@@ -716,4 +901,3 @@ adminRouter.get('/reports/me', requireRole('master_agent', 'field_agent', 'prope
     return { leads, comms, active_contracts: contracts[0].n, workers: workers[0].n, properties: props[0].n };
   }));
 }));
-

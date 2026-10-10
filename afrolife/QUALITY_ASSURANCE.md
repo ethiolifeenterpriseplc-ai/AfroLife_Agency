@@ -64,7 +64,13 @@ complete from a local development check alone.
 - [ ] Integration scenarios pass against disposable staging data, including
   sign-up/activation, role boundaries, RLS isolation, four-eyes approval,
   contract and rent ledger flows, refunds, private upload authorization, and
-  MFI transaction reversal.
+  MFI transaction reversal. Also verify authenticated session inactivity
+  expiry, absolute expiry, logout revocation, and session replacement after
+  password or MFA changes.
+- [ ] The test API and fixture database use the exact same disposable schema
+  migrated through the release's latest migration. Confirm runtime role
+  identity and explicit central Insurance table/sequence privileges before
+  accepting integration results.
 - [ ] A second user/role cannot access another agent's or institution's data;
   check API responses as well as database RLS using the runtime role.
 - [ ] HTTPS, CORS, proxy trust, staff MFA, rate limits, secret storage, and

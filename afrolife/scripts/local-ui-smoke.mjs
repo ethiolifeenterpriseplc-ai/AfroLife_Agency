@@ -85,8 +85,13 @@ try {
   })()`);
   await waitFor("document.querySelector('#app-view')?.hidden === false", 'successful Super Admin sign in');
   await waitFor("document.querySelector('#mfi-tab')?.hidden === false", 'SACCO tab visibility');
-  await evaluate("document.querySelector('#mfi-tab').click()");
+  await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]')", 'role-aware mini-app launcher');
+  await evaluate("document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]').click()");
   await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace rendering');
+  await evaluate("document.querySelector('#agents-tab').click()");
+  await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"commissions\"]')", 'agent mini-app shortcuts');
+  await evaluate("document.querySelector('#mfi-tab').click()");
+  await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace return');
   await waitFor("!!document.querySelector('#workspace [data-mfi-service-search]')", 'accessible service finder');
   const serviceSearch = await evaluate(`(() => {
     const field = document.querySelector('#workspace [data-mfi-service-search]');
@@ -115,6 +120,13 @@ try {
   await waitFor("!!document.querySelector('#workspace [data-mfi-form=\"npl-classification\"]') || !!document.querySelector('#workspace .mfi-record-list')", 'risk classification screen');
   await evaluate("document.querySelector('#workspace [data-mfi-module=\"staff\"]')?.click()");
   await waitFor("!!document.querySelector('#workspace .mfi-staff-form')", 'institution staff form');
+  const edirEnabled = await evaluate("document.querySelector('#edir-tab')?.hidden === false");
+  if (edirEnabled) {
+    await evaluate("document.querySelector('#edir-tab').click()");
+    await waitFor("!!document.querySelector('#workspace .edir-service-nav [data-edir-focus=\"edir-finance\"])", 'Edir mini-app shortcuts');
+    await evaluate("document.querySelector('#workspace [data-edir-focus=\"edir-finance\"]').click()");
+    await waitFor("document.activeElement?.id === 'edir-finance'", 'Edir savings and accounts shortcut');
+  }
 
   const layouts = [];
   for (const [width, height, label] of [[390, 844, 'mobile'], [768, 1024, 'tablet'], [1440, 900, 'desktop']]) {
@@ -126,7 +138,7 @@ try {
     assert.ok(layout.bodyWidth <= layout.width + 1, `${layout.device} body overflows horizontally: ${JSON.stringify(layout)}`);
   }
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join('; ')}`);
-  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], layouts }, null, 2));
+  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir mini-app shortcuts when enabled', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], layouts }, null, 2));
 } finally {
   socket?.close();
   if (Number.isInteger(browser.pid)) {

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Router, Request, Response, RequestHandler } from 'express';
 import { PoolClient } from 'pg';
 import { z } from 'zod';
-import { AuthUser, HttpError, withUser } from './core.js';
+import { AuthUser, HttpError, isPlatformAdminRole, withUser } from './core.js';
 import { centsToAmount, decimalToCents, mfiAmountSchema as amountSchema, normalizeAmount } from './mfi-money.js';
 import { Phone } from './validators.js';
 import { creditPolicySchema, principalSchedule, scoreLoan } from './mfi-credit.js';
@@ -33,7 +33,7 @@ async function withInstitution<T>(
        WHERE institution_id = $1 AND user_id = $2 AND active`,
       [institutionId, user.id],
     )).rows[0];
-    const platformAdmin = user.role === 'super_admin';
+    const platformAdmin = isPlatformAdminRole(user.role);
     if (!membership && !platformAdmin) throw new HttpError(404, 'Institution not found');
     if (!platformAdmin && !allowedRoles.includes(membership.role)) {
       throw new HttpError(403, 'Your institution role cannot do this');
@@ -214,7 +214,7 @@ async function postJournal(
 
 mfiRouter.get('/institutions', h(async (req, res) => {
   const rows = await withUser(req.user!, async (client) => {
-    const platformAdmin = req.user!.role === 'super_admin';
+    const platformAdmin = isPlatformAdminRole(req.user!.role);
     const result = await client.query(
     `SELECT i.id, i.institution_code, i.name, i.currency, m.role
      FROM mfi_institutions i
@@ -240,7 +240,7 @@ mfiRouter.get('/institutions', h(async (req, res) => {
 }));
 
 mfiRouter.post('/institutions', h(async (req, res) => {
-  if (req.user!.role !== 'super_admin') throw new HttpError(403, 'Only a Super Admin can register an institution');
+  if (!isPlatformAdminRole(req.user!.role)) throw new HttpError(403, 'Only a platform administrator can register an institution');
   const body = z.object({
     institution_code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,12}$/),
     name: z.string().trim().min(2).max(160),
@@ -366,7 +366,7 @@ mfiRouter.post('/institutions/:institutionId/staff', h(async (req, res) => {
   const membership = await withInstitution(req.user!, req.params.institutionId, ['institution_admin'], async (client) => {
     const staff = (await client.query(
       `SELECT id, legal_name, phone FROM users
-       WHERE phone=$1 AND active AND role IN ('super_admin','compliance','finance','finance_manager')`,
+       WHERE phone=$1 AND active AND role IN ('global_admin','super_admin','compliance','finance','finance_manager')`,
       [body.phone],
     )).rows[0];
     if (!staff) throw new HttpError(404, 'No active AfroLife finance or compliance staff account matches that phone number');
