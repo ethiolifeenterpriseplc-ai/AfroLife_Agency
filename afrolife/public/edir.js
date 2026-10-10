@@ -208,7 +208,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         const staffForm = node('form', undefined, 'inline-form');
         staffForm.dataset.edirForm = 'organization-staff';
         staffForm.dataset.organizationId = organization.id;
-        staffForm.append(textInput('AfroLife user ID', 'user_id'));
+        staffForm.append(textInput('EthioLife user ID', 'user_id'));
         const roleField = node('label', 'Local Edir role');
         const roleSelect = document.createElement('select');
         roleSelect.name = 'role';
@@ -262,7 +262,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         const staffForm = node('form', undefined, 'inline-form');
         staffForm.dataset.edirForm = 'insurance-staff';
         staffForm.dataset.organizationId = organization.id;
-        staffForm.append(textInput('AfroLife user ID', 'user_id'));
+        staffForm.append(textInput('EthioLife user ID', 'user_id'));
         const roleField = node('label', 'Insurance role');
         const roleSelect = document.createElement('select');
         roleSelect.name = 'role';
@@ -276,7 +276,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
       insurance.append(item);
     }
     insurance.append(node('h3', 'Insurance consolidated totals'));
-    if (!insuranceMasterAccess) insurance.append(node('p', 'An AfroLife platform administrator must assign a separate Insurance Master Edir administrator before these books can be configured or aggregated.'));
+    if (!insuranceMasterAccess) insurance.append(node('p', 'An EthioLife platform administrator must assign a separate Insurance Master Edir administrator before these books can be configured or aggregated.'));
     for (const row of insuranceSummary) {
       insurance.append(card(row.organization_name, `${row.status} Â· ${row.ledger_accounts} accounts Â· ${row.posted_journals} posted journals Â· ETB ${row.posted_volume}`));
     }
@@ -288,15 +288,15 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
   function renderEnrollment() {
     if (user.kyc_status !== 'verified') {
       const reminder = node('section', undefined, 'panel form-card');
-      reminder.append(node('h3', 'AfroLife Edir membership offer'));
-      reminder.append(node('p', 'Edir membership is available to registered workers, employers, landlords, tenants, sellers, buyers, and other AfroLife users after KYC has been verified. Complete KYC review to request membership.'));
+      reminder.append(node('h3', 'EthioLife Edir membership offer'));
+      reminder.append(node('p', 'Edir membership is available to registered workers, employers, landlords, tenants, sellers, buyers, and other EthioLife users after KYC has been verified. Complete KYC review to request membership.'));
       root.append(reminder);
       return;
     }
     const form = node('form', undefined, 'panel form-card inline-form');
     form.id = 'edir-membership';
     form.dataset.edirForm = 'enroll';
-    form.append(node('h3', 'Request AfroLife Edir membership'));
+    form.append(node('h3', 'Request EthioLife Edir membership'));
     const terms = node('label', undefined, 'span-2');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -311,7 +311,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
   function renderBenefits() {
     const benefits = node('section', undefined, 'panel form-card');
     benefits.append(node('h3', 'Available Edir benefits and services'));
-    benefits.append(node('p', 'Membership includes a reviewed request to join the central Edir community. The active product options below are set by AfroLife Edir administrators and may be subject to product terms and approval.'));
+    benefits.append(node('p', 'Membership includes a reviewed request to join the central Edir community. The active product options below are set by EthioLife Edir administrators and may be subject to product terms and approval.'));
     const activeProducts = financialProducts.filter((product) => product.status === 'active');
     if (activeProducts.length) {
       const productList = node('div', undefined, 'list');
@@ -342,9 +342,9 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
     if (membership.status === 'pending') {
       profile.append(node('p', 'Your membership is awaiting independent review. No financial activity is enabled.'));
     } else if (membership.status === 'rejected' || membership.status === 'suspended' || membership.status === 'closed') {
-      profile.append(node('p', membership.review_reason ?? 'Contact AfroLife Edir administration for information.'));
+      profile.append(node('p', membership.review_reason ?? 'Contact EthioLife Edir administration for information.'));
     } else {
-      profile.append(node('p', 'You are enrolled in the central AfroLife Edir registry. Your membership does not create a deposit or payment account.'));
+      profile.append(node('p', 'You are enrolled in the central EthioLife Edir registry. Your membership does not create a deposit or payment account.'));
     }
     root.append(profile);
     renderBenefits();
@@ -449,7 +449,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
       const staffForm = node('form', undefined, 'inline-form');
       staffForm.dataset.edirForm = 'staff';
       staffForm.append(node('h3', 'Assign Edir staff'));
-      staffForm.append(textInput('AfroLife user ID', 'user_id'));
+      staffForm.append(textInput('EthioLife user ID', 'user_id'));
       const roleLabel = node('label', 'Edir role');
       const roleSelect = document.createElement('select');
       roleSelect.name = 'role';
@@ -465,7 +465,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         const insuranceMasterForm = node('form', undefined, 'inline-form');
         insuranceMasterForm.dataset.edirForm = 'insurance-master-staff';
         insuranceMasterForm.append(node('h3', 'Establish separate Insurance Master Edir access'));
-        insuranceMasterForm.append(textInput('AfroLife user ID', 'user_id'));
+        insuranceMasterForm.append(textInput('EthioLife user ID', 'user_id'));
         insuranceMasterForm.append(submitButton('Assign Insurance Master Edir administrator'));
         staffSection.append(insuranceMasterForm);
       }
@@ -817,9 +817,9 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
   function render() {
     root.replaceChildren();
     const heading = node('section', undefined, 'panel form-card');
-    heading.append(node('p', 'AFROLIFE_EDIR · CENTRAL COMMUNITY', 'eyebrow'));
-    heading.append(node('h1', 'AfroLife Edir'));
-    heading.append(node('p', 'One central Edir registry for AfroLife members, with member and administration workspaces.'));
+    heading.append(node('p', 'ETHIOLIFE_EDIR · CENTRAL COMMUNITY', 'eyebrow'));
+    heading.append(node('h1', 'EthioLife Edir'));
+    heading.append(node('p', 'One central Edir registry for EthioLife members, with member and administration workspaces.'));
     heading.append(node('p', 'Staged financial pilot: approved savings, share, and contribution products; member accounts; double-entry postings; and independent transaction approval. Lending, insurance, and benefit payouts require their own approved policies and controls.'));
     if (organizations.length) {
       const picker = node('label', 'Organization workspace');
@@ -849,7 +849,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
       root.append(message);
     }
     if (loading) {
-      root.append(node('p', 'Loading AfroLife Edir…'));
+      root.append(node('p', 'Loading EthioLife Edir…'));
       return;
     }
     if (error) return;
@@ -909,7 +909,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
     ].filter(([target]) => root.querySelector(`#${target}`));
     if (!services.length) return;
     const nav = node('nav', undefined, 'edir-service-nav');
-    nav.setAttribute('aria-label', 'AfroLife Edir mini-apps');
+    nav.setAttribute('aria-label', 'EthioLife Edir mini-apps');
     nav.append(node('h2', 'Edir mini-apps'));
     nav.append(node('p', 'Jump directly to the service area you need.'));
     const grid = node('div', undefined, 'edir-service-grid');

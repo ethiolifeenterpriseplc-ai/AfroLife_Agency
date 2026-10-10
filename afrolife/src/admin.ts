@@ -308,26 +308,29 @@ loginRouter.post('/auth/signup/documents', createApiRateLimiter('signup-document
     throw new HttpError(422, 'This document is not required for the selected account type.');
   }
   const id = randomUUID();
+  let responseId = id;
   const key = randomUUID();
   const sha256 = createHash('sha256').update(file).digest('hex');
   await withUser({ id: applicant.id, role: applicant.role }, async (c) => {
     const count = await c.query('SELECT count(*)::int AS total FROM user_documents WHERE user_id = $1', [applicant.id]);
     const existing = await c.query('SELECT id, status FROM user_documents WHERE user_id = $1 AND doc_type = $2 FOR UPDATE', [applicant.id, docType]);
-    if (existing.rowCount && existing.rows[0].status !== 'uploaded') {
-      throw new HttpError(409, 'This KYC document has already been reviewed and cannot be replaced.');
+    if (existing.rowCount && !['uploaded', 'rejected'].includes(existing.rows[0].status)) {
+      throw new HttpError(409, 'A verified KYC document cannot be replaced here. Contact Compliance if it needs correction.');
     }
     if (!existing.rowCount && Number(count.rows[0].total) >= 2) {
       throw new HttpError(422, 'The maximum number of sign-up identity documents has been reached.');
     }
     await putFile(key, file);
     if (existing.rowCount) {
-      const old = (await c.query('DELETE FROM user_documents WHERE id = $1 RETURNING storage_key', [existing.rows[0].id])).rows[0];
+      const old = existing.rows[0];
+      responseId = old.id;
       await c.query(
-        `INSERT INTO user_documents (id,user_id,doc_type,storage_key,sha256,mime,size_bytes,uploaded_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$2)`,
-        [id, applicant.id, docType, key, sha256, mime, file.length],
+        `UPDATE user_documents
+         SET storage_key=$2,sha256=$3,mime=$4,size_bytes=$5,status='uploaded',reviewer_id=NULL,reviewed_at=NULL,review_note=NULL,uploaded_by=$6,created_at=now()
+         WHERE id=$1`,
+        [old.id, key, sha256, mime, file.length, applicant.id],
       );
-      await audit(c, applicant.id, 'signup_kyc_document_replaced', 'user_document', id, { storage_key: old.storage_key }, { doc_type: docType });
+      await audit(c, applicant.id, 'signup_kyc_document_replaced', 'user_document', old.id, { status: old.status }, { doc_type: docType, status: 'uploaded' });
     } else {
       await c.query(
         `INSERT INTO user_documents (id,user_id,doc_type,storage_key,sha256,mime,size_bytes,uploaded_by)
@@ -338,7 +341,25 @@ loginRouter.post('/auth/signup/documents', createApiRateLimiter('signup-document
     }
     await c.query("UPDATE users SET kyc_status = 'uploaded' WHERE id = $1", [applicant.id]);
   });
-  res.status(201).json({ id, doc_type: docType, status: 'uploaded' });
+  res.status(201).json({ id: responseId, doc_type: docType, status: 'uploaded' });
+}));
+
+loginRouter.get('/auth/signup/documents', h(async (req, res) => {
+  const token = req.get('authorization')?.match(/^Signup ([A-Za-z0-9_-]{40,})$/)?.[1];
+  if (!token) throw new HttpError(401, 'A valid sign-up upload token is required.');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const applicant = (await pool.query(
+    `SELECT u.id, u.role, s.account_type FROM signup_upload_tokens t
+     JOIN users u ON u.id=t.user_id JOIN user_signups s ON s.user_id=u.id
+     WHERE t.token_hash=$1 AND t.expires_at>now() AND s.status='pending'`, [tokenHash],
+  )).rows[0];
+  if (!applicant) throw new HttpError(401, 'The sign-up upload token is invalid or expired.');
+  const config = (await pool.query("SELECT config_value FROM marketplace_configuration WHERE scope='users' AND config_key='kyc_requirements'")).rows[0]?.config_value as Record<string, string[]> | undefined;
+  const required = config?.[applicant.account_type] ?? ['national_id'];
+  const documents = await withUser({ id: applicant.id, role: applicant.role }, async (c) => (await c.query(
+    'SELECT doc_type,status,review_note,reviewed_at FROM user_documents WHERE user_id=$1 ORDER BY doc_type', [applicant.id],
+  )).rows);
+  res.json({ required, documents });
 }));
 
 // ================= Signed-in: own account =================
@@ -721,7 +742,7 @@ adminRouter.post('/users/:id/kyc', requireRole('compliance'), h(async (req, res)
 
 adminRouter.get('/users/:id/documents', requireRole('super_admin', 'compliance'), h(async (req, res) => {
   const documents = await withUser(req.user!, async (c) => (await c.query(
-    'SELECT id, doc_type, mime, size_bytes, status, reviewer_id, reviewed_at, created_at FROM user_documents WHERE user_id = $1 ORDER BY created_at',
+    'SELECT id, doc_type, mime, size_bytes, status, reviewer_id, reviewed_at, review_note, created_at FROM user_documents WHERE user_id = $1 ORDER BY created_at',
     [req.params.id],
   )).rows);
   res.json(documents);
@@ -744,18 +765,22 @@ adminRouter.get('/users/:id/documents/:documentId/file', requireRole('super_admi
 
 adminRouter.post('/users/:id/documents/:documentId/review', requireRole('compliance'), h(async (req, res) => {
   if (req.params.id === req.user!.id) throw new HttpError(403, 'You cannot review your own KYC documents.');
-  const { decision } = z.object({ decision: z.enum(['verified', 'rejected']) }).parse(req.body);
+  const { decision, note } = z.object({
+    decision: z.enum(['verified', 'rejected']),
+    note: z.string().trim().min(10).max(1000).optional(),
+  }).strict().parse(req.body);
+  if (decision === 'rejected' && !note) throw new HttpError(422, 'Give the applicant a reason and tell them what needs to change (at least 10 characters).');
   const document = await withUser(req.user!, async (c) => {
     const found = (await c.query(
-      "SELECT id, doc_type, status, uploaded_by FROM user_documents WHERE id = $1 AND user_id = $2 FOR UPDATE",
+      "SELECT id, doc_type, status, uploaded_by, review_note FROM user_documents WHERE id = $1 AND user_id = $2 FOR UPDATE",
       [req.params.documentId, req.params.id],
     )).rows[0];
     if (!found) throw new HttpError(404, 'KYC document not found.');
     if (found.uploaded_by === req.user!.id) throw new HttpError(403, 'A different compliance officer must review this document.');
     if (found.status !== 'uploaded') throw new HttpError(409, 'This KYC document has already been reviewed.');
     const updated = (await c.query(
-      'UPDATE user_documents SET status = $2, reviewer_id = $3, reviewed_at = now() WHERE id = $1 RETURNING id, doc_type, status',
-      [found.id, decision, req.user!.id],
+      'UPDATE user_documents SET status = $2, reviewer_id = $3, reviewed_at = now(), review_note = $4 WHERE id = $1 RETURNING id, doc_type, status, review_note',
+      [found.id, decision, req.user!.id, decision === 'rejected' ? note : null],
     )).rows[0];
     await audit(c, req.user!.id, 'signup_kyc_document_' + decision, 'user_document', found.id, { status: found.status }, { status: decision });
     return updated;

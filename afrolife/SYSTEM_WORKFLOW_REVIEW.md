@@ -39,6 +39,17 @@ certificate requirements. Contract stages distinguish party-signed and
 company-countersigned files. File type is checked from file bytes, uploads are
 hashed, and authorized downloads are audited for worker documents.
 
+**Implemented in this update:** compliance rejection of worker and signup identity
+documents requires a reason of at least 10 characters. The review reason is stored
+with the document and shown in the review UI and applicant follow-up; audit events
+record the decision without copying the reason into audit metadata. Applicants can
+replace a rejected signup document from the same browser session while the upload
+token remains valid. Worker document history exposes reviewer feedback so the
+responsible agent can upload a correction. Migration
+`041_document_review_feedback.sql` is applied to the local database. The applicant
+replacement token expires after 24 hours; expired-token recovery is still needed
+for a complete long-running application journey.
+
 There is no OCR or automatic field extraction, no source-to-extracted-value
 record, no extracted-data correction/approval flow, and no general document
 requirement matrix for property title/authority, seller authority, tenant/lease,
@@ -126,7 +137,7 @@ current description is that the app provides staff-led workflows with scoped
 records and audit trails; buyer, worker, and tenant self-service, OCR extraction,
 full customer recommendations, and end-to-end reporting remain unimplemented.
 
-Reviewed 8 October 2026 against the current application routes, database migrations,
+The initial system review was performed 8 October 2026 against the application routes, database migrations,
 browser flows, and local test harness. This is a source and local-environment review;
 it is not a legal, regulatory, penetration, accessibility, or production operations
 certification.

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency</string>
-    <string name="title_activity_main">አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency</string>
+    <string name="app_name">ኢትዮ-ላይፍ ኤጀንሲ / EthioLife Agency</string>
+    <string name="title_activity_main">ኢትዮ-ላይፍ ኤጀንሲ / EthioLife Agency</string>
     <string name="package_name">com.afrolife.agency</string>
     <string name="custom_url_scheme">com.afrolife.agency</string>
 </resources>

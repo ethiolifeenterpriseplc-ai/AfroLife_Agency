@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 
 const chrome = process.env.AFROLIFE_CHROME_PATH
   ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const appUrl = process.env.AFROLIFE_UI_URL ?? 'http://127.0.0.1:3000/';
 const credentialFile = join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
 const adminLine = readFileSync(credentialFile, 'utf8').split(/\r?\n/)
   .find((line) => line.startsWith('super_admin |'));
@@ -16,7 +17,7 @@ assert.ok(profile.startsWith(tmpdir()), 'Browser profile must be isolated in the
 const browser = spawn(chrome, [
   '--headless', '--disable-gpu', '--disable-crash-reporter', '--disable-breakpad', '--no-first-run', '--no-default-browser-check',
   '--disable-background-networking', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
-  'http://127.0.0.1:3000/',
+  appUrl,
 ], { stdio: 'ignore', windowsHide: true });
 
 let socket;
@@ -128,6 +129,27 @@ try {
     await waitFor("document.activeElement?.id === 'edir-finance'", 'Edir savings and accounts shortcut');
   }
 
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  const mobileNavigation = await evaluate(`(() => {
+    const nav = document.querySelector('#mobile-workspace-nav');
+    const more = document.querySelector('#mobile-workspace-more');
+    const links = [...nav.querySelectorAll('.workspace-nav-link')];
+    return {
+      visible: getComputedStyle(nav).display !== 'none',
+      count: links.length,
+      shortestTarget: Math.min(...links.map((link) => link.getBoundingClientRect().height)),
+      labels: links.map((link) => link.getAttribute('aria-label') || link.textContent.trim()),
+    };
+  })()`);
+  assert.equal(mobileNavigation.visible, true, 'Mobile quick navigation should be visible');
+  assert.equal(mobileNavigation.count, 4, 'Mobile navigation should keep no more than three primary destinations plus More');
+  assert.ok(mobileNavigation.shortestTarget >= 44, `Mobile navigation targets are too small: ${JSON.stringify(mobileNavigation)}`);
+  await evaluate("document.querySelector('#mobile-workspace-more').click()");
+  await waitFor("document.querySelector('#workspace-more-dialog')?.open === true", 'mobile workspace sections sheet');
+  await waitFor("!!document.querySelector('#workspace-more-nav [data-panel=\"admin\"]')", 'additional role-visible sections');
+  await evaluate("document.querySelector('#workspace-more-nav [data-panel=\"admin\"]').click()");
+  await waitFor("document.querySelector('#workspace-more-dialog')?.open === false && document.querySelector('#page-title')?.textContent === 'Admin workspace'", 'More navigation selection');
+
   const layouts = [];
   for (const [width, height, label] of [[390, 844, 'mobile'], [768, 1024, 'tablet'], [1440, 900, 'desktop']]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 600 });
@@ -138,7 +160,7 @@ try {
     assert.ok(layout.bodyWidth <= layout.width + 1, `${layout.device} body overflows horizontally: ${JSON.stringify(layout)}`);
   }
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join('; ')}`);
-  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir mini-app shortcuts when enabled', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], layouts }, null, 2));
+  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir mini-app shortcuts when enabled', 'mobile bottom navigation visibility and touch target sizing', 'More sections sheet navigation', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], mobileNavigation, layouts }, null, 2));
 } finally {
   socket?.close();
   if (Number.isInteger(browser.pid)) {

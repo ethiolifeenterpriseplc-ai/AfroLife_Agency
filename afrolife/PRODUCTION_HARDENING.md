@@ -87,7 +87,21 @@ gates below have been satisfied.
 
 ### DuckDNS and HTTPS
 
-The requested hostname is `afrolife-agency.duckdns.org`. A public DNS lookup currently returns an A record. In the latest deployment check, that record did not match this network current public egress address, and external TCP ports 80 and 443 timed out. The DuckDNS updater credential is not installed on this host. Confirm the account owns the subdomain, securely install its token with `deploy/windows/Set-DuckDnsCredential.ps1`, and configure the updater on the actual public server before creating IIS bindings or requesting TLS. Use `deploy/windows/Set-DuckDnsCredential.ps1` to store
+The requested hostname is `afrolife-agency.duckdns.org`. As of 10 October
+2026, its A record matches this network's current public egress address, and
+the saved DuckDNS updater credential successfully updated the record. External
+TCP ports 80 and 443 remain unreachable. The host is behind a private LAN
+gateway; Windows Firewall has no enabled inbound allow rule for those ports.
+WSL Nginx and the API listen only on loopback ports 8080 and 3000, respectively.
+Local Windows IIS serves its stock landing page on HTTP, and no HTTPS binding
+is configured. DNS is therefore working, but the host is neither routed nor
+configured to serve the AfroLife app publicly.
+
+If this Windows host is to be used, confirm the gateway has a reachable public
+IPv4 address and configure inbound routing for TCP 80/443 to the host; if the
+ISP uses CGNAT or blocks inbound web traffic, use a public server or managed
+tunnel instead. Configure a reverse proxy to the app and trusted TLS before
+allowing public access. Use `deploy/windows/Set-DuckDnsCredential.ps1` to store
 the DuckDNS token protected by Windows DPAPI for the current Windows account,
 and `deploy/windows/Update-DuckDns.ps1` as the updater. Run the updater's
 scheduled task as that same account. Do not put the DuckDNS token in a
@@ -107,8 +121,9 @@ account, configured to run whether the account is logged on or not. Add a
 repeating trigger every 5 minutes and an action that starts
 `powershell.exe -NoProfile -NonInteractive -File
 C:\AfroLife\app\deploy\windows\Update-DuckDns.ps1`. Do not put the token in
-the task arguments. Confirm `C:\ProgramData\AfroLife\logs\duckdns-update.log`
-records a successful update before proceeding.
+the task arguments. Confirm
+`%LOCALAPPDATA%\AfroLife\logs\duckdns-update.log` for the task account records
+a successful update before proceeding.
 
 After confirming that the hostname resolves to the server's public IP and external TCP ports 80 and 443 reach the host:
 
@@ -181,6 +196,27 @@ configure Windows port proxies. Do not point the Linux app at the Windows
 development database. For public production, migrate this deployment to a
 supported VPS or cloud VM, configure DNS and firewall routing there, and test
 trusted TLS before accepting real user traffic.
+
+## Oracle Cloud Always Free ARM64 VM
+
+For a public pilot on an eligible free VM, see
+[deploy/linux/ORACLE_ALWAYS_FREE.md](./deploy/linux/ORACLE_ALWAYS_FREE.md).
+Oracle documents an Always Free Ampere A1 compute allowance, but capacity is
+region-dependent and idle instances can be reclaimed. Compute eligibility does
+not guarantee that the public IP or every networking/storage resource is free;
+check the complete estimate and stop if any charge is shown. The account owner
+must create the cloud resources; this repository does not provision them. The
+runbook keeps PostgreSQL and the Node listener loopback-only, exposes only
+SSH/HTTP/HTTPS, and retains the database, TLS, release, and production-readiness
+gates.
+
+## VMware Workstation local pilot
+
+For a host-only local pilot in the existing Windows VMware Workstation
+installation, see [deploy/linux/VMWARE_LOCAL_PILOT.md](./deploy/linux/VMWARE_LOCAL_PILOT.md).
+This is NAT-only, HTTP-only test hosting with synthetic data; it does not make
+the DuckDNS hostname public and must not be used for real identity documents,
+deposits, or regulated financial workflows.
 
 Build a clean release on the server or in a trusted build pipeline:
 

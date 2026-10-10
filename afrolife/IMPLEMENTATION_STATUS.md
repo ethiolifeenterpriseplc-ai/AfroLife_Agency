@@ -150,8 +150,35 @@ Current artifact checksums (latest builds):
 - APK SHA-256: `0C93CCE36747814EFB20DCA4AE0BDDC4C363740F1F9780CDC5A09634D5F40270`
 - PWA ZIP SHA-256: `89BA28FF0B6B8EBF56DCADAD59835354C660A974C3A71AE148E20E5D52D86434`
 
-## Domain configuration check — 5 October 2026
+## Domain configuration check — 10 October 2026
 
-`afrolife-agency.duckdns.org` has an A record, but it points to an address different from this network's current public egress address. External TCP ports 80 and 443 both time out. This machine has no DuckDNS credential at `%ProgramData%\AfroLife\duckdns-credential.json`, so the checked-in updater cannot correct the record. The local WSL staging endpoint responds at `http://localhost:8080`, but it is HTTP-only, separate from the current Windows workspace build, and not publicly reachable. The custom domain is therefore not yet configured to serve the current app.
+The saved DuckDNS credential was used successfully to update
+`afrolife-agency.duckdns.org`. Public DNS now resolves to this network's current
+public egress address. This confirms DNS is no longer the blocker.
 
-The remaining external prerequisites are a DuckDNS account token entered locally through `deploy/windows/Set-DuckDnsCredential.ps1`, a host with a stable/reachable public IP (or a public VPS/tunnel), inbound routing for TCP 80/443, and a trusted TLS certificate. Do not forward database/API internal ports directly.
+The app is not configured as a public web site on this host. WSL Nginx serves
+the staging app only on `127.0.0.1:8080`, and the Node API listens only on
+`127.0.0.1:3000`. Windows IIS responds locally on HTTP with its stock landing
+page rather than the AfroLife app; no HTTPS binding is configured. Windows
+Firewall has no enabled inbound allow rule for ports 80/443, the host uses a
+private LAN address behind a gateway, and external checks cannot reach TCP
+80/443. No port-proxy rule is configured. Thus, a router/firewall inbound route
+or a public host/tunnel is still required, as are an app reverse-proxy binding
+and trusted TLS. Do not forward database/API internal ports directly.
+
+## Oracle Cloud Always Free deployment preparation — 10 October 2026
+
+Prepared `deploy/linux/ORACLE_ALWAYS_FREE.md` for a central-app pilot on an
+Ubuntu ARM64 VM, added a production Nginx site template, and constrained the
+Linux systemd service's Node listener to loopback. The DuckDNS updater can now
+set an explicitly supplied IPv4 address without revealing the saved token;
+this is needed to point the hostname at a VM rather than the current PC's
+hotspot egress. No Oracle account, VM, public ingress, certificate, database,
+or deployment was created. Oracle's free compute quota does not guarantee
+that public IPv4 and all network/storage resources are free, so review the
+complete estimate and stop if any charge is shown.
+
+The developer host also has VMware Workstation Pro 16.2.3. Prepared a
+NAT-only Ubuntu Server VM configuration with a growable virtual disk under
+`%USERPROFILE%\Documents\Virtual Machines\AfroLife-Ubuntu`; no guest OS has
+been installed or started yet. See `deploy/linux/VMWARE_LOCAL_PILOT.md`.

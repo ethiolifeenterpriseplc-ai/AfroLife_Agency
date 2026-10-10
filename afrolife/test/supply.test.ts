@@ -103,10 +103,37 @@ test('verification: refused without verified documents; uploading is not verific
   for (const d of [d1, d2]) assert.equal((await call(compliance, 'POST', `/documents/${d.body.id}/review`, { decision: 'verified' })).status, 200);
   assert.equal((await call(compliance, 'POST', `/documents/${d3.body.id}/review`, { decision: 'verified' })).status, 403);
   assert.equal((await call(complianceAlt, 'POST', `/documents/${d3.body.id}/review`, { decision: 'verified' })).status, 200);
-  assert.equal((await call(compliance, 'POST', `/documents/${d1.body.id}/review`, { decision: 'rejected' })).status, 409); // already reviewed
+  assert.equal((await call(compliance, 'POST', `/documents/${d1.body.id}/review`, {
+    decision: 'rejected', note: 'This document has already been reviewed.',
+  })).status, 409); // already reviewed
   const ok = await call(compliance, 'POST', `/workers/${w1.id}/verify`);
   assert.equal(ok.status, 200);
   assert.equal(ok.body.verification, 'verified');
+});
+
+test('worker document rejection requires and exposes corrective feedback', async () => {
+  const worker = await call(fa, 'POST', '/workers', workerBody(8));
+  assert.equal(worker.status, 201);
+  const document = await upload(fa, worker.body.id, 'national_id');
+  assert.equal(document.status, 201);
+
+  assert.equal((await call(compliance, 'POST', `/documents/${document.body.id}/review`, {
+    decision: 'rejected',
+  })).status, 422);
+  assert.equal((await call(compliance, 'POST', `/documents/${document.body.id}/review`, {
+    decision: 'rejected', note: 'No',
+  })).status, 400);
+
+  const note = 'The identity image is blurred; upload a clearer copy.';
+  const rejected = await call(compliance, 'POST', `/documents/${document.body.id}/review`, {
+    decision: 'rejected', note,
+  });
+  assert.equal(rejected.status, 200);
+  assert.equal(rejected.body.review_note, note);
+
+  const history = await call(fa, 'GET', `/workers/${worker.body.id}/documents`);
+  assert.equal(history.status, 200);
+  assert.equal(history.body.find((entry: any) => entry.id === document.body.id).review_note, note);
 });
 
 test('verification: an expired police clearance does not count', async () => {

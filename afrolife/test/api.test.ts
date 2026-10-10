@@ -218,6 +218,47 @@ test('worker sign-up uploads private KYC documents and requires separate complia
     });
     assert.equal(uploaded.status, 201, `${doc_type}: ${await uploaded.text()}`);
   }
+  const tokenStatus = await fetch(API + '/auth/signup/documents', {
+    headers: { authorization: `Signup ${signup.upload_token}` },
+  });
+  assert.equal(tokenStatus.status, 200);
+  const initialStatus = await tokenStatus.json() as any;
+  assert.deepEqual(initialStatus.required.sort(), ['national_id', 'police_clearance']);
+  const identityDocumentStatus = initialStatus.documents.find((doc: any) => doc.doc_type === 'national_id');
+  assert.equal(identityDocumentStatus.status, 'uploaded');
+  const identityDocument = (await db.query(
+    "SELECT id FROM user_documents WHERE user_id = $1 AND doc_type = 'national_id'",
+    [user.id],
+  )).rows[0];
+  assert.ok(identityDocument);
+  assert.equal((await call(compliance, 'POST', `/users/${user.id}/documents/${identityDocument.id}/review`, {
+    decision: 'rejected',
+  })).status, 422);
+  const rejectionNote = 'The identity image is blurred; upload a clearer copy.';
+  const rejected = await call(compliance, 'POST', `/users/${user.id}/documents/${identityDocument.id}/review`, {
+    decision: 'rejected', note: rejectionNote,
+  });
+  assert.equal(rejected.status, 200);
+  assert.equal(rejected.body.review_note, rejectionNote);
+  const rejectedStatus = await fetch(API + '/auth/signup/documents', {
+    headers: { authorization: `Signup ${signup.upload_token}` },
+  });
+  assert.equal(rejectedStatus.status, 200);
+  const rejectedDocuments = await rejectedStatus.json() as any;
+  assert.equal(rejectedDocuments.documents.find((doc: any) => doc.doc_type === 'national_id').review_note, rejectionNote);
+  const replacement = await fetch(`${API}/auth/signup/documents?doc_type=national_id`, {
+    method: 'POST',
+    headers: { authorization: `Signup ${signup.upload_token}`, 'content-type': 'image/png' },
+    body: PNG,
+  });
+  assert.equal(replacement.status, 201);
+  assert.equal((await replacement.json() as any).id, identityDocument.id);
+  const replacedDocuments = await call(compliance, 'GET', `/users/${user.id}/documents`);
+  assert.equal(replacedDocuments.status, 200);
+  const replacedIdentity = replacedDocuments.body.find((doc: any) => doc.doc_type === 'national_id');
+  assert.equal(replacedIdentity.id, identityDocument.id);
+  assert.equal(replacedIdentity.status, 'uploaded');
+  assert.equal(replacedIdentity.review_note, null);
   assert.equal((await call(compliance, 'POST', `/users/${user.id}/kyc`, { decision: 'verified' })).status, 409);
   const documents = await call(compliance, 'GET', `/users/${user.id}/documents`);
   assert.equal(documents.status, 200);
@@ -227,6 +268,7 @@ test('worker sign-up uploads private KYC documents and requires separate complia
     const downloaded = await fetch(`${API}/users/${user.id}/documents/${document.id}/file`, {
       headers: { authorization: 'Bearer ' + compliance.token },
     });
+
     assert.equal(downloaded.status, 200);
     assert.equal(downloaded.headers.get('cache-control'), 'private, no-store');
     assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), PNG);

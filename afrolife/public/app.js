@@ -1,4 +1,4 @@
-﻿import { initializeLocale, t } from './i18n.js';
+import { initializeLocale, t } from './i18n.js';
 import { ApiError, optionalApiFallback } from './api-errors.js';
 import { createMfiWorkspace } from './mfi.js';
 import { createEdirWorkspace } from './edir.js';
@@ -9,6 +9,7 @@ let API_ROOT = WEB_API_ROOT;
 const TOKEN_KEY = 'afrolife.session';
 const API_URL_KEY = 'afrolife.api-base';
 const SIGNUP_UPLOAD_KEY = 'afrolife.signup-upload';
+const SIGNUP_DONE_KEY = 'afrolife.signup-upload-complete';
 const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
@@ -218,7 +219,7 @@ function updatePlanLabels() {
     $('#signup-plan option[value="enterprise"]').textContent = t('Enterprise plan — ETB {{amount}} per month', { amount: plans.agent_enterprise_monthly_etb });
   }
   const descriptions = {
-    free: ['Free service', 'Core AfroLife tools for your role, including lead, worker, request, contract and listing workflows.'],
+    free: ['Free service', 'Core EthioLife tools for your role, including lead, worker, request, contract and listing workflows.'],
     pro: ['Pro service', 'Pro is a plan request only. Future paid features require billing and activation.'],
     enterprise: ['Enterprise service', 'Enterprise is a plan request only. Team reporting is not active until billing and activation are configured.'],
   };
@@ -256,8 +257,13 @@ function openSignup(agentPlans = false) {
   $('#signup-form').hidden = false;
   $('#signup-success').hidden = true;
   if (sessionStorage.getItem(SIGNUP_UPLOAD_KEY)) {
-    $('#signup-form').dataset.signupCreated = 'true';
-    setLocalizedText($('#signup-error'), 'A registration is already pending. Upload the required documents to finish it.');
+    if (sessionStorage.getItem(SIGNUP_DONE_KEY) === 'true') {
+      showSignupFollowupMode();
+      void loadSignupFollowup();
+    } else {
+      $('#signup-form').dataset.signupCreated = 'true';
+      setLocalizedText($('#signup-error'), 'A registration is already pending. Upload the required documents to finish it.');
+    }
   }
   if (agentPlans) {
     $('#signup-account-type').value = 'agent';
@@ -266,6 +272,68 @@ function openSignup(agentPlans = false) {
   loadSignupOptions().catch((error) => {
     setLocalizedText($('#signup-error'), error.message);
   });
+}
+
+function showSignupFollowupMode() {
+  const form = $('#signup-form');
+  form.dataset.signupCreated = 'true';
+  $('#signup-followup').hidden = false;
+  $('#signup-success').hidden = false;
+  setLocalizedText($('#signup-success'), 'Your registration is pending review. Check document decisions below and replace any document returned by Compliance.');
+  for (const child of form.children) {
+    child.hidden = !['signup-followup', 'signup-success', 'show-login'].includes(child.id)
+      && !['H2', 'P'].includes(child.tagName);
+  }
+  $('#signup-followup').hidden = false;
+  $('#signup-success').hidden = false;
+}
+
+async function loadSignupFollowup() {
+  const token = sessionStorage.getItem(SIGNUP_UPLOAD_KEY);
+  if (!token) return;
+  const list = $('#signup-followup-documents');
+  const select = $('#signup-followup-type');
+  list.replaceChildren();
+  select.replaceChildren();
+  try {
+    const response = await fetch(`${apiRoot()}/auth/signup/documents`, { headers: { authorization: `Signup ${token}` } });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(result?.error ?? `Could not load document review (${response.status}).`);
+    const byType = new Map(result.documents.map((document) => [document.doc_type, document]));
+    for (const docType of result.required) {
+      const document = byType.get(docType);
+      const label = docType.split('_').map((part) => part[0].toUpperCase() + part.slice(1)).join(' ');
+      const item = card(label, document?.review_note ?? (document ? 'Received and awaiting compliance decision.' : 'Required document is missing.'), document?.status ?? 'missing');
+      list.append(item);
+      if (!document || document.status === 'rejected') {
+        const option = node('option', document?.status === 'rejected' ? `Replace ${label} (returned)` : `Upload ${label}`);
+        option.value = docType;
+        select.append(option);
+      }
+    }
+    $('#signup-followup-form').hidden = !select.options.length;
+    if (!select.options.length) list.append(node('p', 'All required documents are received. Compliance will review them before account activation.', 'muted'));
+  } catch (error) {
+    list.append(empty(error.message));
+    $('#signup-followup-form').hidden = true;
+  }
+}
+
+async function uploadSignupReplacement() {
+  const token = sessionStorage.getItem(SIGNUP_UPLOAD_KEY);
+  const docType = $('#signup-followup-type').value;
+  const file = $('#signup-followup-form [name="file"]').files[0];
+  if (!token || !docType || !file) throw new Error(t('Choose a returned or missing document and select a replacement file.'));
+  if (file.size > 10 * 1024 * 1024) throw new Error(t('This file exceeds the 10 MB upload limit.'));
+  if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.type)) throw new Error(t('Choose a PDF, JPEG or PNG document.'));
+  const response = await fetch(`${apiRoot()}/auth/signup/documents?${new URLSearchParams({ doc_type: docType })}`, {
+    method: 'POST', headers: { authorization: `Signup ${token}`, 'content-type': file.type }, body: file,
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(result?.error ?? `Replacement upload failed (${response.status}).`);
+  $('#signup-followup-form [name="file"]').value = '';
+  await loadSignupFollowup();
+  showAlert(t('Replacement document uploaded securely for compliance review.'));
 }
 
 function initializeNativeServer() {
@@ -328,7 +396,7 @@ async function submitSignup(event) {
     if (!form.dataset.signupCreated) {
       const signup = await api('/auth/signup', { method: 'POST', body: JSON.stringify(payload) });
       uploadToken = signup.upload_token;
-      if (!uploadToken) throw new Error(t('Registration succeeded but a secure document-upload token was not issued. Contact AfroLife support.'));
+      if (!uploadToken) throw new Error(t('Registration succeeded but a secure document-upload token was not issued. Contact EthioLife support.'));
       sessionStorage.setItem(SIGNUP_UPLOAD_KEY, uploadToken);
       form.dataset.signupCreated = 'true';
     }
@@ -348,12 +416,11 @@ async function submitSignup(event) {
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(t(result?.error ?? 'Document upload failed ({{status}})', { status: response.status }));
     }
-    sessionStorage.removeItem(SIGNUP_UPLOAD_KEY);
-    delete form.dataset.signupCreated;
+    sessionStorage.setItem(SIGNUP_DONE_KEY, 'true');
     form.reset();
     updateSignupFields();
-    setLocalizedText($('#signup-success'), 'Registration and KYC documents received. Compliance staff will review them before account activation.');
-    $('#signup-success').hidden = false;
+    showSignupFollowupMode();
+    await loadSignupFollowup();
   } catch (reason) {
     setLocalizedText(error, form.dataset.signupCreated
       ? `Your registration is saved, but document upload needs attention: ${reason.message} Select the required files and submit again to retry.`
@@ -427,7 +494,7 @@ function startSessionActivity(idleTimeoutMinutes) {
     if (sessionStorage.getItem(TOKEN_KEY) && Date.now() - lastSessionActivityAt < 60_000) {
       api('/auth/session').catch((error) => {
         if (!(error instanceof ApiError && error.status === 401)) {
-          console.error('The active AfroLife session could not be refreshed.', error);
+          console.error('The active EthioLife session could not be refreshed.', error);
         }
       });
     }
@@ -444,17 +511,19 @@ function signOut({ revoke = true, message = '' } = {}) {
       headers.set('authorization', ['Bearer', token].join(' '));
       void fetch(endpoint, { method: 'POST', headers })
         .then((response) => {
-          if (!response.ok && response.status !== 401) console.warn('AfroLife could not revoke the signed-out server session.', response.status);
+          if (!response.ok && response.status !== 401) console.warn('EthioLife could not revoke the signed-out server session.', response.status);
         })
-        .catch((error) => console.warn('AfroLife could not reach the server to revoke the signed-out session.', error));
+        .catch((error) => console.warn('EthioLife could not reach the server to revoke the signed-out session.', error));
     } catch (error) {
-      console.warn('AfroLife could not resolve the server to revoke the signed-out session.', error);
+      console.warn('EthioLife could not resolve the server to revoke the signed-out session.', error);
     }
   }
   stopSessionActivity();
   sessionStorage.removeItem(TOKEN_KEY);
   state.user = null;
   $('#app-view').hidden = true;
+  $('#mobile-workspace-nav').hidden = true;
+  if ($('#workspace-more-dialog').open) $('#workspace-more-dialog').close();
   $('#account-tools').hidden = true;
   $('#login-view').hidden = false;
   $('#public-hub').hidden = false;
@@ -474,6 +543,7 @@ async function loadWorkspace() {
   $('#login-view').hidden = true;
   $('#public-hub').hidden = true;
   $('#app-view').hidden = false;
+  $('#mobile-workspace-nav').hidden = false;
   $('#account-tools').hidden = false;
   $('#login-error').textContent = '';
   $('#retry-session').hidden = true;
@@ -506,6 +576,7 @@ async function loadWorkspace() {
       tab.hidden = !['overview', 'leads', 'workers', 'requests', 'contracts', 'commissions', 'agents', 'security', 'edir', 'privacy'].includes(tab.dataset.panel);
     }
   });
+  renderMobileWorkspaceNav();
   if (state.user.must_change_password) {
     state.panel = 'password';
     renderPanel();
@@ -608,9 +679,9 @@ function renderOverview() {
   wrap.append(renderServiceLauncher());
   if (state.user.kyc_status === 'verified' && state.features.edirEnabled && !state.edirMe?.membership) {
     const offer = node('section', undefined, 'panel form-card edir-offer');
-    offer.append(node('p', 'AFROLIFE EDIR · MEMBERSHIP OFFER', 'eyebrow'));
+    offer.append(node('p', 'ETHIOLIFE EDIR · MEMBERSHIP OFFER', 'eyebrow'));
     offer.append(node('h2', 'Explore Edir membership and available benefits'));
-    offer.append(node('p', 'Open to verified AfroLife users across worker, employer, landlord, tenant, seller, and buyer services. Review active community, savings, share, and contribution options before requesting membership. Lending, insurance, and benefit payouts are not live in this pilot.'));
+    offer.append(node('p', 'Open to verified EthioLife users across worker, employer, landlord, tenant, seller, and buyer services. Review active community, savings, share, and contribution options before requesting membership. Lending, insurance, and benefit payouts are not live in this pilot.'));
     const action = button('View Edir offer', 'open-edir-offer', 'button button-primary');
     action.addEventListener('click', () => { state.panel = 'edir'; renderPanel(); });
     offer.append(action);
@@ -683,6 +754,64 @@ function renderServiceLauncher(panelNames) {
   }
   section.append(grid);
   return section;
+}
+
+const workspaceNavIcons = {
+  overview: '⌂',
+  leads: '＋',
+  workers: '◎',
+  requests: '↔',
+  properties: '⌂',
+  marketplace: '▦',
+  contracts: '▤',
+  commissions: '◈',
+  agents: '♧',
+  rent: '▣',
+  mfi: '◉',
+  edir: '◇',
+  privacy: '⬡',
+  security: '⌑',
+  admin: '⚙',
+};
+
+function createWorkspaceNavLink(tab, className = 'workspace-nav-link') {
+  const panel = tab.dataset.panel;
+  const link = node('button', undefined, className);
+  link.type = 'button';
+  link.dataset.panel = panel;
+  link.setAttribute('aria-label', tab.textContent.trim());
+  const icon = node('span', workspaceNavIcons[panel] ?? '•', 'workspace-nav-icon');
+  icon.setAttribute('aria-hidden', 'true');
+  const label = node('span', tab.textContent.trim(), 'workspace-nav-label');
+  link.append(icon, label);
+  return link;
+}
+
+function renderMobileWorkspaceNav() {
+  const nav = $('#mobile-workspace-nav');
+  const moreNav = $('#workspace-more-nav');
+  const tabs = [...document.querySelectorAll('#app-view .tabs .tab:not([hidden])')];
+  const overview = tabs.find((tab) => tab.dataset.panel === 'overview');
+  const primary = [
+    overview,
+    ...tabs.filter((tab) => tab !== overview && !['privacy', 'security', 'admin'].includes(tab.dataset.panel)).slice(0, 2),
+  ].filter(Boolean);
+  const primaryPanels = new Set(primary.map((tab) => tab.dataset.panel));
+  nav.replaceChildren(...primary.map((tab) => createWorkspaceNavLink(tab)));
+  moreNav.replaceChildren(...tabs
+    .filter((tab) => !primaryPanels.has(tab.dataset.panel))
+    .map((tab) => createWorkspaceNavLink(tab, 'workspace-nav-link workspace-more-link')));
+  const moreButton = node('button', undefined, 'workspace-nav-link mobile-nav-more');
+  moreButton.type = 'button';
+  moreButton.id = 'mobile-workspace-more';
+  moreButton.hidden = moreNav.childElementCount === 0;
+  moreButton.setAttribute('aria-label', t('More workspace sections'));
+  moreButton.setAttribute('aria-haspopup', 'dialog');
+  moreButton.setAttribute('aria-controls', 'workspace-more-dialog');
+  const moreIcon = node('span', '⋯', 'workspace-nav-icon');
+  moreIcon.setAttribute('aria-hidden', 'true');
+  moreButton.append(moreIcon, node('span', 'More', 'workspace-nav-label'));
+  nav.append(moreButton);
 }
 
 function renderLeads() {
@@ -819,7 +948,7 @@ function renderProperties() {
     }
     form.append(territory.label);
     if(['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)){
-      const seller=field('Seller / agent represented','owner_user_id','select',false);const none=node('option','AfroLife managed listing');none.value='';seller.input.append(none);for(const user of state.marketplaceSellers){const option=node('option',`${user.legal_name} · ${roleLabel(user.role)}`);option.value=user.id;seller.input.append(option);}form.append(seller.label);
+      const seller=field('Seller / agent represented','owner_user_id','select',false);const none=node('option','EthioLife managed listing');none.value='';seller.input.append(none);for(const user of state.marketplaceSellers){const option=node('option',`${user.legal_name} · ${roleLabel(user.role)}`);option.value=user.id;seller.input.append(option);}form.append(seller.label);
     }
     form.append(field('Description','description','textarea',false,{maxlength:5000,rows:3}).label);
     const listingMode=field('Listing transaction','listing_mode','select');for(const [value,label] of [['sale','For sale'],['rent','For rent'],['sale_or_rent','Sale or rent']]){const option=node('option',label);option.value=value;listingMode.input.append(option);}form.append(listingMode.label);
@@ -1275,7 +1404,7 @@ function renderAdmin() {
       : `${user.phone} · ${roleLabel(user.role)}`;
     const requestedBenefits = [
       user.pension_match_interest && 'Pension match requested',
-      user.edir_member_interest && 'AfroLife Edir requested',
+      user.edir_member_interest && 'EthioLife Edir requested',
       user.edir_life_interest && 'Life cover requested',
       user.household_cover_interest && 'Household cover requested',
     ].filter(Boolean).join(' · ');
@@ -1349,6 +1478,9 @@ function renderSecurity() {
 
 function renderPanel() {
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.panel === state.panel));
+  document.querySelectorAll('.workspace-nav-link').forEach((link) => link.classList.toggle('active', link.dataset.panel === state.panel));
+  const primaryPanels = new Set([...document.querySelectorAll('#mobile-workspace-nav [data-panel]')].map((link) => link.dataset.panel));
+  $('#mobile-workspace-more')?.classList.toggle('active', !primaryPanels.has(state.panel));
   $('#page-title').textContent = t(state.panel === 'password' || state.panel === 'security' ? 'Account security' : state.panel === 'admin' ? 'Admin workspace' : state.panel === 'mfi' ? 'SACCO / MFI workspace' : 'Your workspace');
   if (state.panel === 'mfi') {
     $('#workspace').replaceChildren(createMfiWorkspace(api, state.user));
@@ -1618,7 +1750,7 @@ async function showWorkerDocuments(workerId, container) {
     const documents = await api(`/workers/${workerId}/documents`);
     if (!documents.length) panel.append(empty('No documents uploaded yet.'));
     for (const document of documents) {
-      const item = card(t(document.doc_type.split('_').map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')), t('Expires {{date}}', { date: document.expires_on ?? t('not specified') }), document.status);
+      const item = card(t(document.doc_type.split('_').map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')), [t('Expires {{date}}', { date: document.expires_on ?? t('not specified') }), document.review_note].filter(Boolean).join(' · '), document.status);
       item.append(button('Download', 'document-download', 'button button-outline', { id: document.id }));
       if (state.user.role === 'compliance' && ['uploaded','under_review'].includes(document.status)) {
         item.append(button('Verify document', 'document-review', 'button button-primary', { id: document.id, decision: 'verified' }));
@@ -1732,6 +1864,7 @@ async function showUserDocuments(userId, container) {
         size: `${Math.ceil(doc.size_bytes / 1024)} KB`,
         date: new Date(doc.created_at).toLocaleDateString(document.documentElement.lang),
       }), doc.status);
+      if (doc.review_note) item.append(node('p', doc.review_note, 'form-error'));
       item.append(button('Download', 'user-document-download', 'button button-outline', { id: doc.id, user: userId }));
       if (state.user.role === 'compliance' && doc.status === 'uploaded' && userId !== state.user.id) {
         item.append(button('Verify document', 'user-document-review', 'button button-primary', { id: doc.id, user: userId, decision: 'verified' }));
@@ -1783,6 +1916,25 @@ document.addEventListener('submit', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
+  if (event.target === $('#workspace-more-dialog')) {
+    $('#workspace-more-dialog').close();
+    return;
+  }
+  if (event.target.closest('[data-close-workspace-more]')) {
+    $('#workspace-more-dialog').close();
+    return;
+  }
+  const workspaceLink = event.target.closest('.workspace-nav-link[data-panel]');
+  if (workspaceLink) {
+    state.panel = workspaceLink.dataset.panel;
+    if ($('#workspace-more-dialog').open) $('#workspace-more-dialog').close();
+    renderPanel();
+    return;
+  }
+  if (event.target.closest('#mobile-workspace-more')) {
+    $('#workspace-more-dialog').showModal();
+    return;
+  }
   const tab = event.target.closest('.tab[data-panel]');
   if (tab) { state.panel = tab.dataset.panel; renderPanel(); return; }
   const action = event.target.closest('button[data-action]');
@@ -2005,9 +2157,14 @@ document.addEventListener('click', async (event) => {
   }
   if (name === 'user-documents') { void showUserDocuments(id, container); return; }
   if (name === 'user-document-review') {
+    let note;
+    if (action.dataset.decision === 'rejected') {
+      note = window.prompt(t('Explain what needs to be corrected in this document (at least 10 characters).'));
+      if (!note || note.trim().length < 10) return;
+    }
     api(`/users/${action.dataset.user}/documents/${id}/review`, {
       method: 'POST',
-      body: JSON.stringify({ decision: action.dataset.decision }),
+      body: JSON.stringify({ decision: action.dataset.decision, ...(note ? { note: note.trim() } : {}) }),
     })
       .then(async () => { showAlert(t('KYC document {{decision}}.', { decision: t(action.dataset.decision) })); await refresh(); })
       .catch((error) => showAlert(error.message, true));
@@ -2030,7 +2187,12 @@ document.addEventListener('click', async (event) => {
     return;
   }
   if (name === 'document-review') {
-    api(`/documents/${id}/review`, { method: 'POST', body: JSON.stringify({ decision: action.dataset.decision }) })
+    let note;
+    if (action.dataset.decision === 'rejected') {
+      note = window.prompt(t('Explain what needs to be corrected in this document (at least 10 characters).'));
+      if (!note || note.trim().length < 10) return;
+    }
+    api(`/documents/${id}/review`, { method: 'POST', body: JSON.stringify({ decision: action.dataset.decision, ...(note ? { note: note.trim() } : {}) }) })
       .then(async () => { showAlert(`Document ${action.dataset.decision}.`); await refresh(); })
       .catch((error) => showAlert(error.message, true));
     return;
@@ -2093,6 +2255,8 @@ document.addEventListener('click', async (event) => {
 
 $('#login-form').addEventListener('submit', login);
 $('#signup-form').addEventListener('submit', submitSignup);
+$('#signup-followup-upload').addEventListener('click', () => uploadSignupReplacement()
+  .catch((error) => setLocalizedText($('#signup-error'), error.message)));
 $('#edir-registration-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2107,7 +2271,7 @@ $('#edir-registration-form').addEventListener('submit', async (event) => {
       method: 'POST', body: JSON.stringify(payload),
     });
     form.reset();
-    setLocalizedText($('#edir-registration-success'), 'Application received. AfroLife Master Edir will review it before an organization workspace is activated. Reference: {{id}}', { id: result.id });
+    setLocalizedText($('#edir-registration-success'), 'Application received. EthioLife Master Edir will review it before an organization workspace is activated. Reference: {{id}}', { id: result.id });
     $('#edir-registration-success').hidden = false;
   } catch (reason) {
     setLocalizedText(error, reason.message);
@@ -2160,7 +2324,7 @@ $('#retry-session').addEventListener('click', async () => {
   try {
     await loadWorkspace();
   } catch (error) {
-    console.error('AfroLife could not restore the saved session.', error);
+    console.error('EthioLife could not restore the saved session.', error);
     if (state.user && !$('#app-view').hidden) {
       showAlert('Your session is still active, but some workspace data could not be loaded. Check the connection and reload the workspace.', true);
       return;
@@ -2220,12 +2384,12 @@ updateSignupFields();
 
 if (!isNativeApp && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch((error) => {
-    console.error('AfroLife offline support could not be enabled.', error);
+    console.error('EthioLife offline support could not be enabled.', error);
   }));
 }
 if (sessionStorage.getItem(TOKEN_KEY)) {
   loadWorkspace().catch((error) => {
-    console.error('AfroLife could not restore the saved session.', error);
+    console.error('EthioLife could not restore the saved session.', error);
     if (sessionStorage.getItem(TOKEN_KEY)) {
       if (state.user && !$('#app-view').hidden) {
         showAlert('Your session is still active, but some workspace data could not be loaded. Check the connection and reload the workspace.', true);

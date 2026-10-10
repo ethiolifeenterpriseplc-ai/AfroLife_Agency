@@ -1,12 +1,12 @@
 {
-  "name": "AfroLife Super App",
-  "short_name": "AfroLife",
+  "name": "EthioLife Agency",
+  "short_name": "EthioLife",
   "id": "/",
-  "description": "AfroLife agency, workforce, marketplace, property, and SACCO/MFI operations",
+  "description": "EthioLife Agency services for work, homes, business, and community",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f6f7f3",
+  "background_color": "#f2f5f1",
   "theme_color": "#102b27",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

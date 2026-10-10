@@ -101,19 +101,23 @@ supply.get('/documents/:id/file', requireRole(...AGENT, 'compliance', 'super_adm
 supply.get('/workers/:id/documents', h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => {
     if (!(await c.query('SELECT id FROM workers WHERE id = $1', [req.params.id])).rowCount) throw new HttpError(404, 'Worker not found');
-    return (await c.query('SELECT id, doc_type, status, issued_on, expires_on, reviewed_at FROM documents WHERE worker_id = $1 ORDER BY id', [req.params.id])).rows;
+    return (await c.query('SELECT id, doc_type, status, issued_on, expires_on, reviewed_at, review_note FROM documents WHERE worker_id = $1 ORDER BY id', [req.params.id])).rows;
   }));
 }));
 
 supply.post('/documents/:id/review', requireRole('compliance'), h(async (req, res) => {
-  const { decision } = z.object({ decision: z.enum(['verified', 'rejected']) }).parse(req.body);
+  const { decision, note } = z.object({
+    decision: z.enum(['verified', 'rejected']),
+    note: z.string().trim().min(10).max(1000).optional(),
+  }).strict().parse(req.body);
+  if (decision === 'rejected' && !note) throw new HttpError(422, 'Give the worker a reason and tell them what needs to change (at least 10 characters).');
   res.json(await withUser(req.user!, async (c) => {
-    const document = (await c.query('SELECT id, doc_type, status, uploaded_by FROM documents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    const document = (await c.query('SELECT id, doc_type, status, uploaded_by, review_note FROM documents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!document) throw new HttpError(404, 'Document not found');
     if (document.uploaded_by === req.user!.id) throw new HttpError(403, 'A different compliance officer must review this document');
     if (!['uploaded', 'under_review'].includes(document.status)) throw new HttpError(409, 'Document has already been reviewed');
-    const r = await c.query("UPDATE documents SET status = $2, reviewer_id = $3, reviewed_at = now() WHERE id = $1 RETURNING id, doc_type, status", [req.params.id, decision, req.user!.id]);
-    await audit(c, req.user!.id, 'document_' + decision, 'document', r.rows[0].id);
+    const r = await c.query("UPDATE documents SET status = $2, reviewer_id = $3, reviewed_at = now(), review_note = $4 WHERE id = $1 RETURNING id, doc_type, status, review_note", [req.params.id, decision, req.user!.id, decision === 'rejected' ? note : null]);
+    await audit(c, req.user!.id, 'document_' + decision, 'document', r.rows[0].id, { status: document.status }, { status: decision });
     return r.rows[0];
   }));
 }));

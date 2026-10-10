@@ -1,4 +1,8 @@
-﻿$ErrorActionPreference = 'Stop'
+param(
+  [string]$Ip
+)
+
+$ErrorActionPreference = 'Stop'
 
 $credentialPath = Join-Path $env:LOCALAPPDATA 'AfroLife\duckdns-credential.json'
 $logDirectory = Join-Path $env:LOCALAPPDATA 'AfroLife\logs'
@@ -13,13 +17,23 @@ if ($credential.domain -notmatch '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$') {
   throw 'DuckDNS credential file contains an invalid domain label.'
 }
 
+$ipQuery = '&ip='
+if (-not [string]::IsNullOrWhiteSpace($Ip)) {
+  $parsedAddress = $null
+  if (-not [Net.IPAddress]::TryParse($Ip, [ref]$parsedAddress) -or
+      $parsedAddress.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork) {
+    throw 'The optional -Ip value must be a valid IPv4 address.'
+  }
+  $ipQuery = '&ip=' + [Uri]::EscapeDataString($parsedAddress.ToString())
+}
+
 $secureToken = ConvertTo-SecureString -String $credential.token
 $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
 try {
   $tokenValue = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
   $encodedDomain = [Uri]::EscapeDataString([string]$credential.domain)
   $encodedToken = [Uri]::EscapeDataString($tokenValue)
-  $uri = "https://www.duckdns.org/update?domains=$encodedDomain&token=$encodedToken&ip="
+  $uri = "https://www.duckdns.org/update?domains=$encodedDomain&token=$encodedToken$ipQuery"
   try {
     $result = (Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 20).ToString().Trim()
   } catch {
@@ -41,4 +55,3 @@ if ($result -ne 'OK') {
 }
 
 Add-Content -LiteralPath $logPath -Value "$(Get-Date -Format o) DuckDNS update succeeded."
-

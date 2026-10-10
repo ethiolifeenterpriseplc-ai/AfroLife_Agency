@@ -1,4 +1,4 @@
-const CACHE = 'afrolife-shell-v16';
+const CACHE = 'afrolife-shell-v17';
 const SHELL = ['/', '/styles.css', '/app.js', '/api-errors.js', '/mfi.js', '/edir.js', '/privacy.js', '/i18n.js', '/manifest.webmanifest', '/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 const SHELL_PATHS = new Set(SHELL);
 
