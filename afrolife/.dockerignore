@@ -1,0 +1,15 @@
+.git
+.github
+.codex
+node_modules
+dist
+coverage
+data
+artifacts
+android
+uat
+deploy
+test
+scripts
+.env*
+npm-debug.log*

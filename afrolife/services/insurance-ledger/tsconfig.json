@@ -18,6 +18,7 @@
     "../../src/env.ts",
     "../../src/http-error.ts",
     "../../src/insurance-ledger.ts",
+    "../../src/insurance-requests.ts",
     "../../src/insurance-ledger-validation.ts",
     "../../src/insurance-service-gateway.ts"
   ]

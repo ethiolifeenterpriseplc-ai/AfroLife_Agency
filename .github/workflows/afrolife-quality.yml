@@ -44,4 +44,5 @@ jobs:
       - run: npm run build
       - run: npm run build:insurance
       - run: npm run build:edir
+      - run: npm run build:mfi
       - run: npm run test:unit

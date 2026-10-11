@@ -16,8 +16,14 @@ const consentMigration = await readFile(new URL('../services/afrolife-edir/011_h
 const kycMigration = await readFile(new URL('../services/afrolife-edir/012_member_kyc_review.sql', import.meta.url), 'utf8');
 const documentMigration = await readFile(new URL('../services/afrolife-edir/013_loan_documents.sql', import.meta.url), 'utf8');
 const writeoffMigration = await readFile(new URL('../services/afrolife-edir/014_loan_writeoffs.sql', import.meta.url), 'utf8');
+const rlsSafeKycMigration = await readFile(new URL('../services/afrolife-edir/015_rls_safe_kyc_guards.sql', import.meta.url), 'utf8');
+const atomicWriteoffMigration = await readFile(new URL('../services/afrolife-edir/016_atomic_writeoff_posting.sql', import.meta.url), 'utf8');
+const staleLoanStatusMigration = await readFile(new URL('../services/afrolife-edir/017_remove_stale_loan_status_check.sql', import.meta.url), 'utf8');
+const staleInstallmentMigration = await readFile(new URL('../services/afrolife-edir/018_remove_stale_installment_check.sql', import.meta.url), 'utf8');
 const creditRouter = await readFile(new URL('../services/afrolife-edir/credit-router.ts', import.meta.url), 'utf8');
 const complaintIntakeRoute = creditRouter.split("edirCreditRouter.post('/complaints'")[1]?.split("edirCreditRouter.post('/complaints/:complaintId/decision'")[0] ?? '';
+const creditApplicationRoute = creditRouter.split("edirCreditRouter.post('/applications'")[1]?.split("edirCreditRouter.post('/members/:memberId/kyc-review'")[0] ?? '';
+const loanDocumentUploadRoute = creditRouter.split("edirCreditRouter.post('/documents/:documentType'")[1]?.split("edirCreditRouter.get('/documents/me'")[0] ?? '';
 const router = await readFile(new URL('../services/afrolife-edir/router.ts', import.meta.url), 'utf8');
 const migrationRunner = await readFile(new URL('../services/afrolife-edir/migrate.ts', import.meta.url), 'utf8');
 
@@ -113,6 +119,11 @@ test('Edir customer complaints support private member submission and tracked sta
   assert.match(creditRouter, /post\('\/complaints\/:complaintId\/decision'/);
   assert.match(creditRouter, /A resolution summary is required to close a complaint/);
   assert.doesNotMatch(complaintIntakeRoute, /SELECT id FROM edir_memberships WHERE user_id=\$1 AND status='active' FOR UPDATE/);
+  assert.match(creditApplicationRoute, /pg_advisory_xact_lock/);
+  assert.doesNotMatch(creditApplicationRoute, /FROM edir_memberships WHERE user_id=\$1 FOR UPDATE/);
+  assert.match(creditApplicationRoute, /parseEdirMoney\(body\.monthly_expenses, true\)/);
+  assert.match(creditApplicationRoute, /parseEdirMoney\(body\.monthly_debt, true\)/);
+  assert.doesNotMatch(loanDocumentUploadRoute, /edir_memberships WHERE user_id=\$1 AND status='active' FOR UPDATE/);
   assert.match(creditRouter, /resolved_by=CASE WHEN \$2 IN \('resolved','rejected'\) THEN \$6::uuid ELSE null END/);
 });
 
@@ -201,6 +212,32 @@ test('Edir loan application, acceptance and disbursement require independently r
   assert.match(creditRouter,/Edir member KYC must be independently verified before applying for credit/);
   assert.match(creditRouter,/Edir member KYC must remain verified before accepting the loan offer/);
   assert.match(creditRouter,/members\/:memberId\/kyc-review/);
+});
+
+test('Edir KYC guard reads honor member and staff SELECT policies without row-lock visibility',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v15-rls-safe-kyc-guards/);
+  assert.match(rlsSafeKycMigration,/CREATE OR REPLACE FUNCTION edir_require_verified_member_kyc_for_acceptance/);
+  assert.match(rlsSafeKycMigration,/CREATE OR REPLACE FUNCTION edir_require_verified_member_kyc_for_disbursement/);
+  assert.doesNotMatch(rlsSafeKycMigration,/FROM edir_memberships[\s\S]{0,120}FOR UPDATE/);
+});
+
+test('Edir write-off changes loan state only after its journal is posted',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v16-atomic-writeoff-posting/);
+  assert.match(atomicWriteoffMigration,/AFTER UPDATE OF status ON edir_loan_journals/);
+  assert.match(atomicWriteoffMigration,/UPDATE edir_loans SET status='written_off'/);
+  assert.match(atomicWriteoffMigration,/status='posted'/);
+});
+
+test('Edir removes only the observed duplicate legacy status constraint',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v17-remove-stale-loan-status-check/);
+  assert.match(staleLoanStatusMigration,/conname='edir_loans_check1'/);
+  assert.match(staleLoanStatusMigration,/Unexpected edir_loans_check1 definition; refusing to remove it/);
+});
+
+test('Edir removes only the observed duplicate pre-waiver installment constraint',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v18-remove-stale-installment-check/);
+  assert.match(staleInstallmentMigration,/conname='edir_loan_installments_check1'/);
+  assert.match(staleInstallmentMigration,/Unexpected edir_loan_installments_check1 definition; refusing to remove it/);
 });
 
 test('Edir identity documents require independent review and a verified national ID before KYC approval',()=>{

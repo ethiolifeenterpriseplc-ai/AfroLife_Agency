@@ -15,6 +15,7 @@ app.get('/healthz', async (_req, res, next) => {
     next(error);
   }
 });
+app.post('/api/v1/edir/credit/documents/:documentType', express.raw({ type: () => true, limit: '10mb' }));
 app.use('/api/v1/edir', authenticateGateway, edirRouter);
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (error instanceof HttpError) return res.status(error.status).json({ error: error.message });

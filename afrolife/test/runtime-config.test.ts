@@ -12,6 +12,11 @@ const safeProductionEnvironment = {
   CORS_ORIGINS: 'https://afrolife.internal,https://localhost',
   FILE_STORAGE_DIR: '/var/lib/afrolife/private-files',
   TRUST_PROXY: '1',
+  MFI_SERVICE_URL: 'http://127.0.0.1:3300',
+  MFI_GATEWAY_SECRET: 'm'.repeat(48),
+  INSURANCE_SERVICE_URL: 'http://127.0.0.1:3100',
+  INSURANCE_GATEWAY_SECRET: 'i'.repeat(48),
+  INSURANCE_SERVICE_CUTOVER_READY: '1',
 };
 
 test('production configuration enables the role-gated MFI workspace by default', () => {
@@ -23,6 +28,29 @@ test('production configuration enables the role-gated MFI workspace by default',
     /MFI_PILOT_ENABLED must be 0 or 1/,
   );
   assert.equal(loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: '0' }).mfiPilotEnabled, false);
+});
+
+test('production requires separate financial service gateways and blocks in-process fallbacks', () => {
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, MFI_SERVICE_URL: undefined }),
+    /MFI_SERVICE_URL must be configured/,
+  );
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, MFI_GATEWAY_SECRET: 'short' }),
+    /MFI_GATEWAY_SECRET must be a unique/,
+  );
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_URL: undefined }),
+    /INSURANCE_SERVICE_URL is required/,
+  );
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_CUTOVER_READY: '0' }),
+    /INSURANCE_SERVICE_CUTOVER_READY=1 is required/,
+  );
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_GATEWAY_SECRET: undefined }),
+    /INSURANCE_GATEWAY_SECRET must be a unique/,
+  );
 });
 
 test('production configuration requires separate strong JWT and MFA secrets', () => {
@@ -57,11 +85,15 @@ test('production configuration rejects unsafe origins and proxy trust', () => {
 test('Insurance service routing requires an explicit cutover-readiness attestation', () => {
   const serviceUrl = 'https://insurance.internal';
   assert.throws(
-    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_URL: serviceUrl }),
+    () => loadRuntimeConfig({
+      ...safeProductionEnvironment,
+      INSURANCE_SERVICE_URL: serviceUrl,
+      INSURANCE_SERVICE_CUTOVER_READY: undefined,
+    }),
     /INSURANCE_SERVICE_CUTOVER_READY=1/,
   );
   assert.throws(
-    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_CUTOVER_READY: '1' }),
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, INSURANCE_SERVICE_URL: undefined }),
     /INSURANCE_SERVICE_URL is required/,
   );
   assert.throws(

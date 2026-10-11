@@ -14,7 +14,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [] };
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
 let sessionIdleTimer = null;
@@ -555,25 +555,24 @@ async function loadWorkspace() {
   $('#admin-tab').hidden = !['global_admin', 'super_admin', 'compliance', 'corporate_business_manager'].includes(state.user.role);
   const canUseListings = ['global_admin', 'super_admin', 'corporate_business_manager', 'customer', 'master_agent', 'field_agent', 'property_owner'].includes(state.user.role);
   $('#properties-tab').hidden = !canUseListings;
-  const canUseMarketplace = canUseListings;
-  $('#marketplace-tab').hidden = !canUseMarketplace;
+  $('#marketplace-tab').hidden = false;
   if (!canUseListings && state.panel === 'properties') state.panel = 'overview';
-  if (!canUseMarketplace && state.panel === 'marketplace') state.panel = 'overview';
   $('#contracts-tab').hidden = ['customer', 'worker', 'property_owner'].includes(state.user.role);
   const canUseCommissions = ['global_admin','super_admin','finance','finance_manager','master_agent','field_agent'].includes(state.user.role);
   $('#commissions-tab').hidden = !canUseCommissions;
   if (!canUseCommissions && state.panel === 'commissions') state.panel = 'overview';
   $('#agents-tab').hidden = !['global_admin', 'super_admin', 'master_agent'].includes(state.user.role);
   $('#rent-tab').hidden = ['customer', 'worker', 'property_owner', 'compliance'].includes(state.user.role);
-  $('#mfi-tab').hidden = !STAFF.has(state.user.role) || !state.features.mfiPilotEnabled;
+  $('#mfi-tab').hidden = !state.features.mfiPilotEnabled;
   $('#edir-tab').hidden = !state.features.edirEnabled;
   if ($('#mfi-tab').hidden && state.panel === 'mfi') state.panel = 'overview';
   if ($('#edir-tab').hidden && state.panel === 'edir') state.panel = 'overview';
+  const sharedPanels = ['overview', 'marketplace', 'edir', 'insurance', 'mfi', 'security', 'privacy'];
   document.querySelectorAll('.tab').forEach((tab) => {
     if (['property_owner', 'customer'].includes(state.user.role)) {
-      tab.hidden = !['overview', 'properties', 'marketplace', 'security', 'edir', 'privacy'].includes(tab.dataset.panel);
+      tab.hidden = ![...sharedPanels, 'properties'].includes(tab.dataset.panel);
     } else if (['worker', 'corporate_business_manager', 'master_agent', 'field_agent'].includes(state.user.role)) {
-      tab.hidden = !['overview', 'leads', 'workers', 'requests', 'contracts', 'commissions', 'agents', 'security', 'edir', 'privacy'].includes(tab.dataset.panel);
+      tab.hidden = ![...sharedPanels, 'leads', 'workers', 'requests', 'properties', 'contracts', 'commissions', 'agents'].includes(tab.dataset.panel);
     }
   });
   renderMobileWorkspaceNav();
@@ -631,13 +630,13 @@ async function refresh() {
     state.team = ['global_admin', 'super_admin', 'master_agent'].includes(state.user.role) ? await getOptional('/agents/team', []) : [];
     state.businessRules = state.user.role === 'global_admin' ? await api('/business-rules') : [];
     state.globalAdminPromotions = isPlatformAdmin() ? await api('/global-admin-promotions') : [];
-    if (canUseListings) {
-      [state.marketplaceConfig, state.marketplaceListings] = await Promise.all([
-        getOptional('/marketplace/config', {}), getOptional('/marketplace/listings', []),
-      ]);
-      state.marketplaceSellers = ['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)
-        ? await getOptional('/marketplace/sellers', []) : [];
-    }
+    [state.marketplaceConfig, state.marketplaceListings] = await Promise.all([
+      getOptional('/marketplace/config', {}), getOptional('/marketplace/listings', []),
+    ]);
+    state.marketplaceSellers = ['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)
+      ? await getOptional('/marketplace/sellers', []) : [];
+    state.insuranceRequests = await getOptional('/insurance/requests/me', []);
+    state.insuranceStaffRequests = await getOptional('/insurance/requests', []);
     if (state.panel === 'password') state.panel = 'overview';
     renderStats();
     renderPanel();
@@ -729,6 +728,7 @@ const serviceDescriptions = {
   rent: 'Manage leases, rent receipts, and deposit workflows.',
   edir: 'Open the central community membership and financial pilot.',
   mfi: 'Open institution-scoped SACCO and MFI pilot operations.',
+  insurance: 'Request insurance information and review your request activity.',
 };
 
 function renderServiceLauncher(panelNames) {
@@ -1069,6 +1069,98 @@ function renderMarketplace() {
   }
   columns.append(listingList); wrap.append(columns);
   if(manager) wrap.append(renderMarketplaceConfig());
+  const ownedListings = state.marketplaceListings.filter((listing) =>
+    listing.created_by === state.user.id || listing.seller_user_id === state.user.id);
+  const report = node('section', undefined, 'panel form-card');
+  report.append(node('h2', 'Marketplace report dashboard'));
+  const summary = node('div', undefined, 'enterprise-metrics');
+  for (const [label, value] of [
+    ['Published listings available', state.marketplaceListings.filter((listing) => listing.status === 'published').length],
+    ['Your listings', ownedListings.length],
+    ['Marketplace membership', 'Not available'],
+    ['Purchase ledger', 'Not live'],
+  ]) {
+    const metric = node('div', undefined, 'enterprise-metric');
+    metric.append(node('span', label), node('strong', value));
+    summary.append(metric);
+  }
+  report.append(summary, node('p', 'Marketplace supports listings and discovery only. Orders, buyer memberships, wallets, loans, payments, and purchase transaction history are not available; listing prices are not payments.'));
+  const activity = node('div', undefined, 'list');
+  activity.append(node('h3', 'Your detailed listing activity'));
+  if (!ownedListings.length) activity.append(node('p', 'No marketplace listing activity is linked to your account.'));
+  for (const listing of ownedListings) {
+    activity.append(card(listing.title,
+      `${listing.domain} · ${listing.transaction_mode} · Created ${new Date(listing.created_at).toLocaleString(document.documentElement.lang)} · Updated ${new Date(listing.updated_at ?? listing.created_at).toLocaleString(document.documentElement.lang)}`,
+      listing.status));
+  }
+  report.append(activity);
+  wrap.append(report);
+  return wrap;
+}
+
+function renderInsurance() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Insurance information', 'Review insurance information requests. No policy or coverage is created by this mini-app.'));
+  const notice = node('section', undefined, 'panel form-card');
+  const requestCount = state.insuranceRequests.length;
+  const pendingCount = state.insuranceRequests.filter((request) => request.status === 'pending').length;
+  const metrics = node('div', undefined, 'enterprise-metrics');
+  notice.append(
+    node('h2', 'Insurance report dashboard'),
+    node('p', 'Insurance policy enrollment, claims, member wallets, and loans are not available in this platform. Existing Insurance ledgers are separate organization accounting records and do not prove personal cover or a payment balance.'),
+  );
+  for (const [label, value] of [
+    ['Policy membership', 'Not available'],
+    ['Requests submitted', requestCount],
+    ['Awaiting response', pendingCount],
+  ]) {
+    const metric = node('div', undefined, 'enterprise-metric');
+    metric.append(node('span', label), node('strong', value));
+    metrics.append(metric);
+  }
+  notice.append(metrics);
+  const requestForm = node('form', undefined, 'panel form-card inline-form');
+  requestForm.dataset.form = 'insurance-request';
+  requestForm.append(node('h3', 'Request information'));
+  const product = field('Information requested', 'product_interest', 'select');
+  for (const [value, label] of [['life', 'Life insurance information'], ['household', 'Household cover information'], ['property', 'Property cover information']]) {
+    const option = node('option', label);
+    option.value = value;
+    product.input.append(option);
+  }
+  requestForm.append(product.label, field('What would you like to know?', 'message', 'textarea', true, { minlength: 10, maxlength: 500 }).label);
+  const consent = node('label', undefined, 'benefit-check span-2');
+  const consentInput = document.createElement('input');
+  consentInput.type = 'checkbox';
+  consentInput.name = 'consent';
+  consentInput.required = true;
+  consent.append(consentInput, node('span', 'I consent to EthioLife forwarding this information request to the Insurance service team. This is not an application, policy, quote, or coverage confirmation.'));
+  requestForm.append(consent, button('Submit information request', 'submit', 'button button-primary span-2'));
+  wrap.append(notice, requestForm);
+  const myRequests = node('section', undefined, 'panel form-card');
+  myRequests.append(node('h2', 'Your requests and activity'));
+  if (!state.insuranceRequests.length) myRequests.append(node('p', 'No Insurance information requests are linked to your account.'));
+  for (const request of state.insuranceRequests) {
+    myRequests.append(card(request.product_interest, `${request.message} · Submitted ${new Date(request.created_at).toLocaleString(document.documentElement.lang)}${request.responded_at ? ` · Updated ${new Date(request.responded_at).toLocaleString(document.documentElement.lang)}` : ''}${request.response_note ? ` · Response: ${request.response_note}` : ''}`, request.status));
+  }
+  wrap.append(myRequests);
+  if (state.insuranceStaffRequests.length) {
+    const queue = node('section', undefined, 'panel form-card');
+    queue.append(node('h2', 'Insurance information request review'));
+    for (const request of state.insuranceStaffRequests) {
+      const item = card(`${request.legal_name} · ${request.product_interest}`,
+        `${request.phone} · ${request.message} · ${new Date(request.created_at).toLocaleString(document.documentElement.lang)}`,
+        request.status);
+      if (request.status === 'pending' && request.can_respond) {
+        item.append(button('Respond', 'insurance-request-decision', 'button button-primary', { id: request.id, status: 'responded' }));
+        item.append(button('Close request', 'insurance-request-decision', 'button button-outline', { id: request.id, status: 'closed' }));
+      } else if (request.response_note) {
+        item.append(node('p', request.response_note));
+      }
+      queue.append(item);
+    }
+    wrap.append(queue);
+  }
   return wrap;
 }
 
@@ -1491,7 +1583,26 @@ function renderPanel() {
   moreButton?.classList.toggle('active', moreIsCurrent);
   if (moreIsCurrent) moreButton?.setAttribute('aria-current', 'page');
   else moreButton?.removeAttribute('aria-current');
-  $('#page-title').textContent = t(state.panel === 'password' || state.panel === 'security' ? 'Account security' : state.panel === 'admin' ? 'Admin workspace' : state.panel === 'mfi' ? 'SACCO / MFI workspace' : 'Your workspace');
+  const panelTitles = {
+    password: 'Account security',
+    security: 'Account security',
+    admin: 'Admin workspace',
+    mfi: 'SACCO / MFI workspace',
+    edir: 'EthioLife Edir workspace',
+    insurance: 'Insurance information',
+    marketplace: 'Marketplace',
+    leads: 'Leads',
+    workers: 'Workers',
+    requests: 'Requests & matching',
+    properties: 'Properties',
+    contracts: 'Contracts',
+    commissions: 'Commissions',
+    agents: 'Agent management',
+    rent: 'Rent & deposits',
+  };
+  $('#page-title').textContent = t(panelTitles[state.panel] ?? 'Your workspace');
+  // Shared shell statistics describe agency activity, so keep them on the overview only.
+  $('#stat-grid').hidden = state.panel !== 'overview';
   if (state.panel === 'mfi') {
     $('#workspace').replaceChildren(createMfiWorkspace(api, state.user));
     return;
@@ -1511,6 +1622,7 @@ function renderPanel() {
   }
   const renderer = {
     overview: renderOverview,
+    insurance: renderInsurance,
     leads: renderLeads,
     workers: renderWorkers,
     requests: renderRequests,
@@ -1542,6 +1654,19 @@ async function submitForm(form) {
       await refresh();
     }
     showAlert('Password updated successfully.');
+    return;
+  }
+  if (form.dataset.form === 'insurance-request') {
+    await api('/insurance/requests', {
+      method: 'POST',
+      body: JSON.stringify({
+        product_interest: values.product_interest,
+        message: values.message,
+        consent: values.consent === 'on',
+      }),
+    });
+    await refresh();
+    showAlert('Your Insurance information request was submitted. It is not an application or policy.');
     return;
   }
   if (form.dataset.form === 'mfa-enable') {
@@ -2180,6 +2305,21 @@ document.addEventListener('click', async (event) => {
     })
       .then(async () => { showAlert(t('KYC document {{decision}}.', { decision: t(action.dataset.decision) })); await refresh(); })
       .catch((error) => showAlert(error.message, true));
+    return;
+  }
+  if (name === 'insurance-request-decision') {
+    const responseNote = window.prompt(t('Enter the information response or closure reason (at least 10 characters).'));
+    if (!responseNote || responseNote.trim().length < 10) return;
+    try {
+      await api(`/insurance/requests/${encodeURIComponent(id)}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({ status: action.dataset.status, response_note: responseNote.trim() }),
+      });
+      await refresh();
+      showAlert('Insurance information request updated.');
+    } catch (error) {
+      showAlert(error.message, true);
+    }
     return;
   }
   if (name === 'user-document-download') {

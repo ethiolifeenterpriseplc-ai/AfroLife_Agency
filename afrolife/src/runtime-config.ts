@@ -32,6 +32,22 @@ function validateInsuranceServiceCutover(env: Environment) {
   }
 }
 
+function validateServiceOrigin(env: Environment, key: string, label: string): string {
+  const value = env[key]?.trim();
+  if (!value || isPlaceholder(value)) throw new Error(`${key} must be configured for the ${label} service`);
+  let origin: URL;
+  try {
+    origin = new URL(value);
+  } catch {
+    throw new Error(`${key} must be a valid service origin`);
+  }
+  if (origin.pathname !== '/' || origin.search || origin.hash || origin.username || origin.password
+    || (origin.protocol !== 'https:' && !['localhost', '127.0.0.1', '::1'].includes(origin.hostname))) {
+    throw new Error(`${key} must be an HTTPS origin or a loopback HTTP origin`);
+  }
+  return value;
+}
+
 function productionConfig(env: Environment, idleTimeout: number): RuntimeConfig {
   const requiredSecret = (key: 'JWT_SECRET' | 'MFA_ENC_KEY') => {
     const value = env[key]?.trim();
@@ -101,7 +117,23 @@ function productionConfig(env: Environment, idleTimeout: number): RuntimeConfig 
   }
   const pilotSetting = env.MFI_PILOT_ENABLED ?? '1';
   if (!['0', '1'].includes(pilotSetting)) throw new Error('MFI_PILOT_ENABLED must be 0 or 1');
-  return { isProduction: true, mfiPilotEnabled: pilotSetting === '1', sessionIdleTimeoutMinutes: idleTimeout };
+  const mfiPilotEnabled = pilotSetting === '1';
+  if (mfiPilotEnabled) {
+    validateServiceOrigin(env, 'MFI_SERVICE_URL', 'SACCO/MFI');
+    const secret = env.MFI_GATEWAY_SECRET?.trim();
+    if (!secret || secret.length < 32 || isPlaceholder(secret)) {
+      throw new Error('MFI_GATEWAY_SECRET must be a unique, non-placeholder secret of at least 32 characters in production');
+    }
+  }
+  if (!env.INSURANCE_SERVICE_URL?.trim() || env.INSURANCE_SERVICE_CUTOVER_READY !== '1') {
+    throw new Error('Production requires the separate Insurance service and INSURANCE_SERVICE_CUTOVER_READY=1; the in-process ledger is disabled');
+  }
+  validateServiceOrigin(env, 'INSURANCE_SERVICE_URL', 'Insurance');
+  const insuranceSecret = env.INSURANCE_GATEWAY_SECRET?.trim();
+  if (!insuranceSecret || insuranceSecret.length < 32 || isPlaceholder(insuranceSecret)) {
+    throw new Error('INSURANCE_GATEWAY_SECRET must be a unique, non-placeholder secret of at least 32 characters in production');
+  }
+  return { isProduction: true, mfiPilotEnabled, sessionIdleTimeoutMinutes: idleTimeout };
 }
 
 export function loadRuntimeConfig(env: Environment): RuntimeConfig {

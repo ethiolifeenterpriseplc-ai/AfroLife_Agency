@@ -127,6 +127,7 @@ try {
   const edirEnabled = await evaluate("document.querySelector('#edir-tab')?.hidden === false");
   if (edirEnabled) {
     await evaluate("document.querySelector('#edir-tab').click()");
+    await waitFor("document.querySelector('#page-title')?.textContent === 'EthioLife Edir workspace' && document.querySelector('#stat-grid')?.hidden === true", 'Edir rendering in the shared workspace shell');
     await waitFor("!!document.querySelector('#workspace .edir-service-nav [data-edir-focus=\"edir-finance\"])", 'Edir mini-app shortcuts');
     await evaluate("document.querySelector('#workspace [data-edir-focus=\"edir-finance\"]').click()");
     await waitFor("document.activeElement?.id === 'edir-finance'", 'Edir savings and accounts shortcut');
@@ -169,7 +170,7 @@ try {
     assert.ok(layout.bodyWidth <= layout.width + 1, `${layout.device} body overflows horizontally: ${JSON.stringify(layout)}`);
   }
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join('; ')}`);
-  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir mini-app shortcuts when enabled', 'mobile bottom navigation visibility and touch target sizing', 'More sections sheet navigation', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], mobileNavigation, layouts }, null, 2));
+  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir in the shared workspace title and shell metrics', 'Edir mini-app shortcuts when enabled', 'mobile bottom navigation visibility and touch target sizing', 'More sections sheet navigation', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], mobileNavigation, layouts }, null, 2));
 } finally {
   if (closeBrowser) {
     try { closeBrowser(); }

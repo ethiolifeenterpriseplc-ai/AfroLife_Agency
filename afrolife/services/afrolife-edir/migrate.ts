@@ -1,6 +1,7 @@
 import '../../src/env.js';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { buildEdirServiceMigration } from './schema.js';
 
 const migrationUrl = process.env.EDIR_MIGRATION_DATABASE_URL;
@@ -25,9 +26,13 @@ const migrations = await Promise.all([
   ['afrolife-edir-v12-member-kyc-review', '012_member_kyc_review.sql'],
   ['afrolife-edir-v13-loan-documents', '013_loan_documents.sql'],
   ['afrolife-edir-v14-loan-writeoffs', '014_loan_writeoffs.sql'],
+  ['afrolife-edir-v15-rls-safe-kyc-guards', '015_rls_safe_kyc_guards.sql'],
+  ['afrolife-edir-v16-atomic-writeoff-posting', '016_atomic_writeoff_posting.sql'],
+  ['afrolife-edir-v17-remove-stale-loan-status-check', '017_remove_stale_loan_status_check.sql'],
+  ['afrolife-edir-v18-remove-stale-installment-check', '018_remove_stale_installment_check.sql'],
 ].map(async ([version, filename]) => ({
   version,
-  source: await readFile(new URL(`../../../services/afrolife-edir/${filename}`, import.meta.url), 'utf8'),
+  source: await readFile(join(process.cwd(), 'services', 'afrolife-edir', filename), 'utf8'),
 })));
 const client = new pg.Client({ connectionString: migrationUrl });
 await client.connect();

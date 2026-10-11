@@ -107,9 +107,9 @@ local validation must be distinguished from provider connectivity or approval.
   database-enforced independent actor roles. Added Edir migration v14 and
   maker-checker write-off endpoint and servicing form with matching loss
   posting and schedule waiver logic. SACCO migrations 042-049 are applied to the isolated local
-  database. Edir migrations v7-v14 are not applied: the local environment
-  has no `EDIR_MIGRATION_DATABASE_URL`, so Edir database-backed execution is
-  blocked until its intended local database is configured.
+  database. Edir migrations v1-v14 are now applied to a dedicated local UAT
+  database; database-backed validation has passed for synthetic membership and
+  complaint workflows only. See the 11 October continuation below.
 - On 11 October, the main and Edir TypeScript builds passed; the complete unit
   suite passed 118/118, including new document/KYC and write-off migration-security checks.
   The browser smoke passed at `http://localhost:3001/` across mobile, tablet,
@@ -199,7 +199,7 @@ I ran these checks independently of every historical status in the workbook:
 | Browser UI smoke | PASS | Local app at `http://localhost:3001/`; Super Admin login, SACCO screens, mobile/tablet/desktop layouts, and no browser console/runtime errors |
 | SACCO database migrations | PASS | Local migration runner applied pending 043-047; 042 was already recorded as applied |
 | SACCO MFI end-to-end | PASS | Local app at `http://127.0.0.1:3001`, isolated fixture DB at `127.0.0.1:5433/afrolife`; synthetic workflow, 9 balanced journals and 83 audit events including full-principal write-off |
-| Edir database migrations / E2E | BLOCKED | Local configuration has no `EDIR_MIGRATION_DATABASE_URL`; Edir schema/unit tests are not database-backed acceptance |
+| Edir database migrations / E2E | PARTIAL PASS | All 14 migrations applied and 7 synthetic membership/complaint API cases passed on 11 October; remaining Edir lending flows are not accepted |
 | HTTP integration suite | NOT RUN | Harness requires an explicitly configured disposable `TEST_DATABASE_URL`; no disposable integration target was confirmed |
 
 ### 11 October 2026 continuation: Edir database-backed UAT
@@ -240,8 +240,8 @@ caps, repayment/write-off posting, and financial reports still need dedicated
 database-backed UAT. Interest/fee/penalty servicing remains unimplemented for
 Edir. The 235 workbook cases have not each been run against both products.
 
-The earlier execution table's Edir migration/E2E blocker is superseded for the
-scope above; the full Edir lending UAT remains incomplete.
+The execution table's Edir entry is a partial pass for the scope above; the
+full Edir lending UAT remains incomplete.
 
 The local MFI journey covered independent national-ID document review and KYC,
 KYC gating, maker-checker policy and product approvals, pricing snapshots,
@@ -250,3 +250,96 @@ journals, audit events, role authorization and tenant isolation. Synthetic
 accounts and records were used; no customer credentials were reset. The full
 235-case workbook is not fully executed or accepted. No production or shared
 customer records were used.
+
+### 11 October 2026 continuation: Edir lending lifecycle and workbook trace
+
+The remaining Edir lending API workflows were exercised against the isolated
+local PostgreSQL database using synthetic identities and records. The expanded
+journey passed 13 checks covering membership, KYC/document review, product and
+policy maker-checker, application assessment/approval and idempotency, offer
+acceptance and consent hash, disbursement cap enforcement, member savings
+funding, partial repayment, full remaining-principal write-off, waived
+installments, loss-journal posting, portfolio aging, trial balance,
+reconciliation, complaint privacy and complaint resolution. The trial balance
+was balanced at ETB 17,250.00 debit and credit; reconciliation found no missing
+posted journals. Test output identified only synthetic records.
+
+The database run exposed and fixed zero-value parsing errors for legitimate
+zero debt, zero outstanding principal, empty daily totals and zero minimum
+balances. It also exposed row-lock visibility conflicts in the KYC guards and
+disbursement workflow, an atomic write-off trigger-order defect, a stale
+duplicate pre-write-off constraint in the isolated database, and an invalid
+portfolio aging query. Forward Edir migrations v15-v18 correct these defects;
+the exact legacy constraint definitions were inspected before their narrowly
+targeted removal. All four migrations were applied to the isolated UAT database.
+
+The full unit suite now passes 123/123. Edir TypeScript no-emit type-check
+passes. `npm run build:edir` could not replace files in the existing `dist`
+directory because Windows returned EPERM for files held open; the source
+type-check completed without emitting files. The Edir database journey does
+not validate Edir interest, fee, penalty, external provider connectivity, or
+production deployment.
+
+The workbook copy found in Downloads, `YaYa_Digital_Lending_Regulatory_Excellence_UAT.xlsx`,
+has the 15 expected worksheets and 235 populated Master UAT List cases. Its
+historical status cells were kept separate from AfroLife execution evidence.
+The case-level trace is in
+`DIGITAL_LENDING_235_CASE_TRACE_2026-10-11.csv`: 9 cases directly pass against
+executed UAT evidence, 9 are partial, and 217 remain open/unexecuted. These
+totals do not claim completion of the 235-case workbook. The trace records each
+case ID, case description, module, priority, historical status, AfroLife UAT
+status and evidence or open reason. Open areas include third-party identity,
+AML/PEP and bureau providers; NBE returns and approved policy rules; SMS, wallet
+and bank rails; priced Edir servicing; suspense and post-write-off recovery;
+offline/disaster recovery; AI extraction/explanation; collateral workflows;
+and specialized lending products. Remaining non-provider cases still need
+their individual acceptance scenarios executed.
+
+One security access limitation remains: the KYC review endpoint permits a
+platform administrator, but row-level security does not expose private identity
+documents to that role. The UAT used two separately assigned compliance
+reviewers, which validates the authorized compliance path. Automatic review
+rejected broadening sensitive-document visibility to platform administrators
+and other staff roles because that expands access to identity evidence. Any
+change to that access policy needs explicit approval; this does not block the
+tested compliance workflow.
+
+The earlier SACCO/MFI database E2E result remains recorded above. A current
+rerun was attempted on 11 October but stopped at the first login: the local
+synthetic `super_admin` credential returned HTTP 401. The existing local test
+credential file was left untouched; no user password or customer credential
+was reset. The Edir UAT completed independently and passed.
+
+### 11 October 2026 continuation: shared Edir frontend and tester APK
+
+Architecture review confirmed that Edir uses the shared Super App frontend:
+the main `public/app.js` imports and mounts `public/edir.js` in the common
+workspace, under the shared session, header, navigation, language selector,
+responsive layout, and PWA shell. Edir requests continue through the existing
+`/api/v1/edir` gateway to the separately deployed Edir service. No Edir service
+routes, database schema, or deployment boundary were changed for this frontend
+integration. The shared workspace now labels the Edir page explicitly and hides
+agency overview metrics while a user is inside a service workspace.
+
+Both main-app and Edir TypeScript no-emit checks passed. The complete unit suite
+passed 123/123. Capacitor synced the common PWA shell and Edir frontend into the
+Android project, and the Android debug build succeeded. The installable internal
+test artifact is `artifacts/AfroLife-Agency-1.0-debug.apk` (4,517,973 bytes),
+SHA-256 `7DA554C67D221490621796A3DCE427E2DF9A7E19BDB874569771E5C7C0CEABCC`.
+It uses the Android debug signing certificate; it is suitable for controlled
+tester installation, not a store or public release. Release signing variables
+are not configured in this environment, and no signed release APK was produced.
+
+The shared public hostname `afrolife-agency.duckdns.org` resolves to
+`196.189.145.142`, but read-only requests to both HTTP and HTTPS fail to open a
+connection from this test environment (HTTP status 000). The single-origin
+web/PWA architecture is in place in the application, but the public deployment
+is not reachable in this check and is not ready to distribute as a public URL.
+
+The local browser smoke test loaded the shared app login page, but timed out
+waiting for the existing synthetic Super Admin sign-in. The local credential
+file was not changed. This means the responsive authenticated Edir browser
+checks remain unverified in this run; the Edir database-backed E2E remains the
+current authenticated workflow evidence. The full workbook status is unchanged
+at 9 pass, 9 partial, and 217 open/unexecuted. The APK build does not close any
+of those database or provider-dependent workbook cases.

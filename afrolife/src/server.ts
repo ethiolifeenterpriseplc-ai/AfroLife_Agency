@@ -11,9 +11,10 @@ import { loadRuntimeConfig } from './runtime-config.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
 import { audit, feeSnapshot, loadRules, post, transition } from './domain.js';
 import { supply } from './supply.js';
-import { mfiRouter } from './mfi.js';
+import { createMfiRouter } from './mfi.js';
 import { createInsuranceLedgerRouter } from './insurance-ledger.js';
-import { createInsuranceServiceGateway, createPublicServiceGateway, createServiceGateway } from './insurance-service-gateway.js';
+import { createInsuranceRequestsRouter } from './insurance-requests.js';
+import { createInsuranceRequestsServiceGateway, createInsuranceServiceGateway, createMfiServiceGateway, createPublicServiceGateway, createServiceGateway } from './insurance-service-gateway.js';
 import { loginRouter, adminRouter } from './admin.js';
 import { ops } from './ops.js';
 import { privacy } from './privacy.js';
@@ -112,6 +113,21 @@ api.use(adminRouter);
 api.use(privacy);
 api.use(ops);
 api.use(supply);
+api.use('/insurance/requests', process.env.INSURANCE_SERVICE_URL
+  ? createInsuranceRequestsServiceGateway({
+    baseUrl: process.env.INSURANCE_SERVICE_URL,
+    secret: process.env.INSURANCE_GATEWAY_SECRET ?? '',
+  })
+  : runtimeConfig.isProduction
+    ? (_req, res) => res.status(503).json({ error: 'Separate Insurance service is not configured' })
+    : createInsuranceRequestsRouter(withUser));
+// Parse private Edir uploads before the signed service gateway so the raw
+// bytes and their content type can be forwarded and signed without JSON wrapping.
+api.post('/edir/credit/documents/:documentType', express.raw({ type: () => true, limit: '10mb' }));
+// MFI document uploads use the same raw-body signature contract when routed to
+// the standalone service; the in-process router can consume the parsed Buffer.
+api.post('/mfi/institutions/:institutionId/members/:memberId/documents/:documentType',
+  express.raw({ type: () => true, limit: '10mb' }));
 api.use('/edir', process.env.EDIR_SERVICE_URL
   ? createServiceGateway({
     baseUrl: process.env.EDIR_SERVICE_URL,
@@ -128,7 +144,12 @@ api.use('/insurance/ledger', process.env.INSURANCE_SERVICE_URL
   : createInsuranceLedgerRouter(withUser));
 if (runtimeConfig.mfiPilotEnabled) {
   if (runtimeConfig.isProduction) console.warn('SACCO/MFI pilot is enabled; do not use for public deposits or regulated lending');
-  api.use('/mfi', mfiRouter);
+  api.use('/mfi', process.env.MFI_SERVICE_URL
+    ? createMfiServiceGateway({
+      baseUrl: process.env.MFI_SERVICE_URL,
+      secret: process.env.MFI_GATEWAY_SECRET ?? '',
+    })
+    : createMfiRouter(withUser));
 }
 
 // ---- Leads (row-level security limits what each agent can see) ----

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { createHash, createHmac } from 'node:crypto';
 import express from 'express';
 import {
+  createInsuranceRequestsServiceGateway,
   createInsuranceServiceGateway,
+  createMfiServiceGateway,
   verifyInsuranceServiceAssertion,
   type InsuranceServiceAssertion,
 } from '../src/insurance-service-gateway.js';
@@ -102,4 +104,153 @@ test('insurance gateway forwards a signed identity and relays the service respon
   assert.equal(result.identity?.email, 'edir-member@example.invalid');
   assert.ok(result.identity && Math.abs(Date.now() - result.identity.issuedAt) < 60_000);
   assert.deepEqual(result.received, body);
+});
+
+test('Insurance information-request path is forwarded through its own signed service route', async (context) => {
+  const requestPath = '/api/v1/insurance/requests/me';
+  const service = express();
+  service.get(requestPath, (req, res) => {
+    const identity = verifyInsuranceServiceAssertion(
+      secret,
+      req.get('x-afrolife-identity') ?? '',
+      req.get('x-afrolife-signature') ?? '',
+      req.method,
+      req.originalUrl,
+      req.body,
+    );
+    res.status(identity ? 200 : 401).json({ identity: identity?.userId ?? null });
+  });
+  const serviceServer = service.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => serviceServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    serviceServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const api = express();
+  api.use((req, _res, next) => {
+    req.user = { id: '3cd21265-95d9-40a4-9e68-95538d8d6650', role: 'customer' };
+    next();
+  });
+  const servicePort = (serviceServer.address() as import('node:net').AddressInfo).port;
+  api.use('/insurance/requests', createInsuranceRequestsServiceGateway({
+    baseUrl: `http://127.0.0.1:${servicePort}`,
+    secret,
+  }));
+  const apiServer = api.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => apiServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    apiServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const apiPort = (apiServer.address() as import('node:net').AddressInfo).port;
+  const response = await fetch(`http://127.0.0.1:${apiPort}/insurance/requests/me`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { identity: '3cd21265-95d9-40a4-9e68-95538d8d6650' });
+});
+
+test('SACCO/MFI gateway signs and forwards requests to the isolated service API', async (context) => {
+  const service = express();
+  service.use(express.json());
+  service.post('/api/v1/mfi/member-portal', (req, res) => {
+    const identity = verifyInsuranceServiceAssertion(
+      secret,
+      req.get('x-afrolife-identity') ?? '',
+      req.get('x-afrolife-signature') ?? '',
+      req.method,
+      req.originalUrl,
+      req.body,
+    );
+    res.status(identity ? 200 : 401).json({ identity, received: req.body });
+  });
+  const serviceServer = service.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => serviceServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    serviceServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const api = express();
+  api.use(express.json());
+  api.use((req, _res, next) => {
+    req.user = {
+      id: '3cd21265-95d9-40a4-9e68-95538d8d6650',
+      role: 'finance_manager',
+      sessionId: '58de121e-43a0-48b0-817a-021d5aa00002',
+    };
+    next();
+  });
+  const port = (serviceServer.address() as import('node:net').AddressInfo).port;
+  api.use('/mfi', createMfiServiceGateway({ baseUrl: `http://127.0.0.1:${port}`, secret }));
+  const apiServer = api.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => apiServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    apiServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const apiPort = (apiServer.address() as import('node:net').AddressInfo).port;
+  const response = await fetch(`http://127.0.0.1:${apiPort}/mfi/member-portal`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  assert.equal(response.status, 200);
+  const result = await response.json() as {
+    identity: InsuranceServiceAssertion | null;
+    received: typeof body;
+  };
+  assert.equal(result.identity?.userId, '3cd21265-95d9-40a4-9e68-95538d8d6650');
+  assert.equal(result.identity?.role, 'finance_manager');
+  assert.deepEqual(result.received, body);
+});
+
+test('SACCO/MFI gateway signs and preserves private document upload bytes', async (context) => {
+  const document = Buffer.from('%PDF-1.7 synthetic fixture');
+  const service = express();
+  service.use(express.json());
+  service.post('/api/v1/mfi/documents', express.raw({ type: () => true, limit: '10mb' }), (req, res) => {
+    const identity = verifyInsuranceServiceAssertion(
+      secret,
+      req.get('x-afrolife-identity') ?? '',
+      req.get('x-afrolife-signature') ?? '',
+      req.method,
+      req.originalUrl,
+      req.body,
+    );
+    res.status(identity ? 201 : 401).json({
+      identity,
+      document: Buffer.isBuffer(req.body) ? req.body.toString('base64') : null,
+    });
+  });
+  const serviceServer = service.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => serviceServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    serviceServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const api = express();
+  api.post('/mfi/documents', express.raw({ type: () => true, limit: '10mb' }));
+  api.use((req, _res, next) => {
+    req.user = {
+      id: '3cd21265-95d9-40a4-9e68-95538d8d6650',
+      role: 'compliance',
+    };
+    next();
+  });
+  const port = (serviceServer.address() as import('node:net').AddressInfo).port;
+  api.use('/mfi', createMfiServiceGateway({ baseUrl: `http://127.0.0.1:${port}`, secret }));
+  const apiServer = api.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => apiServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    apiServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const apiPort = (apiServer.address() as import('node:net').AddressInfo).port;
+  const response = await fetch(`http://127.0.0.1:${apiPort}/mfi/documents`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/pdf' },
+    body: new Uint8Array(document),
+  });
+  assert.equal(response.status, 201);
+  const result = await response.json() as { identity: InsuranceServiceAssertion | null; document: string | null };
+  assert.equal(result.identity?.role, 'compliance');
+  assert.equal(result.document, document.toString('base64'));
 });

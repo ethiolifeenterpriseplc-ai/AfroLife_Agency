@@ -1,0 +1,15 @@
+﻿<service>
+  <id>AfroLifeMfi</id>
+  <name>AfroLife SACCO and MFI Service</name>
+  <description>Private SACCO/MFI backend behind the AfroLife Super App gateway</description>
+  <executable>C:\Program Files\nodejs\node.exe</executable>
+  <arguments>C:\AfroLife\app\dist\services\sacco-mfi\server.js</arguments>
+  <workingdirectory>C:\AfroLife\app</workingdirectory>
+  <env name="AFROLIFE_ENV_FILE" value="C:\ProgramData\AfroLife\mfi.env" />
+  <env name="HOST" value="127.0.0.1" />
+  <env name="PORT" value="3300" />
+  <logpath>C:\ProgramData\AfroLife\logs\mfi</logpath>
+  <log mode="roll" />
+  <stoptimeout>30 sec</stoptimeout>
+  <onfailure action="restart" delay="10 sec" />
+</service>

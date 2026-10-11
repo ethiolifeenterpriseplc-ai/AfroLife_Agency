@@ -94,14 +94,15 @@ export function createServiceGateway(options: {
     })).toString('base64url');
     const bodyHash = requestBodyHash(req.body);
     const signed = signature(options.secret, assertion, req.method, path, bodyHash);
+    const rawBody = Buffer.isBuffer(req.body);
     const headers = new Headers({
       'x-afrolife-identity': assertion,
       'x-afrolife-signature': signed,
-      'content-type': 'application/json',
+      'content-type': rawBody ? (req.get('content-type') ?? 'application/octet-stream') : 'application/json',
     });
     const body = req.method === 'GET' || req.method === 'HEAD' || req.body === undefined
       ? undefined
-      : JSON.stringify(req.body);
+      : rawBody ? new Uint8Array(req.body as Buffer) : JSON.stringify(req.body);
     fetch(new URL(path, serviceUrl), {
       method: req.method,
       headers,
@@ -125,6 +126,22 @@ export function createInsuranceServiceGateway(options: { baseUrl: string; secret
     ...options,
     servicePath: '/api/v1/insurance/ledger',
     serviceName: 'Insurance ledger service',
+  });
+}
+
+export function createInsuranceRequestsServiceGateway(options: { baseUrl: string; secret: string }): RequestHandler {
+  return createServiceGateway({
+    ...options,
+    servicePath: '/api/v1/insurance/requests',
+    serviceName: 'Insurance request service',
+  });
+}
+
+export function createMfiServiceGateway(options: { baseUrl: string; secret: string }): RequestHandler {
+  return createServiceGateway({
+    ...options,
+    servicePath: '/api/v1/mfi',
+    serviceName: 'SACCO/MFI service',
   });
 }
 

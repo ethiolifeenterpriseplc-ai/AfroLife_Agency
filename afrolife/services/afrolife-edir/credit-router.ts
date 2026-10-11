@@ -371,8 +371,9 @@ edirCreditRouter.post('/applications', h(async (req, res) => {
     idempotency_key: z.string().uuid(),
   }).strict().parse(req.body);
   const result = await withUser(req.user!, async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', ['edir-credit-application', req.user!.id]);
     const member = (await client.query(
-      `SELECT id,status,activated_at,kyc_status FROM edir_memberships WHERE user_id=$1 FOR UPDATE`, [req.user!.id],
+      `SELECT id,status,activated_at,kyc_status FROM edir_memberships WHERE user_id=$1`, [req.user!.id],
     )).rows[0];
     if (!member || member.status !== 'active') throw new HttpError(403, 'An active Edir membership is required to request credit');
     if(member.kyc_status!=='verified')throw new HttpError(409,'Edir member KYC must be independently verified before applying for credit');
@@ -382,8 +383,8 @@ edirCreditRouter.post('/applications', h(async (req, res) => {
     const payloadHash = createHash('sha256').update([
       formatEdirMoney(parseEdirMoney(body.requested_principal)), body.requested_term_months, body.purpose.trim(),
       formatEdirMoney(parseEdirMoney(body.monthly_income)),
-      formatEdirMoney(parseEdirMoney(body.monthly_expenses)),
-      formatEdirMoney(parseEdirMoney(body.monthly_debt)), body.product_code ?? '', body.customer_category,
+      formatEdirMoney(parseEdirMoney(body.monthly_expenses, true)),
+      formatEdirMoney(parseEdirMoney(body.monthly_debt, true)), body.product_code ?? '', body.customer_category,
       body.age ?? '', body.business_months ?? '', body.employment_months ?? '',
       body.equity_amount ?? '', body.collateral_value ?? '', [...body.supplied_fields].sort().join(','),
     ].join('\n')).digest('hex');
@@ -502,7 +503,7 @@ edirCreditRouter.post('/documents/:documentType',express.raw({type:()=>true,limi
   if(!mime)throw new HttpError(415,'Only PDF, JPEG, or PNG loan documents are accepted');
   const document=await withUser(req.user!,async(client)=>{
     const member=(await client.query(
-      `SELECT id FROM edir_memberships WHERE user_id=$1 AND status='active' FOR UPDATE`,[req.user!.id],
+      `SELECT id FROM edir_memberships WHERE user_id=$1 AND status='active'`,[req.user!.id],
     )).rows[0];
     if(!member)throw new HttpError(403,'An active Edir membership is required to upload loan documents');
     const storageKey=randomUUID();
@@ -938,11 +939,13 @@ edirCreditRouter.get('/reports/portfolio', requireStaffRole(creditReaderRoles, '
            FROM edir_loans loan LEFT JOIN edir_loan_installments installment
              ON installment.loan_id=loan.id AND installment.organization_id=loan.organization_id
            WHERE loan.status='disbursed' GROUP BY loan.id
+         ), buckets AS (
+           SELECT CASE WHEN dpd BETWEEN 1 AND 30 THEN '1_30' WHEN dpd BETWEEN 31 AND 60 THEN '31_60'
+             WHEN dpd BETWEEN 61 AND 90 THEN '61_90' WHEN dpd>90 THEN 'over_90' ELSE 'current' END AS bucket,
+             outstanding FROM balances
          )
-         SELECT CASE WHEN dpd BETWEEN 1 AND 30 THEN '1_30' WHEN dpd BETWEEN 31 AND 60 THEN '31_60'
-           WHEN dpd BETWEEN 61 AND 90 THEN '61_90' WHEN dpd>90 THEN 'over_90' ELSE 'current' END AS bucket,
-           count(*)::int AS loan_count,coalesce(sum(outstanding),0)::numeric(14,2) AS outstanding_principal
-         FROM balances GROUP BY bucket ORDER BY CASE bucket WHEN 'current' THEN 0 WHEN '1_30' THEN 1
+         SELECT count(*)::int AS loan_count,coalesce(sum(outstanding),0)::numeric(14,2) AS outstanding_principal
+         FROM buckets GROUP BY bucket ORDER BY CASE bucket WHEN 'current' THEN 0 WHEN '1_30' THEN 1
            WHEN '31_60' THEN 2 WHEN '61_90' THEN 3 ELSE 4 END`,
       ),
     ]);
@@ -1080,7 +1083,7 @@ edirCreditRouter.post('/loans/:loanId/writeoffs', requireStaffRole(servicingMake
     )).rows[0];
     if (!loan) throw new HttpError(404, 'Edir loan was not found');
     if (loan.status !== 'disbursed') throw new HttpError(409, 'Only a disbursed Edir loan can be written off');
-    const outstanding = parseEdirMoney(loan.principal_amount) - parseEdirMoney(loan.principal_repaid);
+    const outstanding = parseEdirMoney(loan.principal_amount) - parseEdirMoney(loan.principal_repaid, true);
     if (outstanding <= 0n) throw new HttpError(409, 'The Edir loan has no outstanding principal to write off');
     const amount = formatEdirMoney(outstanding);
     const inserted = await client.query(
@@ -1135,12 +1138,11 @@ edirCreditRouter.post('/operations/:operationId/decision',
         throw new HttpError(409, 'Only the full accepted Edir loan principal can be disbursed once');
       }
       if (body.decision === 'approved' && current.operation_type === 'writeoff'
-          && (current.loan_status !== 'disbursed' || parseEdirMoney(String(current.amount)) !== parseEdirMoney(current.principal_amount) - parseEdirMoney(current.principal_repaid))) {
+          && (current.loan_status !== 'disbursed' || parseEdirMoney(String(current.amount)) !== parseEdirMoney(current.principal_amount) - parseEdirMoney(current.principal_repaid, true))) {
         throw new HttpError(409, 'The write-off must cover the full current Edir principal balance');
       }
       if (current.operation_type === 'disbursement') {
         await client.query('SELECT id FROM edir_organizations WHERE id=$1 FOR UPDATE',[req.user!.edir_id??'00000000-0000-4000-8000-000000000002']);
-        await client.query('SELECT id FROM edir_memberships WHERE id=$1 FOR UPDATE',[current.member_id]);
       }
       if (body.decision === 'approved' && current.operation_type === 'disbursement'
           && (await client.query('SELECT edir_member_has_active_risk_hold($1) AS held',[current.member_id])).rows[0].held) {
@@ -1153,12 +1155,12 @@ edirCreditRouter.post('/operations/:operationId/decision',
             JOIN edir_loan_operations o ON o.id=j.operation_id AND o.organization_id=j.organization_id
             WHERE j.organization_id=$1 AND j.status='posted' AND o.operation_type='disbursement' AND j.posted_at::date=current_date`,
             [current.organization_id])).rows[0].amount as string;
-          if(parseEdirMoney(today)+parseEdirMoney(String(current.amount))>parseEdirMoney(String(limit.daily_limit)))
+          if(parseEdirMoney(today,true)+parseEdirMoney(String(current.amount))>parseEdirMoney(String(limit.daily_limit)))
             throw new HttpError(409,'The approved Edir daily disbursement limit would be exceeded');
         }
       }
       if (body.decision === 'approved' && current.operation_type === 'repayment') {
-        const outstanding = parseEdirMoney(current.principal_amount) - parseEdirMoney(current.principal_repaid);
+        const outstanding = parseEdirMoney(current.principal_amount) - parseEdirMoney(current.principal_repaid, true);
         if (current.loan_status !== 'disbursed' || parseEdirMoney(String(current.amount)) > outstanding) {
           throw new HttpError(409, 'The requested repayment exceeds the outstanding Edir loan principal');
         }
@@ -1173,8 +1175,8 @@ edirCreditRouter.post('/operations/:operationId/decision',
           [current.member_account_id, req.user!.edir_id ?? '00000000-0000-4000-8000-000000000002', current.member_id],
         )).rows[0];
         if (!account || account.account_status !== 'active' || account.product_status !== 'active'
-            || parseEdirMoney(account.balance) - parseEdirMoney(String(current.amount))
-              < parseEdirMoney(account.minimum_balance)) {
+            || parseEdirMoney(account.balance, true) - parseEdirMoney(String(current.amount))
+              < parseEdirMoney(account.minimum_balance, true)) {
           throw new HttpError(409, 'The selected Edir savings account has insufficient available balance for repayment');
         }
       }

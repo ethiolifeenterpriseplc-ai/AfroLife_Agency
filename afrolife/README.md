@@ -76,7 +76,9 @@ runtime role (not a superuser, table owner, or `BYPASSRLS` role),
 `EDIR_RUNTIME_DB_ROLE` to that runtime role's SQL identifier.
 `EDIR_GATEWAY_SECRET` must be a random secret of at least 32 characters shared
 only with the AfroLife API gateway. Set `EDIR_SERVICE_URL` on the main API to
-enable its Super App entry. Build with `npm run build:edir`, apply the isolated
+enable its Edir entry in the shared Super App shell. Edir keeps its own backend,
+database, member registry, and financial ledger; the shared shell does not move
+or merge those records. Build with `npm run build:edir`, apply the isolated
 schema with `npm run migrate:edir`, and start with `npm run start:edir`; the
 standalone service listens on port 3200 by default. The versioned migration
 chain adds member organizations and Edir governance hierarchies without
@@ -158,7 +160,7 @@ international and local standards references, mapped controls, and release gaps.
 See [SACCO_SERVICE_ROLLOUT.md](./SACCO_SERVICE_ROLLOUT.md) for each service's
 current release state and the evidence required before it can be marked Live.
 
-The **SACCO / MFI** workspace adds a separate institution-scoped operational area without replacing AfroLife's agency, marketplace, contract, rent, or workforce records. Run `npm run db:migrate` to apply the MFI schema. The workspace is enabled by default; set `MFI_PILOT_ENABLED=0` to hide and disable it. Access remains limited to authorized AfroLife staff with active institution membership, and operations are checked against each user's institution role. A Super Admin can register an institution; the creator becomes its first institution administrator. That administrator can provision existing active AfroLife finance/compliance staff by phone and assign an institution role.
+The **SACCO / MFI** workspace adds a separate institution-scoped operational area without replacing AfroLife's agency, marketplace, contract, rent, or workforce records. Run `npm run db:migrate` to apply the MFI schema. The workspace is enabled by default; set `MFI_PILOT_ENABLED=0` to hide and disable it. Institution operations remain limited to authorized staff with active institution membership and are checked against each user's institution role. Verified users can request membership; an independent institution administrator or compliance reviewer must approve it before the member record is linked. Linked members can view their own account balances, loan schedules, and posted transaction detail, read-only. These are not digital wallets, and no member payments or transfers are enabled. A Super Admin can register an institution; the creator becomes its first institution administrator. That administrator can provision existing active AfroLife finance/compliance staff by phone and assign an institution role.
 
 The workspace now presents a service menu across institution governance, members/KYC, products, savings, shares, credit, IFB, payments, wallets, agent/field operations, collections, accounting, treasury, reconciliation, AML/compliance, risk/fraud, regulatory reporting, CRM, digital channels, analytics, documents, staff, audit/security, exceptions, and cooperative governance. Each service is labelled `Pilot`, `Partial`, or `Not live`; selecting a not-live service shows its baseline scope and explicitly does not accept or post activity. Platform Super Admins can access every institution and all currently implemented institution operations/configuration regardless of institution membership; each institution-scoped request is written to that institution's append-only audit trail. Super Admin access does not make unavailable SRS capabilities live. This menu is a capability map, not a claim that every SRS requirement is implemented.
 
@@ -191,24 +193,34 @@ enrollment, collection, claims, or regulatory-approval workflow. Do not record
 real insurance activity until the insurer, products, accounting policy,
 authorization matrix, and operating controls have been approved.
 
+The shared Insurance mini-app accepts consented information requests and shows
+their review status. A response is informational only; it does not create an
+application, quote, policy, coverage, claim, wallet, or loan. Marketplace
+supports published listing discovery and listing activity only; buyer orders,
+purchase transactions, and marketplace wallet balances are not implemented.
+
 ### Independent service deployment
 
 See [SERVICE_BOUNDARIES.md](./SERVICE_BOUNDARIES.md) for current and proposed
 domain ownership and the safe extraction sequence. AfroLife is currently a
-hybrid modular platform: Edir and Insurance have separate service
-implementations, while Agency, MFI/SACCO, privacy, and shared administration
-remain in the central API. Do not describe those central modules as independent
-microservices until their data and deployment boundaries have been verified.
+hybrid modular platform: Edir, Insurance, and MFI/SACCO have separate service
+processes behind the shared API, while Agency, Marketplace, Property
+Management, workforce, privacy, and shared administration remain in the
+central API. MFI and Insurance request records still have central database
+dependencies during the no-data-move transition. Do not describe those
+financial data stores as fully independent until their ownership and migration
+boundaries have been verified.
 
 The insurance ledger can be deployed independently while the existing AfroLife
-API remains the identity authority and backward-compatible gateway. With
-`INSURANCE_SERVICE_URL` unset, requests continue to use the in-process ledger.
+API remains the identity authority and backward-compatible gateway. In
+development only, with `INSURANCE_SERVICE_URL` unset, requests continue to use
+the in-process ledger.
 The service schema migration creates an empty ledger; it does not import or
 reconcile records from the legacy in-process ledger. Do not cut over until a
 separately approved historical-data migration has been completed, opening
 balances and totals have been reconciled, rollback and recovery procedures have
-been rehearsed, and the independent accounting owner has signed off. Startup
-requires both `INSURANCE_SERVICE_URL` and `INSURANCE_SERVICE_CUTOVER_READY=1`;
+been rehearsed, and the independent accounting owner has signed off. Production
+startup requires both `INSURANCE_SERVICE_URL` and `INSURANCE_SERVICE_CUTOVER_READY=1`;
 that flag is an operator attestation, not an automated reconciliation check.
 Only set it after the required migration and reconciliation evidence has been
 reviewed and retained.
@@ -364,3 +376,76 @@ The **Rent & deposits** workspace supports tenant and lease creation, rent recei
 - The Android API origin is entered on-device. Restrict `CORS_ORIGINS` to the app origins you intend to trust; do not use `*`.
 - The initial version is a pilot foundation, not a substitute for review of local labor, consumer, privacy, tax, payment, and real-estate requirements. Production payment settlement and personal-ID retention policies need their own implementation and approval.
 - Use [PRODUCTION_HARDENING.md](./PRODUCTION_HARDENING.md) as the production release gate and `.env.production.example` as a non-secret configuration template. Replace every example value and keep migration-only credentials out of the API runtime environment.
+
+## One public Super App URL (Windows/IIS)
+
+The public hostname serves the PWA and every API through the main AfroLife API
+origin. IIS must proxy the entire hostname to `http://127.0.0.1:3000`; the main
+API serves the PWA and owns `/api/v1` authentication. Its signed internal
+routes expose Edir at `/api/v1/edir` and Insurance at
+`/api/v1/insurance/ledger`. Agency operations and MFI remain under that same
+API. Do not publish ports 3100 or 3200 or configure browser clients to call
+those backend ports directly.
+
+For a Windows host, deploy the main API with `deploy/windows/afrolife-service.xml`
+and register the additional private service definitions
+`afrolife-edir-service.xml`, `afrolife-insurance-service.xml`, and
+`afrolife-mfi-service.xml` with the same approved Windows service wrapper. Copy
+`edir.env.example`, `insurance.env.example`, and `mfi.env.example` to the
+protected service environment files under `C:\ProgramData\AfroLife\`. Configure
+each service with its restricted runtime DB connection and a unique gateway
+secret. The MFI service currently connects to the same restricted AfroLife
+database and private-file directory as the main API to preserve its existing
+data. Add the matching Edir and MFI gateway secrets to the main `runtime.env`;
+set `EDIR_SERVICE_URL=http://127.0.0.1:3200` and
+`MFI_SERVICE_URL=http://127.0.0.1:3300`. Production requires the MFI service
+when its pilot is enabled. Configure `INSURANCE_SERVICE_URL=http://127.0.0.1:3100`,
+the distinct `INSURANCE_GATEWAY_SECRET`, and
+`INSURANCE_SERVICE_CUTOVER_READY=1` only after the Insurance service database
+is migrated, reconciled against the existing ledger, and has an approved
+rollback plan. Production refuses to route Insurance ledger traffic to the
+legacy in-process implementation. The information-request API now runs in the
+Insurance service, but its records still use a second restricted connection to
+the central identity database until their explicit data migration is implemented.
+
+The public browser URL remains `https://afrolife-agency.duckdns.org`; routes
+stay same-origin, so no separate public subdomains or browser CORS origins are
+needed. Nginx is the only public ingress to the central API gateway; the
+gateway dispatches signed requests to private Edir, Insurance, and SACCO/MFI
+services. Service-specific Nginx locations must continue to terminate at the
+central gateway rather than bypassing its identity assertions. Keep all
+service ports loopback/private. Verify the main
+`/healthz`, Edir `/healthz` on loopback, and Insurance `/healthz` on loopback,
+then sign in through the public PWA and exercise the Edir and Insurance pages.
+A successful health check does not replace database migration, ledger
+reconciliation, or production release gates.
+
+### SACCO/MFI service backend
+
+SACCO/MFI now has a separately runnable API process in `services/sacco-mfi/`.
+Build it with `npm run build:mfi` and start it with `npm run start:mfi`; it
+listens on private loopback port 3300. A standalone container definition is at
+`services/sacco-mfi/Dockerfile`. The shared API gateway forwards the
+existing `/api/v1/mfi` contract with signed identity when
+`MFI_SERVICE_URL=http://127.0.0.1:3300` and the matching
+`MFI_GATEWAY_SECRET` are configured. The same Super App shell, sign-in,
+responsive navigation, localization, and API origin remain in use.
+
+Build its private image from the repository root with
+`docker build -f services/sacco-mfi/Dockerfile -t afrolife-sacco-mfi .`.
+Attach it only to a trusted private network and use an HTTPS service URL (or
+the loopback systemd deployment) so the gateway assertion remains protected.
+The container still needs the existing restricted `MFI_DATABASE_URL`, matching
+`MFI_GATEWAY_SECRET`, and persistent private-file storage mounted at the path
+in `FILE_STORAGE_DIR`.
+
+For this first service cutover, configure `MFI_DATABASE_URL` to the same
+restricted AfroLife database used by the main API, and use the same
+`FILE_STORAGE_DIR`; this keeps existing RLS policies, membership records,
+balances, loan schedules, audit history, and private documents intact. It
+separates backend process lifecycle, not database ownership. Do not use an
+empty MFI database: user references, tables, policies, and balances are not
+replicated automatically. The MFI service binds only to loopback, with Windows
+and systemd service templates at `deploy/windows/afrolife-mfi-service.xml` and
+`deploy/linux/afrolife-mfi.service`. Nginx continues to route the public origin
+only to the main API gateway; never expose port 3300 directly.

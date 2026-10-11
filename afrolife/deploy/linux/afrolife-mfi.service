@@ -1,0 +1,30 @@
+[Unit]
+Description=AfroLife SACCO and MFI Service
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=afrolife
+Group=afrolife
+WorkingDirectory=/opt/afrolife/app
+EnvironmentFile=/etc/afrolife/mfi.env
+Environment=HOST=127.0.0.1
+Environment=PORT=3300
+ExecStart=/usr/bin/node /opt/afrolife/app/dist/services/sacco-mfi/server.js
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/afrolife/private-files /var/log/afrolife
+
+[Install]
+WantedBy=multi-user.target

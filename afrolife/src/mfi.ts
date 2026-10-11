@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import express, { Router, Request, Response, RequestHandler } from 'express';
-import { PoolClient } from 'pg';
+import type { PoolClient } from 'pg';
 import { z } from 'zod';
-import { AuthUser, HttpError, isPlatformAdminRole, withUser } from './core.js';
+import type { AuthUser } from './auth-types.js';
+import { isPlatformAdminRole } from './auth-types.js';
+import { HttpError } from './http-error.js';
 import { centsToAmount, decimalToCents, mfiAmountSchema as amountSchema, normalizeAmount } from './mfi-money.js';
 import { Phone } from './validators.js';
 import { sniff } from './files.js';
@@ -11,7 +13,10 @@ import { toCsv } from './csv.js';
 import { creditPolicySchema, principalSchedule, scoreLoan } from './mfi-credit.js';
 import { cooldownRemainingDays, evaluateLoanEligibility, lendingProductTermsSchema, quoteLoan, type LendingProductTerms } from './lending-products.js';
 
-export const mfiRouter = Router();
+export type MfiWithUser = <T>(
+  user: AuthUser,
+  callback: (client: PoolClient) => Promise<T>,
+) => Promise<T>;
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { fn(req, res).catch(next); };
@@ -19,38 +24,40 @@ const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandle
 const institutionRoles = ['institution_admin', 'finance_manager', 'credit_manager', 'loan_officer', 'teller', 'compliance', 'auditor'] as const;
 type InstitutionRole = typeof institutionRoles[number];
 
-async function withInstitution<T>(
-  user: AuthUser,
-  institutionId: string,
-  allowedRoles: readonly InstitutionRole[],
-  fn: (client: PoolClient, role: InstitutionRole) => Promise<T>,
-): Promise<T> {
-  return withUser(user, async (client) => {
-    await client.query("SELECT set_config('app.mfi_institution_id', $1, true)", [institutionId]);
-    const institution = (await client.query(
-      'SELECT id FROM mfi_institutions WHERE id=$1',
-      [institutionId],
-    )).rows[0];
-    if (!institution) throw new HttpError(404, 'Institution not found');
-    const membership = (await client.query(
-      `SELECT role FROM mfi_institution_memberships
-       WHERE institution_id = $1 AND user_id = $2 AND active`,
-      [institutionId, user.id],
-    )).rows[0];
-    const platformAdmin = isPlatformAdminRole(user.role);
-    if (!membership && !platformAdmin) throw new HttpError(404, 'Institution not found');
-    if (!platformAdmin && !allowedRoles.includes(membership.role)) {
-      throw new HttpError(403, 'Your institution role cannot do this');
-    }
-    if (platformAdmin) {
-      await auditMfi(client, institutionId, user.id, 'mfi_platform_admin_access', 'mfi_institution', institutionId, null, {
-        method: 'institution_scoped_api_access',
-        path: '/mfi/institutions/:institutionId',
-        access: 'platform_super_admin_override',
-      });
-    }
-    return fn(client, platformAdmin ? 'institution_admin' : membership.role);
-  });
+function createInstitutionRunner(withUser: MfiWithUser) {
+  return async function withInstitution<T>(
+    user: AuthUser,
+    institutionId: string,
+    allowedRoles: readonly InstitutionRole[],
+    fn: (client: PoolClient, role: InstitutionRole) => Promise<T>,
+  ): Promise<T> {
+    return withUser(user, async (client) => {
+      await client.query("SELECT set_config('app.mfi_institution_id', $1, true)", [institutionId]);
+      const institution = (await client.query(
+        'SELECT id FROM mfi_institutions WHERE id=$1',
+        [institutionId],
+      )).rows[0];
+      if (!institution) throw new HttpError(404, 'Institution not found');
+      const membership = (await client.query(
+        `SELECT role FROM mfi_institution_memberships
+         WHERE institution_id = $1 AND user_id = $2 AND active`,
+        [institutionId, user.id],
+      )).rows[0];
+      const platformAdmin = isPlatformAdminRole(user.role);
+      if (!membership && !platformAdmin) throw new HttpError(404, 'Institution not found');
+      if (!platformAdmin && !allowedRoles.includes(membership.role)) {
+        throw new HttpError(403, 'Your institution role cannot do this');
+      }
+      if (platformAdmin) {
+        await auditMfi(client, institutionId, user.id, 'mfi_platform_admin_access', 'mfi_institution', institutionId, null, {
+          method: 'institution_scoped_api_access',
+          path: '/mfi/institutions/:institutionId',
+          access: 'platform_super_admin_override',
+        });
+      }
+      return fn(client, platformAdmin ? 'institution_admin' : membership.role);
+    });
+  };
 }
 
 const viewRoles: readonly InstitutionRole[] = institutionRoles;
@@ -253,6 +260,10 @@ async function postJournal(
   return { ...posted, replayed: false };
 }
 
+export function createMfiRouter(withUser: MfiWithUser): Router {
+  const mfiRouter = Router();
+  const withInstitution = createInstitutionRunner(withUser);
+
 mfiRouter.get('/institutions', h(async (req, res) => {
   const rows = await withUser(req.user!, async (client) => {
     const platformAdmin = isPlatformAdminRole(req.user!.role);
@@ -278,6 +289,212 @@ mfiRouter.get('/institutions', h(async (req, res) => {
     }));
   });
   res.json(rows);
+}));
+
+mfiRouter.get('/institutions/catalog', h(async (_req, res) => {
+  const rows = await withUser(_req.user!, async (client) => (await client.query(
+    `SELECT id, institution_code, name, currency
+     FROM mfi_institutions ORDER BY name`,
+  )).rows);
+  res.json(rows);
+}));
+
+mfiRouter.get('/member-portal', h(async (req, res) => {
+  const portal = await withUser(req.user!, async (client) => {
+    const [applications, members] = await Promise.all([
+      client.query(
+        `SELECT application.id, application.institution_id, institution.institution_code,
+                institution.name AS institution_name, application.status, application.review_reason,
+                application.created_at, application.reviewed_at
+         FROM mfi_member_applications application
+         JOIN mfi_institutions institution ON institution.id=application.institution_id
+         WHERE application.user_id=$1 ORDER BY application.created_at DESC`,
+        [req.user!.id],
+      ),
+      client.query(
+        `SELECT member.id, member.institution_id, institution.institution_code,
+                institution.name AS institution_name, member.member_number, member.full_name,
+                member.status, member.kyc_status, member.created_at
+         FROM mfi_members member
+         JOIN mfi_institutions institution ON institution.id=member.institution_id
+         WHERE member.user_id=$1 ORDER BY member.created_at DESC`,
+        [req.user!.id],
+      ),
+    ]);
+    const memberIds = members.rows.map((member) => member.id);
+    if (!memberIds.length) return { applications: applications.rows, memberships: [] };
+
+    const [accounts, loans] = await Promise.all([
+      client.query(
+        `SELECT account.id, account.institution_id, account.member_id, account.account_number,
+                account.account_type, account.status, account.created_at, product.name AS product_name,
+                COALESCE(sum(CASE WHEN account.account_type='loan' THEN line.debit-line.credit
+                                  ELSE line.credit-line.debit END)
+                  FILTER (WHERE journal.status='posted'),0)::numeric(16,2)::text AS balance
+         FROM mfi_member_accounts account
+         JOIN mfi_products product ON product.institution_id=account.institution_id
+           AND product.id=account.product_id
+         LEFT JOIN mfi_journal_lines line ON line.institution_id=account.institution_id
+           AND line.member_account_id=account.id
+         LEFT JOIN mfi_journals journal ON journal.institution_id=line.institution_id
+           AND journal.id=line.journal_id
+         WHERE account.member_id=ANY($1::uuid[])
+         GROUP BY account.id, product.id ORDER BY account.created_at DESC`,
+        [memberIds],
+      ),
+      client.query(
+        `SELECT loan.id, loan.institution_id, loan.member_id, loan.status,
+                loan.principal_amount::text, loan.principal_repaid::text,
+                (loan.principal_amount-loan.principal_repaid)::numeric(16,2)::text AS outstanding_principal,
+                loan.term_months, loan.created_at, loan.reviewed_at, loan.disbursed_at,
+                product.name AS product_name,
+                COALESCE(jsonb_agg(jsonb_build_object(
+                  'installment_no', installment.installment_no, 'due_on', installment.due_on,
+                  'principal_due', installment.principal_due::text,
+                  'principal_paid', installment.principal_paid::text, 'status', installment.status
+                ) ORDER BY installment.installment_no) FILTER (WHERE installment.id IS NOT NULL), '[]'::jsonb) AS schedule
+         FROM mfi_loans loan
+         JOIN mfi_products product ON product.institution_id=loan.institution_id
+           AND product.id=loan.product_id
+         LEFT JOIN mfi_loan_installments installment ON installment.institution_id=loan.institution_id
+           AND installment.loan_id=loan.id
+         WHERE loan.member_id=ANY($1::uuid[])
+         GROUP BY loan.id, product.id ORDER BY loan.created_at DESC`,
+        [memberIds],
+      ),
+    ]);
+    const transactions = await client.query(
+      `SELECT journal.id, journal.institution_id, journal.transaction_type, journal.amount::text,
+              journal.status, journal.created_at, journal.posted_at, journal.reversal_of,
+              journal.reversal_reason, account.account_number, account.account_type,
+              loan.id AS loan_id,
+              COALESCE(jsonb_agg(jsonb_build_object(
+                'account_code', gl.account_code, 'account_name', gl.name,
+                'debit', line.debit::text, 'credit', line.credit::text
+              ) ORDER BY gl.account_code) FILTER (WHERE line.id IS NOT NULL), '[]'::jsonb) AS lines
+       FROM mfi_journals journal
+       LEFT JOIN mfi_member_accounts account ON account.institution_id=journal.institution_id
+         AND account.id=journal.member_account_id
+       LEFT JOIN mfi_loans loan ON loan.institution_id=journal.institution_id AND loan.id=journal.loan_id
+       JOIN mfi_journal_lines line ON line.institution_id=journal.institution_id
+         AND line.journal_id=journal.id
+       JOIN mfi_gl_accounts gl ON gl.institution_id=line.institution_id AND gl.id=line.gl_account_id
+       WHERE journal.status='posted'
+         AND (account.member_id=ANY($1::uuid[]) OR loan.member_id=ANY($1::uuid[]))
+       GROUP BY journal.id, account.id, loan.id ORDER BY journal.posted_at DESC LIMIT 500`,
+      [memberIds],
+    );
+    return {
+      applications: applications.rows,
+      memberships: members.rows.map((member) => ({
+        ...member,
+        accounts: accounts.rows.filter((account) => account.member_id === member.id),
+        loans: loans.rows.filter((loan) => loan.member_id === member.id),
+        transactions: transactions.rows.filter((transaction) =>
+          transaction.institution_id === member.institution_id
+          && (accounts.rows.some((account) => account.member_id === member.id
+            && account.account_number === transaction.account_number)
+            || loans.rows.some((loan) => loan.member_id === member.id && loan.id === transaction.loan_id))),
+      })),
+    };
+  });
+  res.json(portal);
+}));
+
+mfiRouter.post('/institutions/:institutionId/member-applications', h(async (req, res) => {
+  z.object({ consent: z.literal(true) }).strict().parse(req.body);
+  if (req.user!.kyc_status !== 'verified') {
+    throw new HttpError(403, 'Verified identity is required before requesting SACCO membership');
+  }
+  if (!req.user!.legal_name || !req.user!.phone) {
+    throw new HttpError(409, 'Complete your account name and phone number before applying');
+  }
+  const application = await withUser(req.user!, async (client) => {
+    const institution = (await client.query(
+      'SELECT id FROM mfi_institutions WHERE id=$1',
+      [req.params.institutionId],
+    )).rows[0];
+    if (!institution) throw new HttpError(404, 'SACCO institution not found');
+    const linkedMember = (await client.query(
+      'SELECT id FROM mfi_members WHERE institution_id=$1 AND user_id=$2',
+      [req.params.institutionId, req.user!.id],
+    )).rows[0];
+    if (linkedMember) throw new HttpError(409, 'You already have a membership record with this institution');
+    const existing = (await client.query(
+      `SELECT id, status FROM mfi_member_applications
+       WHERE institution_id=$1 AND user_id=$2 AND status='pending'`,
+      [req.params.institutionId, req.user!.id],
+    )).rows[0];
+    if (existing) throw new HttpError(409, 'Your membership application is already awaiting review');
+    const row = (await client.query(
+      `INSERT INTO mfi_member_applications (institution_id, user_id, full_name, phone, email)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING id, institution_id, user_id, status, created_at`,
+      [req.params.institutionId, req.user!.id, req.user!.legal_name, req.user!.phone, req.user!.email ?? null],
+    )).rows[0];
+    await auditMfi(client, req.params.institutionId, req.user!.id, 'mfi_member_application_submitted',
+      'mfi_member_application', row.id, null, { status: row.status });
+    return row;
+  });
+  res.status(201).json(application);
+}));
+
+mfiRouter.get('/institutions/:institutionId/member-applications', h(async (req, res) => {
+  const applications = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin', 'compliance'], async (client) => (await client.query(
+      `SELECT application.id, application.full_name, application.phone, application.email,
+              application.status, application.created_at
+       FROM mfi_member_applications application
+       WHERE application.institution_id=$1 AND application.status='pending'
+         AND application.user_id<>$2
+       ORDER BY application.created_at`,
+      [req.params.institutionId, req.user!.id],
+    )).rows);
+  res.json(applications);
+}));
+
+mfiRouter.post('/institutions/:institutionId/member-applications/:applicationId/decision', h(async (req, res) => {
+  const body = z.object({
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
+  const result = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin', 'compliance'], async (client) => {
+      const application = (await client.query(
+        `SELECT * FROM mfi_member_applications
+         WHERE institution_id=$1 AND id=$2 FOR UPDATE`,
+        [req.params.institutionId, req.params.applicationId],
+      )).rows[0];
+      if (!application) throw new HttpError(404, 'SACCO membership application not found');
+      if (application.status !== 'pending') throw new HttpError(409, 'SACCO membership application has already been reviewed');
+      if (application.user_id === req.user!.id) throw new HttpError(409, 'Applicants cannot review their own membership request');
+      const status = body.decision === 'approve' ? 'approved' : 'rejected';
+      if (status === 'approved') {
+        const memberNumber = 'M-' + (await client.query(
+          "SELECT lpad(nextval('mfi_member_seq')::text, 8, '0') AS value",
+        )).rows[0].value;
+        await client.query(
+          `INSERT INTO mfi_members
+             (institution_id, member_number, full_name, phone, email, status,
+              created_by, reviewed_by, reviewed_at, review_reason, user_id)
+           VALUES ($1,$2,$3,$4,$5,'active',$6,$7,now(),$8,$6)`,
+          [req.params.institutionId, memberNumber, application.full_name, application.phone,
+            application.email, application.user_id, req.user!.id, body.reason],
+        );
+      }
+      const updated = (await client.query(
+        `UPDATE mfi_member_applications
+         SET status=$3, reviewed_by=$4, reviewed_at=now(), review_reason=$5
+         WHERE institution_id=$1 AND id=$2
+         RETURNING id, user_id, status, reviewed_by, reviewed_at, review_reason`,
+        [req.params.institutionId, application.id, status, req.user!.id, body.reason],
+      )).rows[0];
+      await auditMfi(client, req.params.institutionId, req.user!.id,
+        `mfi_member_application_${body.decision}d`, 'mfi_member_application', application.id,
+        { status: application.status }, { status, reason: body.reason });
+      return updated;
+    });
+  res.json(result);
 }));
 
 mfiRouter.post('/institutions', h(async (req, res) => {
@@ -2188,3 +2405,6 @@ mfiRouter.post('/institutions/:institutionId/risk-flags/:flagId/decision', h(asy
     });
   res.json(flag);
 }));
+
+  return mfiRouter;
+}

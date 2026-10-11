@@ -506,7 +506,7 @@ const ListingIn = z.object({
 supply.get('/marketplace/listings', h(async (req, res) => {
   const rows = await withUser(req.user!, async (c) => (await c.query(
     `SELECT l.id,l.seller_user_id,u.legal_name AS seller_name,l.source_agent_id,l.created_by,l.domain,l.category_key,
-            l.title,l.description,l.transaction_mode,l.price,l.rent_period,l.condition,l.territory_id,l.status,l.review_note,l.created_at,
+            l.title,l.description,l.transaction_mode,l.price,l.rent_period,l.condition,l.territory_id,l.status,l.review_note,l.created_at,l.updated_at,
             COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'mime',m.mime,'size_bytes',m.size_bytes,'caption',m.caption,'created_at',m.created_at) ORDER BY m.created_at)
                       FROM marketplace_media m WHERE m.listing_id=l.id),'[]'::jsonb) AS media
      FROM marketplace_listings l JOIN users u ON u.id=l.seller_user_id

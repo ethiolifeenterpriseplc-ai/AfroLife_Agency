@@ -88,10 +88,12 @@ edirFinanceRouter.get('/me', h(async (req, res) => {
       [membership.id],
     )).rows;
     const transactions = (await client.query(
-      `SELECT t.id, t.direction, t.amount::text, t.status, t.created_at, t.reviewed_at, t.review_reason,
+      `SELECT t.id, t.member_account_id, p.name AS product_name, p.product_type,
+              t.direction, t.amount::text, t.status, t.created_at, t.reviewed_at, t.review_reason,
               t.reverses_transaction_id, t.reversal_reason, j.id AS journal_id
        FROM edir_financial_transactions t
        JOIN edir_member_accounts ma ON ma.id=t.member_account_id
+       JOIN edir_financial_products p ON p.id=ma.product_id
        LEFT JOIN edir_financial_journals j ON j.transaction_id=t.id
        WHERE ma.member_id=$1 ORDER BY t.created_at DESC LIMIT 100`,
       [membership.id],

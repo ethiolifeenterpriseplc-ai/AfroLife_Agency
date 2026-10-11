@@ -167,7 +167,11 @@ before configuring public ingress.
 
 Install `deploy/linux/nginx-afrolife-production.conf` as
 `/etc/nginx/sites-available/afrolife`, enable it, remove/disable the default
-site, run `nginx -t`, and reload Nginx. Verify DNS resolves to the VM and that
+site, install `deploy/linux/afrolife-proxy-headers.conf` at
+`/etc/nginx/snippets/afrolife-proxy-headers.conf`, run `nginx -t`, and reload
+Nginx. The Edir, Insurance, and MFI path groups all forward to the authenticated
+Super App API gateway; Nginx must never target the private service ports.
+Verify DNS resolves to the VM and that
 the OCI security list and UFW permit ports 80 and 443. Then request a
 Let's Encrypt certificate:
 

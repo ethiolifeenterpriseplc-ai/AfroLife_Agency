@@ -93,15 +93,42 @@ Clone a reviewed commit (not an uncommitted development worktree) into
 `afrolife.service` as `/etc/systemd/system/afrolife.service`, enable the
 service, and install
 `nginx-afrolife-production.conf` as `/etc/nginx/sites-available/afrolife`.
-Enable the Nginx site, disable the default site, validate with `nginx -t`, and
-reload Nginx. The service unit binds Node to loopback; Nginx listens on the VM
-network interfaces.
+Install `afrolife-proxy-headers.conf` at
+`/etc/nginx/snippets/afrolife-proxy-headers.conf`, enable the Nginx site,
+disable the default site, validate with `nginx -t`, and reload Nginx. The
+service unit binds Node to loopback; Nginx listens on the VM network interfaces.
 
 From the Windows host, browse to `http://<VM_NAT_IPV4>/`. The NAT guest address
 is not routed to other LAN clients by this setup. For LAN use, first select
 and secure an appropriate LAN deployment model; do not switch to bridged
 networking or open host firewall ports without explicitly reviewing that
 exposure.
+
+For a release that enables the financial service backends, install their
+systemd units alongside the main API:
+`afrolife-edir.service`, `afrolife-insurance.service`, and
+`afrolife-mfi.service`. Keep each environment file under `/etc/afrolife/`
+owned by `root:afrolife` with mode `0640`. Edir remains on its existing
+service/database boundary. MFI's initial process split must use the same
+restricted database URL and private-file directory as the existing API; this
+preserves the current ledger and uploaded documents without claiming database
+isolation.
+
+Insurance has a separate service and database path, but do not enable its
+gateway or set `INSURANCE_SERVICE_CUTOVER_READY=1` until the Insurance schema
+migration, ledger reconciliation, and rollback review are complete. For this
+HTTP-only synthetic-data pilot, leave `INSURANCE_SERVICE_URL` and the readiness
+flag unset and run the local non-production configuration; production mode
+intentionally refuses to start without the approved Insurance service
+cutover. After cutover approval, configure the main API's
+`INSURANCE_SERVICE_URL` and matching gateway secret, and configure the
+Insurance service's separate database environment.
+
+Nginx remains the only public ingress and forwards all paths to the central
+API gateway. The gateway authenticates users and dispatches signed requests to
+the loopback-only service processes; never proxy public paths directly to
+financial service ports. Verify `/healthz` on the main API and each enabled
+service on loopback before exercising the same-origin browser routes.
 
 Use only dummy data over HTTP. Public-domain production deployment requires a
 separately provisioned public host, TLS, DNS pointing at that host, external

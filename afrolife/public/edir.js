@@ -482,6 +482,21 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
     const section = node('section', undefined, 'panel form-card');
     section.id = 'edir-finance';
     section.append(node('h2', 'Edir savings, shares, and contributions'));
+    const memberSummary = node('div', undefined, 'enterprise-metrics');
+    const personalSavings = finance.accounts
+      .filter((account) => account.status === 'active' && ['savings', 'share', 'contribution'].includes(account.product_type))
+      .reduce((total, account) => total + Number(account.balance ?? 0), 0);
+    for (const [label, value] of [
+      ['Edir membership', me.membership?.status ?? 'Not linked'],
+      ['Linked financial accounts', finance.accounts.length],
+      ['Active member balances', `ETB ${personalSavings.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['Recorded financial activity', finance.transactions.length],
+    ]) {
+      const metric = node('div', undefined, 'enterprise-metric');
+      metric.append(node('span', label), node('strong', value));
+      memberSummary.append(metric);
+    }
+    section.append(memberSummary, node('p', 'Edir accounts are not a digital wallet. This view is read-only for your balances and activity; payment and transfer rails are not connected.'));
     section.append(node('p', 'Financial products require independent approval before opening. Deposits and withdrawals post only after a second authorized person approves them. Amounts use ETB; lending and benefit payouts will be introduced as separately controlled stages.'));
 
     const productsList = node('div', undefined, 'list');
@@ -542,6 +557,21 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
       accountsList.append(item);
     }
     section.append(accountsList);
+
+    const memberActivity = node('div', undefined, 'list');
+    memberActivity.append(node('h3', 'Your detailed Edir transaction activity'));
+    if (!finance.transactions.length) memberActivity.append(node('p', 'No Edir transaction activity is linked to your membership.'));
+    for (const transaction of finance.transactions) {
+      const item = card(
+        `${transaction.direction.replaceAll('_', ' ')} · ETB ${transaction.amount}`,
+        `${transaction.product_name} · ${transaction.product_type} · ${new Date(transaction.created_at).toLocaleString(document.documentElement.lang)} · ${transaction.status} · Reference ${transaction.id}${transaction.reviewed_at ? ` · Reviewed ${new Date(transaction.reviewed_at).toLocaleString(document.documentElement.lang)}` : ''}${transaction.journal_id ? ` · Journal ${transaction.journal_id}` : ''}`,
+        transaction.status,
+      );
+      if (transaction.review_reason) item.append(node('p', `Review note: ${transaction.review_reason}`));
+      if (transaction.reverses_transaction_id) item.append(node('p', `Reversal of transaction ${transaction.reverses_transaction_id}${transaction.reversal_reason ? ` · ${transaction.reversal_reason}` : ''}`));
+      memberActivity.append(item);
+    }
+    section.append(memberActivity);
 
     if (canManageFinance()) {
       const productForm = node('form', undefined, 'inline-form');

@@ -240,7 +240,7 @@ function renderSubmodulePanel(module, state, root) {
 
 export function createMfiWorkspace(api, user) {
   const root = $('div', undefined, 'mfi-workspace');
-  const state = { institutions: [], institutionId: '', membership: null, overview: null, members: [], documents: [], accounts: [], products: [], loans: [], staff: [], audit: [], transactions: [], creditPolicy: null, collections: [], nplEvents: [], writeoffs: [], module: 'overview', moduleSearch: '', error: '', busy: false };
+  const state = { institutions: [], catalog: [], memberPortal: { applications: [], memberships: [] }, pendingApplications: [], institutionId: '', membership: null, overview: null, members: [], documents: [], accounts: [], products: [], loans: [], staff: [], audit: [], transactions: [], creditPolicy: null, collections: [], nplEvents: [], writeoffs: [], module: 'overview', moduleSearch: '', error: '', busy: false };
   const savedInstitution = localStorage.getItem('afrolife.mfi-institution');
 
   function hasRole(...roles) {
@@ -273,6 +273,135 @@ export function createMfiWorkspace(api, user) {
     } else {
       root.append($('p', 'No SACCO/MFI institution has been assigned to your account. Ask a Super Admin to create one and provision your institution role.', 'empty-state'));
     }
+  }
+
+  function renderMemberPortal() {
+    const area = section('Your SACCO memberships', 'Read-only access to linked memberships, account balances, active loan schedules, and posted transactions. This is not a wallet and does not support payments or transfers.');
+    const applications = state.memberPortal.applications ?? [];
+    const memberships = state.memberPortal.memberships ?? [];
+    const summary = $('div', undefined, 'mfi-metrics');
+    const accounts = memberships.flatMap((member) => member.accounts ?? []);
+    const loans = memberships.flatMap((member) => member.loans ?? []);
+    const savingsAndShares = accounts.filter((account) => account.status === 'active' && account.account_type !== 'loan')
+      .reduce((total, account) => total + Number(account.balance ?? 0), 0);
+    const loanOutstanding = loans
+      .filter((loan) => loan.status === 'disbursed')
+      .reduce((total, loan) => total + Number(loan.outstanding_principal ?? 0), 0);
+    for (const [label, value] of [
+      ['Linked memberships', memberships.length],
+      ['Active member savings and shares', money(savingsAndShares)],
+      ['Current loan principal outstanding', money(loanOutstanding)],
+    ]) {
+      const metric = $('div', undefined, 'mfi-metric panel');
+      metric.append($('span', label), $('strong', value));
+      summary.append(metric);
+    }
+    area.append(summary);
+
+    const membershipList = $('div', undefined, 'mfi-record-list');
+    membershipList.append($('h3', 'Membership and account details'));
+    for (const member of memberships) {
+      const item = $('article', undefined, 'panel mfi-record');
+      item.append($('h3', `${member.institution_name} · ${member.member_number}`),
+        $('p', `${member.full_name} · Membership ${member.status} · KYC ${member.kyc_status}`));
+      for (const account of member.accounts ?? []) {
+        item.append($('p', `${account.product_name} · ${account.account_type.replaceAll('_', ' ')} · ${money(account.balance)} · ${account.status}`));
+      }
+      for (const loan of member.loans ?? []) {
+        const loanCard = $('section', undefined, 'mfi-record');
+        const loanBalance = loan.status === 'disbursed'
+          ? `${money(loan.outstanding_principal)} principal outstanding`
+          : 'No outstanding balance recorded before disbursement';
+        loanCard.append($('h4', `${loan.product_name} · ${loanBalance}`),
+          $('p', `${loan.status} · Original principal ${money(loan.principal_amount)} · ${loan.term_months} months`));
+        if (loan.schedule?.length) {
+          const schedule = $('details', undefined, 'mfi-schedule');
+          schedule.append($('summary', 'Detailed loan repayment schedule'));
+          for (const installment of loan.schedule) {
+            schedule.append($('p', `#${installment.installment_no} · Due ${new Date(`${installment.due_on}T00:00:00`).toLocaleDateString(document.documentElement.lang)} · ${money(installment.principal_paid)} paid of ${money(installment.principal_due)} · ${installment.status}`));
+          }
+          loanCard.append(schedule);
+        }
+        item.append(loanCard);
+      }
+      membershipList.append(item);
+    }
+    if (!memberships.length) membershipList.append($('p', 'No SACCO membership is linked to your account yet.', 'empty-state'));
+    area.append(membershipList);
+
+    const transactionList = $('div', undefined, 'mfi-record-list');
+    transactionList.append($('h3', 'Detailed transaction activity'));
+    for (const member of memberships) {
+      for (const transaction of member.transactions ?? []) {
+        const item = $('article', undefined, 'panel mfi-record');
+        item.append($('h4', `${member.institution_name} · ${transaction.transaction_type.replaceAll('_', ' ')}`),
+          $('p', `${new Date(transaction.posted_at ?? transaction.created_at).toLocaleString(document.documentElement.lang)} · ${money(transaction.amount)} · ${transaction.status} · ${transaction.account_number ?? 'Loan account'}`));
+        for (const line of transaction.lines ?? []) {
+          item.append($('p', `${line.account_code} ${line.account_name} · Debit ${money(line.debit)} · Credit ${money(line.credit)}`));
+        }
+        if (transaction.reversal_of) item.append($('p', `Reversal of transaction ${transaction.reversal_of}${transaction.reversal_reason ? ` · ${transaction.reversal_reason}` : ''}`));
+        transactionList.append(item);
+      }
+    }
+    if (!memberships.some((member) => member.transactions?.length)) transactionList.append($('p', 'No posted transaction history is linked to your membership accounts.', 'empty-state'));
+    area.append(transactionList);
+
+    const applicationsList = $('div', undefined, 'mfi-record-list');
+    applicationsList.append($('h3', 'Membership applications'));
+    for (const application of applications) {
+      const item = $('article', undefined, 'panel mfi-record');
+      item.append($('h4', `${application.institution_name} · ${application.institution_code}`),
+        $('p', `Submitted ${new Date(application.created_at).toLocaleString(document.documentElement.lang)}${application.reviewed_at ? ` · Reviewed ${new Date(application.reviewed_at).toLocaleString(document.documentElement.lang)}` : ''}`),
+        $('span', application.status, `mfi-status status-${application.status}`));
+      if (application.review_reason) item.append($('p', `Review note: ${application.review_reason}`));
+      applicationsList.append(item);
+    }
+    area.append(applicationsList);
+
+    const eligibleInstitutions = state.catalog.filter((institution) =>
+      !memberships.some((member) => member.institution_id === institution.id)
+      && !state.institutions.some((assigned) => assigned.id === institution.id)
+      && !applications.some((application) => application.institution_id === institution.id && application.status === 'pending'));
+    if (eligibleInstitutions.length) {
+      const declaration = $('label', 'I understand this is a membership request subject to the institution’s independent review; submitting does not create an account or enable financial activity.');
+      const confirmation = $('input');
+      confirmation.type = 'checkbox';
+      confirmation.name = 'consent';
+      confirmation.value = 'true';
+      confirmation.required = true;
+      declaration.append(confirmation);
+      const institution = select('SACCO / MFI institution', 'institution_id', eligibleInstitutions.map((item) => ({
+        value: item.id, label: `${item.institution_code} · ${item.name}`,
+      })));
+      const apply = form('mfi-member-application-form', $('h3', 'Request membership'), institution.label, declaration, submitButton('Submit membership request'));
+      apply.dataset.mfiForm = 'member-application';
+      area.append(apply);
+      if (user.kyc_status !== 'verified') {
+        apply.querySelector('button[type="submit"]').disabled = true;
+        area.append($('p', 'Complete identity verification before submitting a membership request.', 'mfi-notice'));
+      }
+    } else if (!state.catalog.length) {
+      area.append($('p', 'No SACCO / MFI institutions are available for membership requests.', 'empty-state'));
+    }
+
+    if (state.pendingApplications.length) {
+      const review = $('div', undefined, 'mfi-record-list');
+      review.append($('h3', 'Membership requests awaiting review'));
+      for (const application of state.pendingApplications) {
+        const item = $('article', undefined, 'panel mfi-record');
+        item.append($('h4', application.full_name), $('p', `${application.phone} · ${application.email ?? 'No email'} · ${new Date(application.created_at).toLocaleString(document.documentElement.lang)}`));
+        for (const [label, decision] of [['Approve', 'approve'], ['Reject', 'reject']]) {
+          const action = $('button', label, 'button button-outline');
+          action.type = 'button';
+          action.dataset.mfiApplicationDecision = decision;
+          action.dataset.applicationId = application.id;
+          item.append(action);
+        }
+        review.append(item);
+      }
+      area.append(review);
+    }
+    root.append(area);
   }
 
   function renderOverview() {
@@ -819,6 +948,7 @@ export function createMfiWorkspace(api, user) {
     const header = section('SACCO / MFI operations', 'Member services and principal-only financial operations, kept separate from EthioLife Agency records.');
     root.append(header);
     if (state.error) root.append($('p', state.error, 'alert error'));
+    renderMemberPortal();
     if (!state.institutions.length) {
       renderNoInstitution();
       return;
@@ -899,7 +1029,11 @@ export function createMfiWorkspace(api, user) {
     state.error = '';
     state.overview = null;
     try {
-      state.institutions = await api('/mfi/institutions');
+      [state.institutions, state.catalog, state.memberPortal] = await Promise.all([
+        api('/mfi/institutions'),
+        api('/mfi/institutions/catalog'),
+        api('/mfi/member-portal'),
+      ]);
       if (!state.institutions.some((item) => item.id === state.institutionId)) {
         state.institutionId = state.institutions.some((item) => item.id === savedInstitution)
           ? savedInstitution
@@ -919,7 +1053,8 @@ export function createMfiWorkspace(api, user) {
       const canReadCollections = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','loan_officer','compliance','auditor'].includes(membership?.role);
       const canReadNpl = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','compliance','auditor'].includes(membership?.role);
       const canReviewDocs = isPlatformAdmin(user.role) || ['institution_admin','compliance','auditor'].includes(membership?.role);
-      const [overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs] = await Promise.all([
+      const canReviewApplications = isPlatformAdmin(user.role) || ['institution_admin','compliance'].includes(membership?.role);
+      const [overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs, pendingApplications] = await Promise.all([
         api(`/mfi/institutions/${id}/overview`),
         api(`/mfi/institutions/${id}/members`),
         api(`/mfi/institutions/${id}/products`),
@@ -933,8 +1068,9 @@ export function createMfiWorkspace(api, user) {
         canReadNpl ? api(`/mfi/institutions/${id}/npl-events`) : Promise.resolve([]),
         canReviewDocs ? api(`/mfi/institutions/${id}/documents?status=uploaded`) : Promise.resolve([]),
         canReadNpl ? api(`/mfi/institutions/${id}/writeoffs`) : Promise.resolve([]),
+        canReviewApplications ? api(`/mfi/institutions/${id}/member-applications`) : Promise.resolve([]),
       ]);
-      Object.assign(state, { overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs });
+      Object.assign(state, { overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs, pendingApplications });
     } catch (error) {
       state.error = error.message;
     }
@@ -955,6 +1091,10 @@ export function createMfiWorkspace(api, user) {
       if (target.dataset.mfiForm === 'create-institution') {
         path = '/mfi/institutions';
         values.institution_code = values.institution_code.trim().toUpperCase();
+      } else if (target.dataset.mfiForm === 'member-application') {
+        path = `/mfi/institutions/${encodeURIComponent(values.institution_id)}/member-applications`;
+        delete values.institution_id;
+        values.consent = values.consent === 'true';
       } else if (target.dataset.mfiForm === 'provision-staff') {
         path = `/mfi/institutions/${id}/staff`;
       } else if (target.dataset.mfiForm === 'create-member') {
@@ -1065,6 +1205,21 @@ export function createMfiWorkspace(api, user) {
     }
   });
   root.addEventListener('click', (event) => {
+    const applicationDecision = event.target.closest('[data-mfi-application-decision]');
+    if (applicationDecision) {
+      const reason = window.prompt('Enter a review reason (at least 10 characters).');
+      if (!reason || reason.trim().length < 10) return;
+      applicationDecision.disabled = true;
+      const decision = applicationDecision.dataset.mfiApplicationDecision;
+      api(`/mfi/institutions/${encodeURIComponent(state.institutionId)}/member-applications/${encodeURIComponent(applicationDecision.dataset.applicationId)}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({ decision, reason: reason.trim() }),
+      }).then(() => load()).catch((error) => {
+        state.error = error.message;
+        render();
+      });
+      return;
+    }
     const focusButton = event.target.closest('[data-mfi-focus-target]');
     if (focusButton) {
       const target = root.querySelector(`#${CSS.escape(focusButton.dataset.mfiFocusTarget)}`);
