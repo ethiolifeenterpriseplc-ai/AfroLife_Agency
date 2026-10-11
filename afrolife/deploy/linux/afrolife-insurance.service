@@ -1,5 +1,5 @@
 [Unit]
-Description=AfroLife Insurance Ledger Service
+Description=AfroLife Insurance Service
 After=network.target postgresql.service
 Wants=postgresql.service
 

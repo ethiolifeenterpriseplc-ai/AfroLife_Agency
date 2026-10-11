@@ -76,6 +76,27 @@ which authenticates sessions, signs service requests, and dispatches to private
 service URLs. This avoids duplicating identity policy in Kong/Nginx and blocks
 direct access to service ports.
 
+```mermaid
+flowchart LR
+  User[Browser or PWA] --> Edge[Nginx public ingress]
+  Edge --> Shell[Super App API and shared sign-in]
+  Shell --> Agency[Marketplace, property, workforce and agency API]
+  Shell -->|signed request| Insurance[Insurance service]
+  Shell -->|signed request| MFI[SACCO and MFI service]
+  Shell -->|signed request| Edir[Edir service]
+  Agency --> CoreDB[(AfroLife database)]
+  MFI --> CoreDB
+  Insurance --> LedgerDB[(Insurance ledger database)]
+  Insurance --> CoreDB
+  Edir --> EdirDB[(Edir database)]
+```
+
+The shared frontend continues to use one browser origin and one session.
+Insurance and MFI run separately from Marketplace and workforce at the API
+process level. MFI data and Insurance request-intake records still depend on
+the central database during migration; Insurance ledger and Edir records have
+separate databases.
+
 Do not add Kong alongside the current Nginx-to-central-gateway chain by
 default: that duplicates the ingress/gateway role without improving this
 single-host deployment. Revisit Kong or another service mesh when deployment
