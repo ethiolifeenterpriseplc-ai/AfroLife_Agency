@@ -94,6 +94,8 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
   let financialAccounts = [];
   let financialTransactions = [];
   let credit = { membership: null, applications: [] };
+  let memberDocuments = [];
+  let pendingLoanDocuments = [];
   let creditPolicies = [];
   let creditApplications = [];
   let memberLoans = [];
@@ -153,6 +155,8 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         api('/edir/credit/me'),
         api('/edir/credit/policies'),
       ]);
+      memberDocuments=await api('/edir/credit/documents/me');
+      pendingLoanDocuments=canReadCredit()?await api('/edir/credit/documents/pending-review'):[];
       creditApplications = canReadCredit() ? await api('/edir/credit/applications') : [];
       memberLoans = await api('/edir/credit/loans/me');
       servicingLoans = canReadCredit() ? await api('/edir/credit/loans') : [];
@@ -672,9 +676,28 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
     }
 
     if (credit.membership?.status === 'active') {
+      const documents=node('div',undefined,'list');
+      documents.append(node('h3',`Identity and loan documents Â· KYC ${credit.membership.kyc_status ?? 'pending'}`));
+      const upload=node('form',undefined,'inline-form'); upload.dataset.edirForm='loan-document-upload';
+      const typeLabel=node('label','Document type'); const typeSelect=document.createElement('select'); typeSelect.name='document_type';
+      for(const [value,label] of [['national_id','National ID'],['business_plan','Business plan'],['income_proof','Income proof'],['collateral','Collateral evidence']])
+        typeSelect.append(new Option(label,value));
+      typeLabel.append(typeSelect);
+      const fileLabel=node('label','Upload PDF/JPEG/PNG (max 10 MB)'); const file=document.createElement('input');
+      file.type='file';file.name='file';file.accept='.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';file.required=true;fileLabel.append(file);
+      upload.append(typeLabel,fileLabel,submitButton('Upload document')); documents.append(upload);
+      if(!memberDocuments.length)documents.append(node('p','No identity or loan documents uploaded yet.'));
+      for(const doc of memberDocuments)documents.append(card(doc.document_type,`${doc.status} Â· ${doc.mime} Â· ${doc.size_bytes} bytes${doc.review_reason ? ` Â· ${doc.review_reason}` : ''}`,doc.status));
+      section.append(documents);
       const form = node('form', undefined, 'inline-form');
       form.dataset.edirForm = 'credit-application';
       form.append(node('h3', 'Request a loan assessment'));
+      if (credit.membership.kyc_status !== 'verified') {
+        form.append(node('p', 'Loan requests are unavailable until an independent reviewer verifies your national ID and KYC documents.'));
+        form.append(submitButton('KYC verification required'));
+        form.querySelector('button[type="submit"]').disabled = true;
+        section.append(form);
+      } else {
       form.append(node('p', activePolicy
         ? 'Provide accurate monthly amounts. Your request will be assessed against the active policy and verified by staff before independent review.'
         : 'You may submit a request, but it will remain on hold until this Edir independently approves a credit policy.'));
@@ -695,6 +718,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
       form.append(textInput('Purpose', 'purpose'));
       form.append(submitButton('Submit loan request'));
       section.append(form);
+      }
     } else {
       section.append(node('p', 'Active Edir membership is required to request a loan assessment.'));
     }
@@ -735,6 +759,32 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
     section.append(memberRequests);
 
     if (canReadCredit()) {
+      const kycQueue=node('div',undefined,'list'); kycQueue.append(node('h3','Member KYC review queue'));
+      const pendingKyc=members.filter((member)=>member.status==='active'&&['pending','rejected'].includes(member.kyc_status));
+      if(!pendingKyc.length)kycQueue.append(node('p','No active memberships are awaiting KYC review.'));
+      for(const member of pendingKyc){
+        const item=card(member.full_name,`${member.member_number} Â· KYC ${member.kyc_status}`,'pending');
+        if(['edir_admin','compliance'].some((role)=>me.staff_roles.includes(role))
+          && member.user_id!==user.id && member.created_by!==user.id && member.kyc_reviewed_by!==user.id){
+          item.append(actionButton('Verify KYC','member-kyc-review',member.id,'verified'));
+          item.append(actionButton('Reject KYC','member-kyc-review',member.id,'rejected'));
+        }
+        kycQueue.append(item);
+      }
+      section.append(kycQueue);
+      const documentQueue=node('div',undefined,'list');
+      documentQueue.append(node('h3','Loan document review queue'));
+      if(!pendingLoanDocuments.length)documentQueue.append(node('p','No loan documents are awaiting review.'));
+      for(const document of pendingLoanDocuments){
+        const item=card(`${document.member_name} Â· ${document.member_number}`,`${document.document_type} Â· ${document.mime} Â· ${document.size_bytes} bytes`,'uploaded');
+        if(['edir_admin','compliance','credit_manager'].some((role)=>me.staff_roles.includes(role))){
+          const verify=actionButton('Verify document','loan-document-review',document.id,'verified');verify.dataset.memberId=document.member_id;
+          const reject=actionButton('Reject document','loan-document-review',document.id,'rejected');reject.dataset.memberId=document.member_id;
+          item.append(verify,reject);
+        }
+        documentQueue.append(item);
+      }
+      section.append(documentQueue);
       const reviewList = node('div', undefined, 'list');
       reviewList.append(node('h3', 'Edir credit applications'));
       if (!creditApplications.length) reviewList.append(node('p', 'No Edir credit applications are awaiting review.'));
@@ -798,6 +848,14 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
           form.querySelector('input[name="amount"]').max = loan.principal_amount;
           form.querySelector('input[name="amount"]').step = '0.01';
           form.append(submitButton('Request savings-account disbursement'));
+          item.append(form);
+        }
+        if (canManageLoanServicing() && loan.status === 'disbursed') {
+          const form = node('form', undefined, 'inline-form');
+          form.dataset.edirForm = 'loan-writeoff';
+          form.dataset.loanId = loan.id;
+          form.append(textInput('Write-off reason (10–1000 characters)', 'reason', '', 'text'));
+          form.append(submitButton('Propose full-principal write-off'));
           item.append(form);
         }
         for (const operation of loan.operations) {
@@ -962,6 +1020,14 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         notice = operationType === 'disbursement'
           ? 'Loan disbursement request submitted for independent approval.'
           : 'Savings-funded principal repayment submitted for independent approval.';
+      } else if (form.dataset.edirForm === 'loan-writeoff') {
+        const idempotency = storedIdempotencyKey(user.id, 'loan-writeoff', form.dataset.loanId, values.reason);
+        await api(`/edir/credit/loans/${form.dataset.loanId}/writeoffs`, {
+          method: 'POST',
+          body: JSON.stringify({ reason: values.reason, idempotency_key: idempotency.id }),
+        });
+        sessionStorage.removeItem(idempotency.storageKey);
+        notice = 'Full-principal write-off proposal submitted for independent approval.';
       } else if (form.dataset.edirForm === 'organization') {
         const payload = { ...values };
         for (const key of ['registration_reference','governance_reference']) if (!payload[key]) delete payload[key];
@@ -1023,6 +1089,11 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
           }),
         });
         notice = 'Edir credit policy submitted for independent approval.';
+      } else if (form.dataset.edirForm === 'loan-document-upload') {
+        await api(`/edir/credit/documents/${encodeURIComponent(values.document_type)}`,{
+          method:'POST',body:values.file,
+        });
+        notice='Loan document uploaded for independent review.';
       } else if (form.dataset.edirForm === 'credit-application') {
         const idempotency = storedIdempotencyKey(user.id, 'credit-application', 'edir', JSON.stringify(values));
         await api('/edir/credit/applications', {
@@ -1241,6 +1312,16 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         notice = action.dataset.decision === 'approve'
           ? 'Credit offer approved. The member may accept it and select an active savings account.'
           : 'Credit application rejected.';
+      } else if (actionType === 'loan-document-review') {
+        await api(`/edir/credit/members/${action.dataset.memberId}/documents/${action.dataset.id}/review`,{
+          method:'POST',body:JSON.stringify({decision:action.dataset.decision,reason:reason.trim()}),
+        });
+        notice=`Loan document ${action.dataset.decision}.`;
+      } else if (actionType === 'member-kyc-review') {
+        await api(`/edir/credit/members/${action.dataset.id}/kyc-review`,{
+          method:'POST',body:JSON.stringify({decision:action.dataset.decision,reason:reason.trim()}),
+        });
+        notice=`Member KYC ${action.dataset.decision}.`;
       } else if (actionType === 'loan-operation-decision') {
         await api(`/edir/credit/operations/${action.dataset.id}/decision`, {
           method: 'POST',

@@ -101,11 +101,11 @@ const institutionRoles = [...Object.keys(institutionRoleProfiles), 'super_admin'
 const mfiModules = [
   { id: 'overview', label: 'Overview', group: 'Workspace', status: 'pilot', roles: institutionRoles, summary: 'Institution balances, member activity, lending position, cash on hand, and posted event count.', requirements: ['Institution-scoped operational summary'] },
   { id: 'institution', label: 'Institution & governance', group: 'Workspace', status: 'partial', roles: ['institution_admin'], summary: 'Institution onboarding, legal identity, branches, governance, approval matrix, and cooperative voting.', requirements: ['Legal identity and registration validation', 'Branch and vault/till management', 'Governance resolutions and voting', 'Approval matrix configuration'] },
-  { id: 'members', label: 'Members & KYC', group: 'Customer operations', status: 'partial', roles: ['institution_admin', 'loan_officer', 'compliance', 'finance_manager', 'credit_manager', 'teller', 'auditor'], summary: 'Member registration and review, with controlled suspension, reactivation, and closure checks.', requirements: ['Identity documents and KYC case workflow', 'Watchlist screening and risk rating', 'Dormancy automation, exit, and deceased settlement', 'Member groups and customer profile'] },
+  { id: 'members', label: 'Members & KYC', group: 'Customer operations', status: 'partial', roles: ['institution_admin', 'loan_officer', 'compliance', 'finance_manager', 'credit_manager', 'teller', 'auditor'], summary: 'Member registration, independent identity-document and KYC review, with controlled suspension, reactivation, and closure checks.', requirements: ['Watchlist screening and risk rating', 'National-ID provider and biometric verification', 'Dormancy automation, exit, and deceased settlement', 'Member groups and customer profile'] },
   { id: 'products', label: 'Products & configuration', group: 'Administration', status: 'partial', roles: ['institution_admin'], summary: 'View starter products used by current pilot workflows. Product setup, versioning, pricing, approvals, and accounting mappings are not yet live.', requirements: ['Versioned savings, share, credit, and IFB products', 'Rates, fees, limits, and effective dates', 'Maker-checker publication and retirement', 'Product-to-GL posting rules'] },
   { id: 'savings', label: 'Savings & deposits', group: 'Customer operations', status: 'partial', roles: ['institution_admin', 'finance_manager', 'loan_officer', 'teller', 'compliance', 'auditor'], summary: 'Open basic savings accounts and post deposits or withdrawals. Accruals, term deposits, goals, holds, and advanced transaction controls are not yet live.', requirements: ['Daily accrual, tax, and interest capitalisation', 'Savings goals and controlled allocations', 'Term, compulsory, and lien-linked savings', 'Transaction limits, receipts, and notifications'] },
   { id: 'shares', label: 'Shares & capital', group: 'Customer operations', status: 'partial', roles: ['institution_admin', 'finance_manager', 'loan_officer', 'teller', 'compliance', 'auditor'], summary: 'Open basic share accounts and post share contributions. Share classes, transfer, redemption, dividends, and patronage are not yet live.', requirements: ['Share classes, capital limits, and share register', 'Applications, allotments, transfers, and redemption', 'Dividend declaration, calculation, and settlement', 'Patronage and residual allocation'] },
-  { id: 'credit', label: 'Credit & lending', group: 'Customer operations', status: 'partial', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'loan_officer', 'teller', 'compliance', 'auditor'], summary: 'Configurable maker-checker credit policy, explainable affordability scoring, principal-only origination schedules, and loan servicing.', requirements: ['CRB, collateral valuation, guarantors, and affordability evidence', 'Interest, fees, amortisation, product versions, and member offer acceptance', 'Policy-based delinquency and accounting provisions'] },
+  { id: 'credit', label: 'Credit & lending', group: 'Customer operations', status: 'partial', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'loan_officer', 'teller', 'compliance', 'auditor'], summary: 'Maker-checker credit policies and loan product versions, explainable affordability, priced schedules, principal and priced repayment servicing, and independent member KYC.', requirements: ['Credit-bureau and collateral-provider integration', 'Guarantor management and collateral perfection', 'Provisioning, write-off approval, and post-write-off recovery'] },
   { id: 'ifb', label: 'Islamic finance (IFB)', group: 'Customer operations', status: 'planned', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'loan_officer', 'compliance', 'auditor'], summary: 'A separate IFB lifecycle is not implemented; no Sharia-compliance or IFB transaction is implied.', requirements: ['Sharia Supervisory Board approval and fund segregation', 'Wadiah, Mudarabah, Murabaha, Ijarah, Salam, and Istisna', 'Profit distribution and non-compliant income handling', 'Separate IFB financial statements'] },
   { id: 'payments', label: 'Payments & transfers', group: 'Money movement', status: 'planned', roles: institutionRoles, summary: 'External payment rails and member-to-member transfers are not connected.', requirements: ['Payment lifecycle, authorisation, settlement, and reversal', 'Own-account and external transfers', 'Mobile-money deposits, withdrawals, and loan repayments', 'Provider confirmation and real-time reconciliation'] },
   { id: 'wallet', label: 'Digital wallet', group: 'Money movement', status: 'planned', roles: institutionRoles, summary: 'No wallet balance, payment, or wallet lifecycle is currently available.', requirements: ['Wallet creation, KYC tiering, limits, freeze, and closure', 'Wallet-to-wallet, bank, QR, bill, and merchant payments', 'Standing instructions and bulk salary/benefit credits'] },
@@ -240,7 +240,7 @@ function renderSubmodulePanel(module, state, root) {
 
 export function createMfiWorkspace(api, user) {
   const root = $('div', undefined, 'mfi-workspace');
-  const state = { institutions: [], institutionId: '', membership: null, overview: null, members: [], accounts: [], products: [], loans: [], staff: [], audit: [], transactions: [], creditPolicy: null, collections: [], nplEvents: [], module: 'overview', moduleSearch: '', error: '', busy: false };
+  const state = { institutions: [], institutionId: '', membership: null, overview: null, members: [], documents: [], accounts: [], products: [], loans: [], staff: [], audit: [], transactions: [], creditPolicy: null, collections: [], nplEvents: [], writeoffs: [], module: 'overview', moduleSearch: '', error: '', busy: false };
   const savedInstitution = localStorage.getItem('afrolife.mfi-institution');
 
   function hasRole(...roles) {
@@ -316,6 +316,20 @@ export function createMfiWorkspace(api, user) {
       area.append(create);
     }
 
+    const pendingDocs=state.documents.filter((document)=>document.status==='uploaded');
+    if(hasRole('institution_admin','compliance','auditor')){
+      const docsPanel=$('section',undefined,'panel mfi-record'); docsPanel.append($('h3','Loan document review queue'));
+      if(!pendingDocs.length)docsPanel.append($('p','No loan documents are awaiting review.'));
+      for(const document of pendingDocs){
+        const row=$('article',undefined,'mfi-record');
+        row.append($('p',`${document.member_name} Â· ${document.member_number} Â· ${document.document_type} Â· ${document.mime} Â· ${document.size_bytes} bytes`));
+        const reason=input('Review reason (required)','reason','text',{maxLength:1000}); reason.control.minLength=10;
+        const decision=select('Document decision','decision',[{value:'verified',label:'Verify document'},{value:'rejected',label:'Reject document'}]);
+        const review=form('mfi-inline-form',reason.label,decision.label,submitButton('Review document'));
+        review.dataset.mfiForm='review-loan-document'; review.dataset.documentId=document.id; row.append(review); docsPanel.append(row);
+      }
+      area.append(docsPanel);
+    }
     const list = $('div', undefined, 'mfi-record-list');
     for (const member of state.members) {
       const item = $('article', undefined, 'panel mfi-record');
@@ -323,6 +337,24 @@ export function createMfiWorkspace(api, user) {
       item.firstChild.append($('div', undefined, 'mfi-record-title'));
       item.firstChild.firstChild.append($('h3', `${member.full_name} · ${member.member_number}`), $('p', `${member.phone}${member.email ? ` · ${member.email}` : ''}`));
       item.firstChild.append($('span', t(member.status), `mfi-status status-${member.status}`));
+      item.append($('p', `Member KYC: ${member.kyc_status ?? 'pending'}`));
+      if (hasRole('institution_admin','loan_officer','compliance')) {
+        const docType=select('Document type','document_type',[
+          {value:'national_id',label:'National ID'}, {value:'business_plan',label:'Business plan'},
+          {value:'income_proof',label:'Income proof'}, {value:'collateral',label:'Collateral evidence'},
+        ]);
+        const fileLabel=$('label','Upload PDF/JPEG/PNG (max 10 MB)');
+        const file=$('input'); file.type='file'; file.name='file'; file.accept='.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png'; file.required=true; fileLabel.append(file);
+        const upload=form('mfi-inline-form',docType.label,fileLabel,submitButton('Upload document'));
+        upload.dataset.mfiForm='upload-member-document'; upload.dataset.memberId=member.id; item.append(upload);
+      }
+      if (['pending','rejected'].includes(member.kyc_status) && hasRole('institution_admin','compliance')
+          && member.created_by !== state.userId && member.kyc_reviewed_by !== state.userId) {
+        const reason=input('KYC review reason (required)','reason','text',{maxLength:1000}); reason.control.minLength=10;
+        const decision=select('KYC decision','decision',[{value:'verified',label:'Verify KYC'},{value:'rejected',label:'Reject KYC'}]);
+        const kycReview=form('mfi-inline-form',reason.label,decision.label,submitButton('Record KYC review'));
+        kycReview.dataset.mfiForm='kyc-review-member'; kycReview.dataset.memberId=member.id; item.append(kycReview);
+      }
       if (member.status === 'pending' && hasRole('institution_admin', 'compliance')) {
         const reason = input('Review reason (required)', 'reason', 'text', { maxLength: 1000 });
         reason.control.minLength = 10;
@@ -425,7 +457,7 @@ export function createMfiWorkspace(api, user) {
       if (!activeMembers.length || !state.products.some((item) => item.product_type === 'loan') || !state.creditPolicy?.active) create.querySelector('button').disabled = true;
       area.append(create);
     }
-    area.append($('p', 'Interest, fees, collateral, and external credit bureau checks remain disabled. Generated schedules allocate principal only and must follow your approved credit policy.', 'mfi-notice'));
+    area.append($('p', 'Approved loan-product versions can configure interest, fees, repayment priority, and priced schedules. Activate pricing only under your approved policy. Credit-bureau checks and perfected-collateral workflows are not connected.', 'mfi-notice'));
 
     const list = $('div', undefined, 'mfi-record-list');
     for (const loan of state.loans) {
@@ -559,11 +591,34 @@ export function createMfiWorkspace(api, user) {
       }
       area.append(pending);
     }
+    const writeoffQueue = $('div', undefined, 'mfi-record-list');
+    writeoffQueue.append($('h3', 'Loan write-off approvals'));
+    const pendingWriteoffs = state.writeoffs.filter((item) => item.status === 'pending');
+    if (!pendingWriteoffs.length) writeoffQueue.append($('p', 'No loan write-offs are awaiting review.', 'empty-state'));
+    for (const writeoff of pendingWriteoffs) {
+      const pending = $('article', undefined, 'panel mfi-record');
+      pending.append($('h3', `${writeoff.member_name} · ${money(writeoff.amount)} proposed write-off`),
+        $('p', `${writeoff.member_number} · ${writeoff.reason} · proposed by ${writeoff.created_by}`));
+      if (hasRole('institution_admin','finance_manager','compliance')
+          && ![writeoff.created_by,writeoff.loan_created_by,writeoff.checked_by,writeoff.disbursed_by].includes(state.userId)) {
+        const reason = input('Independent write-off decision reason', 'reason', 'text', { maxLength: 1000 }); reason.control.minLength = 10;
+        const decision = select('Decision', 'decision', [{ value: 'approve', label: 'Approve write-off' }, { value: 'reject', label: 'Reject write-off' }]);
+        const review = form('mfi-inline-form', reason.label, decision.label, submitButton('Record write-off decision'));
+        review.dataset.mfiForm = 'writeoff-decision'; review.dataset.writeoffId = writeoff.id; pending.append(review);
+      }
+      writeoffQueue.append(pending);
+    }
+    area.append(writeoffQueue);
     const list = $('div', undefined, 'mfi-record-list');
     for (const loan of state.loans.filter((item) => ['disbursed','repaid'].includes(item.status))) {
       const item = $('article', undefined, 'panel mfi-record');
       item.append($('h3', `${loan.member_name} · ${money(loan.outstanding_principal)} outstanding`),
         $('p', `${loan.member_number} · ${loan.days_past_due ?? 0} DPD · current classification: ${loan.npl_status}`));
+      if (loan.status === 'disbursed' && hasRole('institution_admin','finance_manager','credit_manager','compliance')) {
+        const reason = input('Write-off proposal reason', 'reason', 'text', { maxLength: 1000 }); reason.control.minLength = 10;
+        const proposal = form('mfi-inline-form', reason.label, submitButton('Propose full principal write-off'));
+        proposal.dataset.mfiForm = 'writeoff-proposal'; proposal.dataset.loanId = loan.id; item.append(proposal);
+      }
       if (hasRole('institution_admin','credit_manager','compliance') && loan.created_by !== state.userId && loan.checked_by !== state.userId && loan.disbursed_by !== state.userId) {
         const status = select('Risk classification', 'status', ['performing','watch','substandard','doubtful','loss'].map((value) => ({ value, label: value.replaceAll('_',' ') })));
         const reason = input('Assessment reason', 'reason', 'text', { maxLength: 1000 }); reason.control.minLength = 10;
@@ -863,7 +918,8 @@ export function createMfiWorkspace(api, user) {
       const canReadAudit = isPlatformAdmin(user.role) || ['institution_admin', 'finance_manager', 'compliance', 'auditor'].includes(membership?.role);
       const canReadCollections = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','loan_officer','compliance','auditor'].includes(membership?.role);
       const canReadNpl = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','compliance','auditor'].includes(membership?.role);
-      const [overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents] = await Promise.all([
+      const canReviewDocs = isPlatformAdmin(user.role) || ['institution_admin','compliance','auditor'].includes(membership?.role);
+      const [overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs] = await Promise.all([
         api(`/mfi/institutions/${id}/overview`),
         api(`/mfi/institutions/${id}/members`),
         api(`/mfi/institutions/${id}/products`),
@@ -875,8 +931,10 @@ export function createMfiWorkspace(api, user) {
         api(`/mfi/institutions/${id}/credit-policy`),
         canReadCollections ? api(`/mfi/institutions/${id}/collections`) : Promise.resolve([]),
         canReadNpl ? api(`/mfi/institutions/${id}/npl-events`) : Promise.resolve([]),
+        canReviewDocs ? api(`/mfi/institutions/${id}/documents?status=uploaded`) : Promise.resolve([]),
+        canReadNpl ? api(`/mfi/institutions/${id}/writeoffs`) : Promise.resolve([]),
       ]);
-      Object.assign(state, { overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents });
+      Object.assign(state, { overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs });
     } catch (error) {
       state.error = error.message;
     }
@@ -903,6 +961,12 @@ export function createMfiWorkspace(api, user) {
         path = `/mfi/institutions/${id}/members`;
       } else if (target.dataset.mfiForm === 'review-member') {
         path = `/mfi/institutions/${id}/members/${encodeURIComponent(target.dataset.memberId)}/review`;
+      } else if (target.dataset.mfiForm === 'kyc-review-member') {
+        path = `/mfi/institutions/${id}/members/${encodeURIComponent(target.dataset.memberId)}/kyc-review`;
+      } else if (target.dataset.mfiForm === 'upload-member-document') {
+        path = `/mfi/institutions/${id}/members/${encodeURIComponent(target.dataset.memberId)}/documents/${encodeURIComponent(values.document_type)}`;
+      } else if (target.dataset.mfiForm === 'review-loan-document') {
+        path = `/mfi/institutions/${id}/documents/${encodeURIComponent(target.dataset.documentId)}/review`;
       } else if (target.dataset.mfiForm === 'member-lifecycle') {
         path = `/mfi/institutions/${id}/members/${encodeURIComponent(target.dataset.memberId)}/lifecycle`;
       } else if (target.dataset.mfiForm === 'open-account') {
@@ -943,6 +1007,11 @@ export function createMfiWorkspace(api, user) {
         path = `/mfi/institutions/${id}/loans/${encodeURIComponent(target.dataset.loanId)}/npl-classification`;
       } else if (target.dataset.mfiForm === 'npl-decision') {
         path = `/mfi/institutions/${id}/npl-events/${encodeURIComponent(target.dataset.eventId)}/decision`;
+      } else if (target.dataset.mfiForm === 'writeoff-proposal') {
+        path = `/mfi/institutions/${id}/loans/${encodeURIComponent(target.dataset.loanId)}/writeoffs`;
+        values.idempotency_key = crypto.randomUUID();
+      } else if (target.dataset.mfiForm === 'writeoff-decision') {
+        path = `/mfi/institutions/${id}/writeoffs/${encodeURIComponent(target.dataset.writeoffId)}/decision`;
       } else if (target.dataset.mfiForm === 'open-collection') {
         path = `/mfi/institutions/${id}/loans/${encodeURIComponent(target.dataset.loanId)}/collections`;
       } else if (target.dataset.mfiForm === 'collection-event') {
@@ -966,7 +1035,9 @@ export function createMfiWorkspace(api, user) {
         values.idempotency_key = target.elements.idempotency_key.value;
       }
       if (!path) return;
-      const response = await api(path, { method, body: JSON.stringify(values) });
+      const response = target.dataset.mfiForm === 'upload-member-document'
+        ? await api(path,{method:'POST',body:target.elements.file.files[0]})
+        : await api(path, { method, body: JSON.stringify(values) });
       state.error = response?.replayed ? 'This request was already posted; the original financial event was returned.' : 'Saved successfully.';
       await load();
     } catch (error) {

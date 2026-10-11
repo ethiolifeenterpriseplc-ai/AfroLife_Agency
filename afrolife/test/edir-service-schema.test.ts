@@ -8,6 +8,15 @@ const financeMigration = await readFile(new URL('../services/afrolife-edir/003_f
 const hierarchyMigration = await readFile(new URL('../services/afrolife-edir/004_hierarchical_edirs.sql', import.meta.url), 'utf8');
 const creditMigration = await readFile(new URL('../services/afrolife-edir/005_credit_workflow.sql', import.meta.url), 'utf8');
 const loanMigration = await readFile(new URL('../services/afrolife-edir/006_loan_servicing.sql', import.meta.url), 'utf8');
+const productMigration = await readFile(new URL('../services/afrolife-edir/007_versioned_loan_products.sql', import.meta.url), 'utf8');
+const complaintMigration = await readFile(new URL('../services/afrolife-edir/008_customer_complaints.sql', import.meta.url), 'utf8');
+const riskMigration = await readFile(new URL('../services/afrolife-edir/009_member_risk_controls.sql', import.meta.url), 'utf8');
+const limitMigration = await readFile(new URL('../services/afrolife-edir/010_daily_disbursement_limits.sql', import.meta.url), 'utf8');
+const consentMigration = await readFile(new URL('../services/afrolife-edir/011_hashed_loan_consent.sql', import.meta.url), 'utf8');
+const kycMigration = await readFile(new URL('../services/afrolife-edir/012_member_kyc_review.sql', import.meta.url), 'utf8');
+const documentMigration = await readFile(new URL('../services/afrolife-edir/013_loan_documents.sql', import.meta.url), 'utf8');
+const writeoffMigration = await readFile(new URL('../services/afrolife-edir/014_loan_writeoffs.sql', import.meta.url), 'utf8');
+const creditRouter = await readFile(new URL('../services/afrolife-edir/credit-router.ts', import.meta.url), 'utf8');
 const router = await readFile(new URL('../services/afrolife-edir/router.ts', import.meta.url), 'utf8');
 const migrationRunner = await readFile(new URL('../services/afrolife-edir/migrate.ts', import.meta.url), 'utf8');
 
@@ -74,6 +83,11 @@ test('Edir organization migration scopes every service record to one immutable t
 test('Edir credit workflow is versioned, tenant-scoped, and blocks self-review', () => {
   assert.match(migrationRunner, /afrolife-edir-v5-credit-workflow/);
   assert.match(migrationRunner, /afrolife-edir-v6-loan-servicing/);
+  assert.match(migrationRunner, /afrolife-edir-v7-versioned-loan-products/);
+  assert.match(migrationRunner, /afrolife-edir-v8-customer-complaints/);
+  assert.match(migrationRunner, /afrolife-edir-v9-member-risk-controls/);
+  assert.match(migrationRunner, /afrolife-edir-v10-daily-disbursement-limits/);
+  assert.match(migrationRunner, /afrolife-edir-v11-hashed-loan-consent/);
   assert.match(router, /edirRouter\.use\('\/credit', edirCreditRouter\)/);
   assert.match(creditMigration, /UNIQUE \(organization_id, created_by, idempotency_key\)/);
   assert.match(creditMigration, /payload_hash text NOT NULL/);
@@ -89,6 +103,51 @@ test('Edir credit workflow is versioned, tenant-scoped, and blocks self-review',
   assert.match(creditMigration, /FORCE ROW LEVEL SECURITY/);
 });
 
+test('Edir customer complaints support private member submission and tracked staff resolution', () => {
+  assert.match(complaintMigration, /CREATE TABLE edir_customer_complaints/);
+  assert.match(complaintMigration, /edir_customer_complaint_read/);
+  assert.match(complaintMigration, /edir_customer_complaint_create/);
+  assert.match(complaintMigration, /edir_customer_complaint_manage/);
+  assert.match(creditRouter, /post\('\/complaints'/);
+  assert.match(creditRouter, /post\('\/complaints\/:complaintId\/decision'/);
+  assert.match(creditRouter, /A resolution summary is required to close a complaint/);
+});
+
+test('Edir risk holds require independent review and block member credit actions', () => {
+  assert.match(riskMigration, /edir_guard_member_risk_flag/);
+  assert.match(riskMigration, /Edir risk hold release requires an independent actor and reason/);
+  assert.match(riskMigration, /edir_member_has_active_risk_hold/);
+  assert.match(creditRouter, /An active Edir risk hold prevents new credit applications/);
+  assert.match(creditRouter, /An active Edir risk hold prevents loan disbursement/);
+});
+
+test('Edir daily disbursement cap is versioned, independently approved and enforced at posting',()=>{
+  assert.match(limitMigration,/CREATE TABLE edir_disbursement_limit_versions/);
+  assert.match(limitMigration,/Edir limit decision requires an independent reviewer and reason/);
+  assert.match(limitMigration,/edir_disbursement_limit_one_active_idx/);
+  assert.match(creditRouter,/edir_disbursement_limit_versions WHERE organization_id=\$1 AND status='active'/);
+  assert.match(creditRouter,/approved Edir daily disbursement limit would be exceeded/);
+});
+
+test('Edir member consent records a cryptographic hash of exact offer and product snapshot',()=>{
+  assert.match(consentMigration,/agreement_hash text/);
+  assert.match(consentMigration,/terms_snapshot jsonb/);
+  assert.match(creditRouter,/agreementHash=createHash\('sha256'\)/);
+  assert.match(creditRouter,/acceptanceText=.*agreementHash/);
+  assert.match(creditRouter,/terms_snapshot:acceptance.terms_snapshot/);
+});
+
+test('Edir product versions require independent review and applications snapshot the chosen product', () => {
+  assert.match(productMigration, /CREATE TABLE edir_loan_product_versions/);
+  assert.match(productMigration, /Edir loan product decision requires an independent reviewer/);
+  assert.match(productMigration, /edir_loan_application_product_fk/);
+  assert.match(productMigration, /edir_loan_product_tenant_scope/);
+  assert.match(creditRouter, /post\('\/products'/);
+  assert.match(creditRouter, /post\('\/products\/:versionId\/decision'/);
+  assert.match(creditRouter, /product_version_id,product_terms,eligibility_context/);
+  assert.match(creditRouter, /The product author cannot review their own version/);
+});
+
 test('Edir loan servicing uses member consent, tenant RLS, maker-checker, and balanced savings postings', () => {
   assert.match(loanMigration, /CREATE TABLE edir_loan_acceptances/);
   assert.match(loanMigration, /Edir loan proceeds must go to the member own active savings account/);
@@ -101,4 +160,51 @@ test('Edir loan servicing uses member consent, tenant RLS, maker-checker, and ba
   assert.match(loanMigration, /line_count<>2/);
   assert.match(loanMigration, /CREATE POLICY edir_loan_journal_lines_tenant_scope ON edir_loan_journal_lines AS RESTRICTIVE/);
   assert.match(loanMigration, /GRANT SELECT,INSERT ON TABLE edir_loan_acceptances/);
+});
+
+test('Edir reporting covers aging, trial balance, and servicing reconciliation', () => {
+  assert.match(creditRouter, /get\('\/reports\/portfolio'/);
+  assert.match(creditRouter, /get\('\/reports\/trial-balance'/);
+  assert.match(creditRouter, /get\('\/reports\/disbursement-reconciliation'/);
+  assert.match(creditRouter, /UNION ALL[\s\S]*edir_loan_journal_lines/);
+  assert.match(creditRouter, /missing_posted_journals/);
+  assert.match(creditRouter, /edir-trial-balance-.*\.csv/);
+  assert.match(creditRouter, /toCsv\(rows,/);
+});
+
+test('Edir application intake enforces product cooldowns after rejection and settlement', () => {
+  assert.match(creditRouter, /cooldownRemainingDays\(recent\.rejected_at, terms\.rejection_cooldown_days\)/);
+  assert.match(creditRouter, /cooldownRemainingDays\(recent\.settled_at, terms\.settlement_cooldown_days\)/);
+});
+
+test('Edir full-principal write-off requires independent review and posts to loss expense', () => {
+  assert.match(migrationRunner, /afrolife-edir-v14-loan-writeoffs/);
+  assert.match(writeoffMigration, /CREATE TABLE edir_loan_writeoffs/);
+  assert.match(writeoffMigration, /operation_type IN \('disbursement','repayment','writeoff'\)/);
+  assert.match(writeoffMigration, /full current principal balance and independent authorized actors/);
+  assert.match(writeoffMigration, /write-off must debit the loan loss expense ledger/);
+  assert.match(writeoffMigration, /SET status='waived'/);
+  assert.match(creditRouter, /post\('\/loans\/:loanId\/writeoffs'/);
+  assert.match(creditRouter, /The write-off must cover the full current Edir principal balance/);
+  assert.match(creditRouter, /mapping\.loss_ledger_id/);
+});
+
+test('Edir loan application, acceptance and disbursement require independently reviewed KYC',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v12-member-kyc-review/);
+  assert.match(kycMigration,/Edir KYC review requires an independent authorized reviewer and reason/);
+  assert.match(kycMigration,/edir_loan_acceptance_kyc_guard/);
+  assert.match(kycMigration,/edir_loan_operation_disbursement_kyc_guard/);
+  assert.match(creditRouter,/Edir member KYC must be independently verified before applying for credit/);
+  assert.match(creditRouter,/Edir member KYC must remain verified before accepting the loan offer/);
+  assert.match(creditRouter,/members\/:memberId\/kyc-review/);
+});
+
+test('Edir identity documents require independent review and a verified national ID before KYC approval',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v13-loan-documents/);
+  assert.match(documentMigration,/CREATE TABLE edir_loan_documents/);
+  assert.match(documentMigration,/size_bytes BETWEEN 1 AND 10485760/);
+  assert.match(documentMigration,/edir_loan_document_guard/);
+  assert.match(documentMigration,/edir_membership_national_id_kyc_guard/);
+  assert.match(creditRouter,/post\('\/documents\/:documentType'/);
+  assert.match(creditRouter,/documents\/\:documentId\/review/);
 });

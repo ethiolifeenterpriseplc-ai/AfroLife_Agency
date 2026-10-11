@@ -11,7 +11,10 @@ for (const line of lines) {
   if (match) credentials.set(match[1].trim(), { phone: match[2], password: match[3] });
 }
 const apiBase = new URL(process.env.API_URL ?? 'http://127.0.0.1:3000');
-assert.ok(['127.0.0.1','localhost','::1'].includes(apiBase.hostname) && apiBase.port === '3000', 'Local SACCO E2E refuses non-local API hosts');
+assert.ok(
+  apiBase.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(apiBase.hostname),
+  'Local SACCO E2E refuses non-local API hosts',
+);
 const fixtureDbUrl = new URL(process.env.MIGRATION_DATABASE_URL ?? '');
 assert.ok(['127.0.0.1','localhost','::1'].includes(fixtureDbUrl.hostname) && fixtureDbUrl.port === '5433'
   && fixtureDbUrl.pathname === '/afrolife', 'Local SACCO E2E refuses non-local fixture databases');
@@ -35,6 +38,14 @@ async function call<T = any>(user: { token: string }, method: string, path: stri
   const result = await response.json().catch(() => null) as any;
   assert.equal(response.status, expected, `${method} ${path}: expected ${expected}, got ${response.status}: ${JSON.stringify(result)}`);
   return result as T;
+}
+async function callRaw(user: { token: string }, method: string, path: string, body: Buffer, expected = 201): Promise<any> {
+  const response = await fetch(api + path, {
+    method, headers: { authorization: `Bearer ${user.token}`, 'content-type': 'application/pdf' }, body,
+  });
+  const result = await response.json().catch(() => null) as any;
+  assert.equal(response.status, expected, `${method} ${path}: expected ${expected}, got ${response.status}: ${JSON.stringify(result)}`);
+  return result;
 }
 
 const admin = await login('super_admin');
@@ -78,7 +89,7 @@ await call(creditManager, 'GET', `${base}/staff`, undefined, 403);
 await call(creditManager, 'POST', `${base}/credit-policy`, {
   policy, change_reason: 'Non-administrator policy change must be rejected',
 }, 403);
-await call(admin, 'POST', `${base}/staff`, { phone: credentials.get('super_admin (second account for four-eyes review)')!.phone, role: 'finance_manager' }, 201);
+await call(admin, 'POST', `${base}/staff`, { phone: credentials.get('super_admin (second account for four-eyes review)')!.phone, role: 'institution_admin' }, 201);
 await call(admin, 'POST', `${base}/staff`, { phone: credentials.get('compliance')!.phone, role: 'compliance' }, 201);
 await call(teller, 'GET', `${base}/staff`, undefined, 403);
 await call(creditManager, 'GET', `${base}/staff`, undefined, 403);
@@ -96,6 +107,18 @@ const active = await call<{ status: string }>(compliance, 'POST', `${base}/membe
   decision: 'activate', reason: 'QA member review completed',
 });
 assert.equal(active.status, 'active');
+await call(admin, 'POST', `${base}/members/${member.id}/kyc-review`, {
+  decision: 'verified', reason: 'Synthetic UAT identity documents independently checked',
+}, 409);
+const syntheticId = Buffer.from('%PDF-1.7\nSynthetic local UAT identity evidence; not a real identity document.\n%%EOF\n');
+const idDocument = await callRaw(admin, 'POST', `${base}/members/${member.id}/documents/national_id`, syntheticId);
+await call(compliance, 'POST', `${base}/documents/${idDocument.id}/review`, {
+  decision: 'verified', reason: 'Synthetic UAT document reviewed independently',
+});
+const kyc = await call<{ kyc_status: string }>(admin2, 'POST', `${base}/members/${member.id}/kyc-review`, {
+  decision: 'verified', reason: 'Synthetic UAT identity documents independently checked',
+});
+assert.equal(kyc.kyc_status, 'verified');
 await call(admin2, 'POST', `${base}/members/${member.id}/lifecycle`, {
   action: 'suspend', reason: 'Temporary QA suspension for lifecycle controls',
 }, 200);
@@ -208,6 +231,86 @@ await call(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
 
 const loans = await call<Array<{ id: string; status: string }>>(admin, 'GET', `${base}/loans`);
 assert.equal(loans.find((item) => item.id === loan.id)?.status, 'repaid');
+
+const productTerms = {
+  product_code: 'QA-REDUCING', name: 'Local QA reducing balance', customer_categories: ['group_member'],
+  minimum_principal: '500.00', maximum_principal: '5000.00', minimum_tenor_months: 3, maximum_tenor_months: 12,
+  repayment_frequency: 'monthly', annual_interest_rate_bps: 1200, interest_method: 'reducing_balance',
+  origination_fee_bps: 100, late_penalty_bps: 0, grace_days: 0,
+  repayment_priority: ['penalty', 'fee', 'interest', 'principal'],
+  maximum_debt_service_bps: 3300, minimum_membership_days: 0, minimum_savings_coverage_bps: 0,
+  maximum_concurrent_loans: 1, minimum_equity_bps: 0, required_documents: [], required_fields: [],
+  collateral_required: false, maximum_loan_to_value_bps: 0, manual_review_required: true,
+};
+const productV1 = await call<{ id: string; status: string }>(admin, 'POST', `${base}/loan-products`, {
+  terms: productTerms, change_reason: 'Create a synthetic reducing-balance UAT product',
+}, 201);
+assert.equal(productV1.status, 'pending_approval');
+await call(admin, 'POST', `${base}/loan-products/${productV1.id}/decision`, {
+  decision: 'approve', reason: 'Product maker cannot approve their own synthetic product',
+}, 403);
+const approvedProductV1 = await call<{ status: string }>(admin2, 'POST', `${base}/loan-products/${productV1.id}/decision`, {
+  decision: 'approve', reason: 'Independent approval of synthetic UAT product version one',
+});
+assert.equal(approvedProductV1.status, 'active');
+const pricedLoan = await call<{ id: string; product_version_id: string; product_terms: typeof productTerms }>(admin, 'POST', `${base}/loans`, {
+  member_id: member.id, product_code: productTerms.product_code, principal_amount: '1000.00', term_months: 6,
+  purpose: 'Test approved reducing balance product terms in a synthetic UAT journey',
+  monthly_income: '10000.00', monthly_expenses: '1000.00', monthly_debt: '0.00',
+}, 201);
+assert.equal(pricedLoan.product_version_id, productV1.id);
+assert.equal(pricedLoan.product_terms.annual_interest_rate_bps, 1200);
+const productV2 = await call<{ id: string; status: string }>(admin, 'POST', `${base}/loan-products`, {
+  terms: { ...productTerms, annual_interest_rate_bps: 2400 },
+  change_reason: 'Update synthetic UAT product pricing for a snapshot check',
+}, 201);
+await call(admin2, 'POST', `${base}/loan-products/${productV2.id}/decision`, {
+  decision: 'approve', reason: 'Independently approve updated synthetic UAT pricing',
+});
+await call(creditManager, 'POST', `${base}/loans/${pricedLoan.id}/decision`, {
+  decision: 'approve', reason: 'Approve using the application original product version snapshot',
+});
+const pricedDisbursement = await call<{ quote: { total_interest: string; origination_fee: string }; net_disbursed: string }>(
+  admin2, 'POST', `${base}/loans/${pricedLoan.id}/disburse`, { idempotency_key: randomUUID() }, 201,
+);
+assert.equal(pricedDisbursement.quote.origination_fee, '10.00');
+assert.equal(pricedDisbursement.net_disbursed, '990.00');
+assert.ok(Number(pricedDisbursement.quote.total_interest) > 0);
+const pricedInstallments = await call<Array<{ principal_due: string; interest_due: string }>>(
+  admin, 'GET', `${base}/loans/${pricedLoan.id}/installments`,
+);
+assert.equal(pricedInstallments.length, 6);
+assert.equal(Math.round(pricedInstallments.reduce((sum, row) => sum + Number(row.principal_due), 0) * 100), 100000);
+assert.ok(pricedInstallments.reduce((sum, row) => sum + Number(row.interest_due), 0) > 0);
+
+const writeoffKey = randomUUID();
+const writeoff = await call<{ id: string; amount: string; status: string }>(admin, 'POST', `${base}/loans/${pricedLoan.id}/writeoffs`, {
+  idempotency_key: writeoffKey, reason: 'Synthetic UAT full-principal write-off after documented recovery exhaustion',
+}, 201);
+assert.equal(writeoff.status, 'pending');
+const writeoffReplay = await call<{ created: boolean; id: string }>(admin, 'POST', `${base}/loans/${pricedLoan.id}/writeoffs`, {
+  idempotency_key: writeoffKey,
+  reason: 'Synthetic UAT full-principal write-off after documented recovery exhaustion',
+}, 200);
+assert.equal(writeoffReplay.created, false);
+await call(admin, 'POST', `${base}/writeoffs/${writeoff.id}/decision`, {
+  decision: 'approve', reason: 'The write-off requester and loan maker cannot approve this request',
+}, 409);
+const writeoffDecision = await call<{ status: string; journal: { transaction_type: string } }>(compliance, 'POST', `${base}/writeoffs/${writeoff.id}/decision`, {
+  decision: 'approve', reason: 'Independent UAT approval after the recovery review evidence was examined',
+});
+assert.equal(writeoffDecision.status, 'approved');
+assert.equal(writeoffDecision.journal.transaction_type, 'loan_writeoff');
+const writtenOffLoans = await call<Array<{ id: string; status: string }>>(admin, 'GET', `${base}/loans`);
+assert.equal(writtenOffLoans.find((row) => row.id === pricedLoan.id)?.status, 'written_off');
+const memberHolds = await call<Array<{ category: string; status: string }>>(compliance, 'GET', `${base}/members/${member.id}/risk-flags`);
+assert.ok(memberHolds.some((row) => row.category === 'delinquency_restriction' && row.status === 'active'));
+await call(admin, 'POST', `${base}/loans`, {
+  member_id: member.id, product_code: productTerms.product_code, principal_amount: '1000.00', term_months: 6,
+  purpose: 'Verify an approved loss restriction prevents new credit',
+  monthly_income: '10000.00', monthly_expenses: '1000.00', monthly_debt: '0.00',
+}, 409);
+
 const journals = await call<Array<{ lines: Array<{ debit: string; credit: string }> }>>(admin, 'GET', `${base}/transactions`);
 assert.ok(journals.length >= 5);
 for (const journal of journals) {
@@ -219,17 +322,19 @@ const audit = await call<unknown[]>(compliance, 'GET', `${base}/audit`);
 assert.ok(audit.length >= 8);
 const overview = await call<{ members: Record<string, number>; cash_balance: string }>(admin, 'GET', `${base}/overview`);
 assert.equal(overview.members.active, 1);
-assert.equal(Number(overview.cash_balance), 5000);
+assert.equal(Number(overview.cash_balance), 4010);
 
 console.log(JSON.stringify({
   result: 'PASS', feature_flag: feature.mfiPilotEnabled, institution_code: institution.institution_code,
   member_status: active.status, savings_balance: '5000.00', loan_status: loans.find((item) => item.id === loan.id)?.status,
+  versioned_product_status: approvedProductV1.status, priced_loan_interest: pricedDisbursement.quote.total_interest,
   balanced_journals: journals.length, audit_events: audit.length,
-  verified: ['institution and staff setup', 'separate member review', 'savings deposit and idempotency',
+  verified: ['institution and staff setup', 'separate member review', 'synthetic national ID upload, independent document review, four-eyes KYC and KYC gating', 'savings deposit and idempotency',
     'withdrawal and four-eyes reversal', 'loan application, independent approval and disbursement',
     'credit policy maker-checker, affordability scoring, and role-based personal/financial-data visibility', 'principal-only origination schedule',
+    'loan product maker-checker, immutable application terms, priced origination fee, and reducing-balance schedule',
     'partial repayment reversal and principal balance recalculation', 'policy-threshold NPL classification and independent approval',
     'collection promise and resolution lifecycle',
-    'principal repayment and overpayment rejection', 'balanced ledger and audit trail',
+    'principal repayment and overpayment rejection', 'four-eyes loan write-off, loss journal, waived schedule and post-loss credit hold', 'balanced ledger and audit trail',
     'institution tenant isolation', 'role authorization', 'administrator-only staff and credit-policy configuration'],
 }, null, 2));

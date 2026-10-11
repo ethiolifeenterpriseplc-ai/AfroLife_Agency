@@ -1,11 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Router, Request, Response, RequestHandler } from 'express';
+import express, { Router, Request, Response, RequestHandler } from 'express';
 import { PoolClient } from 'pg';
 import { z } from 'zod';
 import { AuthUser, HttpError, isPlatformAdminRole, withUser } from './core.js';
 import { centsToAmount, decimalToCents, mfiAmountSchema as amountSchema, normalizeAmount } from './mfi-money.js';
 import { Phone } from './validators.js';
+import { sniff } from './files.js';
+import { getFile, putFile } from './storage.js';
+import { toCsv } from './csv.js';
 import { creditPolicySchema, principalSchedule, scoreLoan } from './mfi-credit.js';
+import { cooldownRemainingDays, evaluateLoanEligibility, lendingProductTermsSchema, quoteLoan, type LendingProductTerms } from './lending-products.js';
 
 export const mfiRouter = Router();
 
@@ -80,7 +84,7 @@ async function findJournalReplay(
   client: PoolClient,
   input: {
     institutionId: string; idempotencyKey: string; type: string; memberAccountId: string | null;
-    loanId?: string | null; amount: string; reversalOf?: string | null; reversalReason?: string | null;
+    loanId?: string | null; amount: string; reversalOf?: string | null; reversalReason?: string | null; writeoffId?: string | null;
   },
 ) {
   const payloadHash = amountHash({
@@ -90,6 +94,7 @@ async function findJournalReplay(
     amount: normalizeAmount(input.amount),
     reversal_of: input.reversalOf ?? null,
     reversal_reason: input.reversalReason ?? null,
+    ...(input.writeoffId ? { writeoff_id: input.writeoffId } : {}),
   });
   const existing = (await client.query(
     'SELECT * FROM mfi_journals WHERE institution_id = $1 AND idempotency_key = $2',
@@ -130,10 +135,44 @@ async function allocateLoanPrincipal(client: PoolClient, institutionId: string, 
        SELECT id, principal_due, LEAST(principal_due, GREATEST(0,$3::numeric-prior_due)) AS paid FROM ordered
      )
      UPDATE mfi_loan_installments i SET principal_paid=a.paid,
-       status=CASE WHEN a.paid=0 THEN 'due' WHEN a.paid=a.principal_due THEN 'paid' ELSE 'partial' END
+       status=CASE WHEN a.paid=i.principal_due AND i.interest_paid=i.interest_due AND i.penalty_paid=i.penalty_due THEN 'paid'
+         WHEN a.paid=0 AND i.interest_paid=0 AND i.penalty_paid=0 THEN 'due' ELSE 'partial' END
      FROM allocated a WHERE i.institution_id=$1 AND i.id=a.id`,
     [institutionId, loanId, totalPaid],
   );
+}
+
+async function reverseServicingAllocation(client: PoolClient, institutionId: string, loanId: string,
+  interestAmount: string, penaltyAmount: string) {
+  let interest = decimalToCents(interestAmount);
+  let penalty = decimalToCents(penaltyAmount);
+  const rows = (await client.query(
+    `SELECT id,interest_paid::text,penalty_paid::text,principal_paid::text,principal_due::text,
+            interest_due::text,penalty_due::text
+     FROM mfi_loan_installments WHERE institution_id=$1 AND loan_id=$2 ORDER BY installment_no DESC FOR UPDATE`,
+    [institutionId, loanId],
+  )).rows;
+  for (const row of rows) {
+    const interestPaid = decimalToCents(String(row.interest_paid));
+    const penaltyPaid = decimalToCents(String(row.penalty_paid));
+    const interestBack = interest < interestPaid ? interest : interestPaid;
+    const penaltyBack = penalty < penaltyPaid ? penalty : penaltyPaid;
+    interest -= interestBack;
+    penalty -= penaltyBack;
+    const remainingInterest = interestPaid - interestBack;
+    const remainingPenalty = penaltyPaid - penaltyBack;
+    const principalPaid = decimalToCents(String(row.principal_paid));
+    const paidStatus = principalPaid === decimalToCents(String(row.principal_due))
+      && remainingInterest === decimalToCents(String(row.interest_due))
+      && remainingPenalty === decimalToCents(String(row.penalty_due));
+    const dueStatus = principalPaid === 0n && remainingInterest === 0n && remainingPenalty === 0n;
+    await client.query(
+      `UPDATE mfi_loan_installments SET interest_paid=$3,penalty_paid=$4,status=$5
+       WHERE institution_id=$1 AND id=$2`,
+      [institutionId, row.id, centsToAmount(remainingInterest), centsToAmount(remainingPenalty), paidStatus ? 'paid' : dueStatus ? 'due' : 'partial'],
+    );
+  }
+  if (interest !== 0n || penalty !== 0n) throw new HttpError(409, 'Reversal allocation does not match paid installment interest and penalties');
 }
 
 async function postJournal(
@@ -144,6 +183,7 @@ async function postJournal(
     type: string;
     memberAccountId: string | null;
     loanId?: string | null;
+    writeoffId?: string | null;
     reversalOf?: string | null;
     reversalReason?: string | null;
     amount: string;
@@ -161,18 +201,19 @@ async function postJournal(
     amount,
     reversal_of: input.reversalOf ?? null,
     reversal_reason: input.reversalReason ?? null,
+    ...(input.writeoffId ? { writeoff_id: input.writeoffId } : {}),
   });
 
   const inserted = await client.query(
     `INSERT INTO mfi_journals
        (institution_id, idempotency_key, payload_hash, transaction_type, member_account_id, loan_id,
-        reversal_of, reversal_reason, amount, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        reversal_of, reversal_reason, amount, created_by,writeoff_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (institution_id, idempotency_key) DO NOTHING
      RETURNING *`,
     [
       input.institutionId, input.idempotencyKey, payloadHash, input.type, input.memberAccountId,
-      input.loanId ?? null, input.reversalOf ?? null, input.reversalReason ?? null, amount, input.actorId,
+      input.loanId ?? null, input.reversalOf ?? null, input.reversalReason ?? null, amount, input.actorId,input.writeoffId??null,
     ],
   );
   if (!inserted.rowCount) {
@@ -264,7 +305,11 @@ mfiRouter.post('/institutions', h(async (req, res) => {
         ($1,'1000','Cash on hand','asset'),
         ($1,'1300','Loan principal receivable','asset'),
         ($1,'2100','Member savings liabilities','liability'),
-        ($1,'3100','Member share capital','equity')`,
+        ($1,'3100','Member share capital','equity'),
+        ($1,'4100','Loan interest income','income'),
+        ($1,'4200','Loan fee income','income'),
+        ($1,'4300','Loan penalty income','income'),
+        ($1,'5100','Loan write-off expense','expense')`,
       [institutionId],
     );
     await client.query(
@@ -418,6 +463,122 @@ mfiRouter.get('/institutions/:institutionId/overview', h(async (req, res) => {
   res.json(data);
 }));
 
+// Operational reports are computed from posted ledger entries and the
+// contractual installment schedule; they never consume manually recorded UAT
+// outcomes or draft journals.
+mfiRouter.get('/institutions/:institutionId/reports/portfolio', h(async (req, res) => {
+  const report = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','compliance','auditor'], async (client) => {
+      const [summary, aging] = await Promise.all([
+        client.query(
+          `WITH loan_balances AS (
+             SELECT l.id,l.principal_amount,l.principal_repaid,l.npl_status,
+               COALESCE(max(current_date-i.due_on) FILTER (WHERE i.status NOT IN ('paid','waived') AND i.due_on<current_date),0)::int AS dpd,
+               COALESCE(sum(i.principal_due-i.principal_paid+i.interest_due-i.interest_paid+i.penalty_due-i.penalty_paid)
+                 FILTER (WHERE i.status NOT IN ('paid','waived') AND i.due_on<current_date),0)::numeric(16,2) AS overdue_amount
+             FROM mfi_loans l LEFT JOIN mfi_loan_installments i
+               ON i.institution_id=l.institution_id AND i.loan_id=l.id
+             WHERE l.institution_id=$1 AND l.status='disbursed'
+             GROUP BY l.id
+           )
+           SELECT count(*)::int AS disbursed_loans,
+             COALESCE(sum(principal_amount-principal_repaid),0)::numeric(16,2) AS outstanding_principal,
+             count(*) FILTER (WHERE overdue_amount>0)::int AS loans_past_due,
+             COALESCE(sum(principal_amount-principal_repaid) FILTER (WHERE overdue_amount>0),0)::numeric(16,2) AS par_principal,
+             COALESCE(sum(overdue_amount),0)::numeric(16,2) AS overdue_installments,
+             CASE WHEN COALESCE(sum(principal_amount-principal_repaid),0)=0 THEN 0
+               ELSE round(100*sum(principal_amount-principal_repaid) FILTER (WHERE overdue_amount>0)
+                 / sum(principal_amount-principal_repaid),2) END AS par_ratio_pct
+           FROM loan_balances`, [req.params.institutionId],
+        ),
+        client.query(
+          `WITH loan_balances AS (
+             SELECT l.id,l.principal_amount-l.principal_repaid AS outstanding,
+               COALESCE(max(current_date-i.due_on) FILTER (WHERE i.status NOT IN ('paid','waived') AND i.due_on<current_date),0)::int AS dpd
+             FROM mfi_loans l LEFT JOIN mfi_loan_installments i
+               ON i.institution_id=l.institution_id AND i.loan_id=l.id
+             WHERE l.institution_id=$1 AND l.status='disbursed' GROUP BY l.id
+           )
+           SELECT CASE WHEN dpd BETWEEN 1 AND 30 THEN '1_30' WHEN dpd BETWEEN 31 AND 60 THEN '31_60'
+             WHEN dpd BETWEEN 61 AND 90 THEN '61_90' WHEN dpd>90 THEN 'over_90' ELSE 'current' END AS bucket,
+             count(*)::int AS loan_count, COALESCE(sum(outstanding),0)::numeric(16,2) AS outstanding_principal
+           FROM loan_balances GROUP BY bucket ORDER BY CASE bucket WHEN 'current' THEN 0 WHEN '1_30' THEN 1
+             WHEN '31_60' THEN 2 WHEN '61_90' THEN 3 ELSE 4 END`, [req.params.institutionId],
+        ),
+      ]);
+      return { as_of: new Date().toISOString().slice(0,10), ...summary.rows[0], aging: aging.rows };
+    });
+  res.json(report);
+}));
+
+mfiRouter.get('/institutions/:institutionId/reports/trial-balance', h(async (req, res) => {
+  const asOf = z.string().date().optional().parse(req.query.as_of);
+  const format = z.enum(['json','csv']).default('json').parse(req.query.format);
+  const report = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin','finance_manager','compliance','auditor'], async (client) => {
+      const result = await client.query(
+        `SELECT g.account_code,g.name,g.account_type,
+           COALESCE(sum(l.debit) FILTER (WHERE j.id IS NOT NULL),0)::numeric(16,2) AS debits,
+           COALESCE(sum(l.credit) FILTER (WHERE j.id IS NOT NULL),0)::numeric(16,2) AS credits,
+           CASE WHEN g.account_type IN ('asset','expense')
+             THEN COALESCE(sum(l.debit-l.credit) FILTER (WHERE j.id IS NOT NULL),0)
+             ELSE COALESCE(sum(l.credit-l.debit) FILTER (WHERE j.id IS NOT NULL),0) END::numeric(16,2) AS balance
+         FROM mfi_gl_accounts g
+         LEFT JOIN mfi_journal_lines l ON l.institution_id=g.institution_id AND l.gl_account_id=g.id
+         LEFT JOIN mfi_journals j ON j.institution_id=l.institution_id AND j.id=l.journal_id
+           AND j.status='posted' AND j.posted_at < (($2::date + interval '1 day')::timestamptz)
+         WHERE g.institution_id=$1 GROUP BY g.id ORDER BY g.account_code`,
+        [req.params.institutionId, asOf ?? new Date().toISOString().slice(0,10)],
+      );
+      const totals = result.rows.reduce((acc, row) => ({
+        debits: acc.debits + Number(row.debits), credits: acc.credits + Number(row.credits),
+      }), { debits: 0, credits: 0 });
+      return { as_of: asOf ?? new Date().toISOString().slice(0,10), accounts: result.rows,
+        total_debits: totals.debits.toFixed(2), total_credits: totals.credits.toFixed(2),
+        balanced: Math.abs(totals.debits-totals.credits) < 0.005 };
+    });
+  if (format === 'csv') {
+    const rows = report.accounts.map((row) => ({
+      account_code: String(row.account_code), account_name: String(row.name), account_type: String(row.account_type),
+      debits: String(row.debits), credits: String(row.credits), balance: String(row.balance),
+    }));
+    rows.push({ account_code: 'TOTAL', account_name: '', account_type: '',
+      debits: String(report.total_debits), credits: String(report.total_credits), balance: '' });
+    res.type('text/csv').attachment(`sacco-trial-balance-${report.as_of}.csv`)
+      .send(toCsv(rows, ['account_code','account_name','account_type','debits','credits','balance']));
+  } else res.json(report);
+}));
+
+mfiRouter.get('/institutions/:institutionId/reports/disbursement-reconciliation', h(async (req, res) => {
+  const from = z.string().date().optional().parse(req.query.from);
+  const to = z.string().date().optional().parse(req.query.to);
+  if (from && to && from > to) throw new HttpError(400, 'from must be on or before to');
+  const report = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin','finance_manager','compliance','auditor'], async (client) => {
+      const result = await client.query(
+        `SELECT j.transaction_type,count(*)::int AS journal_count,
+           COALESCE(sum(j.amount),0)::numeric(16,2) AS total_amount,
+           COALESCE(sum(CASE WHEN j.transaction_type='loan_disbursement' THEN j.amount ELSE 0 END),0)::numeric(16,2) AS disbursed,
+           COALESCE(sum(CASE WHEN j.transaction_type='loan_repayment' THEN j.amount ELSE 0 END),0)::numeric(16,2) AS repaid,
+           count(*) FILTER (WHERE abs(lines.debits-lines.credits)>0.005)::int AS unbalanced_journals
+         FROM mfi_journals j JOIN LATERAL (
+           SELECT COALESCE(sum(debit),0) AS debits,COALESCE(sum(credit),0) AS credits
+           FROM mfi_journal_lines WHERE institution_id=j.institution_id AND journal_id=j.id
+         ) lines ON true
+         WHERE j.institution_id=$1 AND j.status='posted'
+           AND ($2::date IS NULL OR j.posted_at >= $2::date::timestamptz)
+           AND ($3::date IS NULL OR j.posted_at < ($3::date + interval '1 day')::timestamptz)
+           AND j.transaction_type IN ('loan_disbursement','loan_repayment')
+         GROUP BY j.transaction_type ORDER BY j.transaction_type`, [req.params.institutionId, from ?? null, to ?? null],
+      );
+      return { from: from ?? null, to: to ?? null, by_type: result.rows,
+        disbursed: result.rows.find((row) => row.transaction_type==='loan_disbursement')?.disbursed ?? '0.00',
+        repaid: result.rows.find((row) => row.transaction_type==='loan_repayment')?.repaid ?? '0.00',
+        unbalanced_journals: result.rows.reduce((sum, row) => sum+Number(row.unbalanced_journals),0) };
+    });
+  res.json(report);
+}));
+
 mfiRouter.get('/institutions/:institutionId/audit', h(async (req, res) => {
   const rows = await withInstitution(req.user!, req.params.institutionId, auditRoles, async (client) =>
     (await client.query(
@@ -472,6 +633,9 @@ mfiRouter.post('/institutions/:institutionId/journals/:journalId/reverse', h(asy
     if (!original) throw new HttpError(404, 'Posted journal not found');
     if (original.transaction_type === 'reversal' || original.reversal_of) {
       throw new HttpError(409, 'A reversal event cannot itself be reversed');
+    }
+    if (original.transaction_type === 'loan_writeoff') {
+      throw new HttpError(409, 'An approved loan write-off is final; any correction requires a separately approved recovery journal');
     }
     const replay = await findJournalReplay(client, {
       institutionId: req.params.institutionId,
@@ -574,6 +738,10 @@ mfiRouter.post('/institutions/:institutionId/journals/:journalId/reverse', h(asy
         [req.params.institutionId, original.loan_id],
       );
     } else if (loan && original.transaction_type === 'loan_repayment') {
+      const reversedInterest = originalLines.filter((line) => line.account_code === '4100')
+        .reduce((sum, line) => sum + decimalToCents(String(line.credit)) - decimalToCents(String(line.debit)), 0n);
+      const reversedPenalty = originalLines.filter((line) => line.account_code === '4300')
+        .reduce((sum, line) => sum + decimalToCents(String(line.credit)) - decimalToCents(String(line.debit)), 0n);
       const outstanding = (await client.query(
         `SELECT COALESCE(sum(l.debit-l.credit),0)::numeric(16,2) AS value
          FROM mfi_journal_lines l JOIN mfi_journals j
@@ -589,6 +757,8 @@ mfiRouter.post('/institutions/:institutionId/journals/:journalId/reverse', h(asy
         [req.params.institutionId, original.loan_id, centsToAmount(repaidCents), isRepaid ? 'repaid' : 'disbursed'],
       );
       await allocateLoanPrincipal(client, req.params.institutionId, String(original.loan_id), centsToAmount(repaidCents));
+      await reverseServicingAllocation(client, req.params.institutionId, String(original.loan_id),
+        centsToAmount(reversedInterest), centsToAmount(reversedPenalty));
     }
     await auditMfi(client, req.params.institutionId, req.user!.id, 'mfi_journal_reversed', 'mfi_journal', original.id, {
       status: 'posted',
@@ -601,7 +771,7 @@ mfiRouter.post('/institutions/:institutionId/journals/:journalId/reverse', h(asy
 mfiRouter.get('/institutions/:institutionId/members', h(async (req, res) => {
   const result = await withInstitution(req.user!, req.params.institutionId, viewRoles, async (client, role) => {
     const rows = (await client.query(
-      `SELECT m.id, m.member_number, m.full_name, m.phone, m.email, m.status, m.created_at,
+      `SELECT m.id, m.member_number, m.full_name, m.phone, m.email, m.status, m.kyc_status,m.kyc_reviewed_by,m.kyc_reviewed_at,m.created_at,
          m.created_by, m.reviewed_by, m.reviewed_at,
          count(a.id)::int AS account_count
        FROM mfi_members m
@@ -665,6 +835,120 @@ mfiRouter.post('/institutions/:institutionId/members/:memberId/review', h(async 
   res.json(member);
 }));
 
+mfiRouter.post('/institutions/:institutionId/members/:memberId/kyc-review', h(async (req, res) => {
+  const body = z.object({ decision: z.enum(['verified','rejected']), reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const member = await withInstitution(req.user!, req.params.institutionId, ['institution_admin','compliance'], async (client) => {
+    const current = (await client.query(
+      `SELECT id,created_by,kyc_status,kyc_reviewed_by FROM mfi_members
+       WHERE institution_id=$1 AND id=$2 FOR UPDATE`, [req.params.institutionId,req.params.memberId],
+    )).rows[0];
+    if (!current) throw new HttpError(404,'Member not found');
+    if (current.created_by===req.user!.id || current.kyc_reviewed_by===req.user!.id) {
+      throw new HttpError(409,'The registrar and previous KYC reviewer cannot review this KYC decision');
+    }
+    if (current.kyc_status===body.decision) throw new HttpError(409,`Member KYC is already ${body.decision}`);
+    if(body.decision==='verified' && !(await client.query(
+      `SELECT 1 FROM mfi_loan_documents WHERE institution_id=$1 AND member_id=$2 AND document_type='national_id'
+       AND status='verified' AND reviewed_by<>$3 LIMIT 1`,[req.params.institutionId,current.id,req.user!.id],
+    )).rowCount)throw new HttpError(409,'A national ID document must be independently verified before member KYC can be verified');
+    const updated=(await client.query(
+      `UPDATE mfi_members SET kyc_status=$3,kyc_reviewed_by=$4,kyc_reviewed_at=now(),kyc_review_reason=$5
+       WHERE institution_id=$1 AND id=$2 RETURNING id,member_number,kyc_status,kyc_reviewed_by,kyc_reviewed_at,kyc_review_reason`,
+      [req.params.institutionId,req.params.memberId,body.decision,req.user!.id,body.reason],
+    )).rows[0];
+    await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_member_kyc_'+body.decision,'mfi_member',current.id,
+      {kyc_status:current.kyc_status},{kyc_status:updated.kyc_status,reason:body.reason});
+    return updated;
+  });
+  res.json(member);
+}));
+
+mfiRouter.post('/institutions/:institutionId/members/:memberId/documents/:documentType',
+  express.raw({type:()=>true,limit:'10mb'}), h(async(req,res)=>{
+    const documentType=z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/).parse(req.params.documentType);
+    const file=req.body as Buffer;
+    if(!Buffer.isBuffer(file)||file.length===0)throw new HttpError(400,'Choose a document file to upload');
+    const mime=sniff(file);
+    if(!mime)throw new HttpError(415,'Only PDF, JPEG, or PNG identity and supporting documents are accepted');
+    const row=await withInstitution(req.user!,req.params.institutionId,
+      ['institution_admin','loan_officer','compliance'],async(client)=>{
+        if(!(await client.query('SELECT id FROM mfi_members WHERE institution_id=$1 AND id=$2',
+          [req.params.institutionId,req.params.memberId])).rowCount)throw new HttpError(404,'Member not found');
+        const storageKey=randomUUID();
+        const document=(await client.query(
+          `INSERT INTO mfi_loan_documents(institution_id,member_id,document_type,storage_key,sha256,mime,size_bytes,uploaded_by)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+           RETURNING id,member_id,document_type,status,mime,size_bytes,created_at`,
+          [req.params.institutionId,req.params.memberId,documentType,storageKey,createHash('sha256').update(file).digest('hex'),mime,file.length,req.user!.id],
+        )).rows[0];
+        await putFile(storageKey,file);
+        await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_loan_document_uploaded','mfi_loan_document',document.id,null,
+          {member_id:req.params.memberId,document_type:documentType,mime,size_bytes:file.length});
+        return document;
+      });
+    res.status(201).json(row);
+  }));
+
+mfiRouter.get('/institutions/:institutionId/members/:memberId/documents',h(async(req,res)=>{
+  const rows=await withInstitution(req.user!,req.params.institutionId,viewRoles,async(client)=>(await client.query(
+    `SELECT id,document_type,status,mime,size_bytes,uploaded_by,reviewed_by,reviewed_at,review_reason,created_at
+     FROM mfi_loan_documents WHERE institution_id=$1 AND member_id=$2 ORDER BY created_at DESC`,
+    [req.params.institutionId,req.params.memberId],
+  )).rows);
+  res.json(rows);
+}));
+
+mfiRouter.get('/institutions/:institutionId/documents',h(async(req,res)=>{
+  const rows=await withInstitution(req.user!,req.params.institutionId,['institution_admin','compliance','auditor'],async(client)=>(await client.query(
+    `SELECT document.id,document.member_id,member.member_number,member.full_name AS member_name,
+       document.document_type,document.status,document.mime,document.size_bytes,document.uploaded_by,
+       document.reviewed_by,document.reviewed_at,document.review_reason,document.created_at
+     FROM mfi_loan_documents document JOIN mfi_members member
+       ON member.id=document.member_id AND member.institution_id=document.institution_id
+     WHERE document.institution_id=$1 AND ($2::text IS NULL OR document.status=$2)
+     ORDER BY document.created_at DESC LIMIT 300`,
+    [req.params.institutionId,req.query.status ? z.enum(['uploaded','verified','rejected']).parse(req.query.status) : null],
+  )).rows);
+  res.json(rows);
+}));
+
+mfiRouter.get('/institutions/:institutionId/documents/:documentId/file',h(async(req,res)=>{
+  const document=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','loan_officer','compliance','auditor'],async(client)=>{
+      const row=(await client.query(
+        `SELECT id,storage_key,mime FROM mfi_loan_documents WHERE institution_id=$1 AND id=$2`,
+        [req.params.institutionId,req.params.documentId],
+      )).rows[0];
+      if(!row)throw new HttpError(404,'Loan document not found');
+      await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_loan_document_downloaded','mfi_loan_document',row.id);
+      return row;
+    });
+  res.set({'Content-Type':document.mime,'Content-Disposition':'attachment','X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'})
+    .send(await getFile(document.storage_key));
+}));
+
+mfiRouter.post('/institutions/:institutionId/documents/:documentId/review',h(async(req,res)=>{
+  const body=z.object({decision:z.enum(['verified','rejected']),reason:z.string().trim().min(10).max(1000)}).strict().parse(req.body);
+  const result=await withInstitution(req.user!,req.params.institutionId,['institution_admin','compliance'],async(client)=>{
+    const current=(await client.query(
+      `SELECT id,member_id,document_type,status,uploaded_by FROM mfi_loan_documents
+       WHERE institution_id=$1 AND id=$2 FOR UPDATE`,[req.params.institutionId,req.params.documentId],
+    )).rows[0];
+    if(!current)throw new HttpError(404,'Pending loan document not found');
+    if(current.status!=='uploaded')throw new HttpError(409,'Loan document has already been reviewed');
+    if(current.uploaded_by===req.user!.id)throw new HttpError(409,'The document uploader cannot review their own upload');
+    const updated=(await client.query(
+      `UPDATE mfi_loan_documents SET status=$3,reviewed_by=$4,reviewed_at=now(),review_reason=$5
+       WHERE institution_id=$1 AND id=$2 RETURNING id,member_id,document_type,status,reviewed_by,reviewed_at,review_reason`,
+      [req.params.institutionId,current.id,body.decision,req.user!.id,body.reason],
+    )).rows[0];
+    await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_loan_document_'+body.decision,'mfi_loan_document',current.id,
+      {status:current.status},{status:updated.status,reason:body.reason});
+    return updated;
+  });
+  res.json(result);
+}));
+
 mfiRouter.post('/institutions/:institutionId/members/:memberId/lifecycle', h(async (req, res) => {
   const body = z.object({ action: z.enum(['suspend','reactivate','close']), reason: z.string().trim().min(10).max(1000) }).parse(req.body);
   const member = await withInstitution(req.user!, req.params.institutionId, ['institution_admin','compliance'], async (client) => {
@@ -719,6 +1003,137 @@ mfiRouter.get('/institutions/:institutionId/products', h(async (req, res) => {
     )).rows,
   );
   res.json(rows);
+}));
+
+mfiRouter.get('/institutions/:institutionId/loan-products', h(async (req, res) => {
+  const rows = await withInstitution(req.user!, req.params.institutionId, viewRoles, async (client) =>
+    (await client.query(
+      `SELECT version.id,product.product_code,product.name,version.version,version.status,version.terms,
+              version.change_reason,version.created_by,version.approved_by,version.approved_at,
+              version.review_reason,version.created_at
+       FROM mfi_loan_product_versions version
+       JOIN mfi_products product ON product.id=version.product_id AND product.institution_id=version.institution_id
+       WHERE version.institution_id=$1 ORDER BY product.product_code,version.version DESC LIMIT 300`,
+      [req.params.institutionId],
+    )).rows,
+  );
+  res.json(rows);
+}));
+
+mfiRouter.post('/institutions/:institutionId/loan-products', h(async (req, res) => {
+  const body = z.object({ terms: lendingProductTermsSchema, change_reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const result = await withInstitution(req.user!, req.params.institutionId, ['institution_admin','credit_manager'], async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [req.params.institutionId, body.terms.product_code]);
+    let product = (await client.query(
+      `SELECT id,product_type,active FROM mfi_products WHERE institution_id=$1 AND product_code=$2 FOR UPDATE`,
+      [req.params.institutionId, body.terms.product_code],
+    )).rows[0];
+    if (product && product.product_type !== 'loan') throw new HttpError(409, 'This product code is already used for a non-loan product');
+    if (!product) product = (await client.query(
+      `INSERT INTO mfi_products(institution_id,product_code,name,product_type,active)
+       VALUES($1,$2,$3,'loan',false) RETURNING id,product_type,active`,
+      [req.params.institutionId, body.terms.product_code, body.terms.name],
+    )).rows[0];
+    const pending = await client.query(
+      `SELECT id FROM mfi_loan_product_versions
+       WHERE institution_id=$1 AND product_id=$2 AND status='pending_approval'`,
+      [req.params.institutionId, product.id],
+    );
+    if (pending.rowCount) throw new HttpError(409, 'Review or reject the pending version before submitting another product change');
+    const version = Number((await client.query(
+      `SELECT coalesce(max(version),0)+1 AS version FROM mfi_loan_product_versions
+       WHERE institution_id=$1 AND product_id=$2`, [req.params.institutionId, product.id],
+    )).rows[0].version);
+    const created = (await client.query(
+      `INSERT INTO mfi_loan_product_versions(institution_id,product_id,version,terms,change_reason,created_by)
+       VALUES($1,$2,$3,$4::jsonb,$5,$6)
+       RETURNING id,version,status,terms,change_reason,created_by,created_at`,
+      [req.params.institutionId, product.id, version, JSON.stringify(body.terms), body.change_reason, req.user!.id],
+    )).rows[0];
+    await auditMfi(client, req.params.institutionId, req.user!.id, 'mfi_loan_product_submitted', 'mfi_loan_product_version', created.id, null, {
+      product_code: body.terms.product_code, version, change_reason: body.change_reason,
+    });
+    return { ...created, product_code: body.terms.product_code, product_active: product.active };
+  });
+  res.status(201).json(result);
+}));
+
+mfiRouter.post('/institutions/:institutionId/loan-products/:versionId/decision', h(async (req, res) => {
+  const versionId = z.string().uuid().parse(req.params.versionId);
+  const body = z.object({ decision: z.enum(['approve','reject']), reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const result = await withInstitution(req.user!, req.params.institutionId, ['institution_admin','credit_manager'], async (client) => {
+    const pending = (await client.query(
+      `SELECT version.*,product.product_code,product.name AS product_name
+       FROM mfi_loan_product_versions version
+       JOIN mfi_products product ON product.id=version.product_id AND product.institution_id=version.institution_id
+       WHERE version.institution_id=$1 AND version.id=$2 AND version.status='pending_approval' FOR UPDATE OF version,product`,
+      [req.params.institutionId, versionId],
+    )).rows[0];
+    if (!pending) throw new HttpError(404, 'Pending loan product version was not found');
+    if (pending.created_by === req.user!.id) throw new HttpError(403, 'The product maker cannot review their own product version');
+    const terms = lendingProductTermsSchema.parse(pending.terms);
+    if (body.decision === 'approve') {
+      await client.query(
+        `UPDATE mfi_loan_product_versions SET status='superseded'
+         WHERE institution_id=$1 AND product_id=$2 AND status='active'`,
+        [req.params.institutionId, pending.product_id],
+      );
+    }
+    const updated = (await client.query(
+      `UPDATE mfi_loan_product_versions SET status=$3,approved_by=$4,approved_at=now(),review_reason=$5
+       WHERE institution_id=$1 AND id=$2
+       RETURNING id,version,status,terms,approved_by,approved_at,review_reason`,
+      [req.params.institutionId, versionId, body.decision === 'approve' ? 'active' : 'rejected', req.user!.id, body.reason],
+    )).rows[0];
+    if (body.decision === 'approve') await client.query(
+      `UPDATE mfi_products SET name=$3,active=true WHERE institution_id=$1 AND id=$2`,
+      [req.params.institutionId, pending.product_id, terms.name],
+    );
+    await auditMfi(client, req.params.institutionId, req.user!.id, `mfi_loan_product_${body.decision}d`, 'mfi_loan_product_version', versionId,
+      { status: 'pending_approval' }, { status: updated.status, product_code: pending.product_code, version: pending.version, reason: body.reason });
+    return updated;
+  });
+  res.json(result);
+}));
+
+mfiRouter.get('/institutions/:institutionId/disbursement-limits',h(async(req,res)=>{
+  const rows=await withInstitution(req.user!,req.params.institutionId,viewRoles,async(client)=>(await client.query(
+    `SELECT id,version,daily_limit::text,status,change_reason,created_by,approved_by,approved_at,review_reason,created_at
+     FROM mfi_disbursement_limit_versions WHERE institution_id=$1 ORDER BY version DESC LIMIT 100`,[req.params.institutionId])).rows);
+  res.json(rows);
+}));
+
+mfiRouter.post('/institutions/:institutionId/disbursement-limits',h(async(req,res)=>{
+  const body=z.object({daily_limit:z.union([amountSchema,z.null()]),change_reason:z.string().trim().min(10).max(1000)}).strict().parse(req.body);
+  const row=await withInstitution(req.user!,req.params.institutionId,['institution_admin','finance_manager'],async(client)=>{
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',[req.params.institutionId,'daily-disbursement-limit']);
+    if((await client.query("SELECT 1 FROM mfi_disbursement_limit_versions WHERE institution_id=$1 AND status='pending_approval'",[req.params.institutionId])).rowCount)
+      throw new HttpError(409,'Review the pending disbursement limit proposal first');
+    const version=Number((await client.query('SELECT coalesce(max(version),0)+1 AS version FROM mfi_disbursement_limit_versions WHERE institution_id=$1',[req.params.institutionId])).rows[0].version);
+    const created=(await client.query(`INSERT INTO mfi_disbursement_limit_versions(institution_id,version,daily_limit,change_reason,created_by)
+      VALUES($1,$2,$3,$4,$5) RETURNING id,version,daily_limit::text,status,created_by,created_at`,
+      [req.params.institutionId,version,body.daily_limit,body.change_reason,req.user!.id])).rows[0];
+    await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_disbursement_limit_submitted','mfi_disbursement_limit',created.id,null,created);
+    return created;
+  });
+  res.status(201).json(row);
+}));
+
+mfiRouter.post('/institutions/:institutionId/disbursement-limits/:versionId/decision',h(async(req,res)=>{
+  const id=z.string().uuid().parse(req.params.versionId);
+  const body=z.object({decision:z.enum(['approve','reject']),reason:z.string().trim().min(10).max(1000)}).strict().parse(req.body);
+  const row=await withInstitution(req.user!,req.params.institutionId,['institution_admin','finance_manager'],async(client)=>{
+    const pending=(await client.query("SELECT * FROM mfi_disbursement_limit_versions WHERE institution_id=$1 AND id=$2 AND status='pending_approval' FOR UPDATE",[req.params.institutionId,id])).rows[0];
+    if(!pending)throw new HttpError(404,'Pending disbursement limit proposal not found');
+    if(pending.created_by===req.user!.id)throw new HttpError(403,'The limit author cannot approve their own proposal');
+    if(body.decision==='approve')await client.query("UPDATE mfi_disbursement_limit_versions SET status='superseded' WHERE institution_id=$1 AND status='active'",[req.params.institutionId]);
+    const updated=(await client.query(`UPDATE mfi_disbursement_limit_versions SET status=$3,approved_by=$4,approved_at=now(),review_reason=$5
+      WHERE id=$1 AND institution_id=$2 RETURNING id,version,daily_limit::text,status,approved_by,approved_at,review_reason`,
+      [id,req.params.institutionId,body.decision==='approve'?'active':'rejected',req.user!.id,body.reason])).rows[0];
+    await auditMfi(client,req.params.institutionId,req.user!.id,`mfi_disbursement_limit_${body.decision}d`,'mfi_disbursement_limit',id,pending,updated);
+    return updated;
+  });
+  res.json(row);
 }));
 
 mfiRouter.get('/institutions/:institutionId/accounts', h(async (req, res) => {
@@ -869,7 +1284,7 @@ mfiRouter.get('/institutions/:institutionId/loans', h(async (req, res) => {
 mfiRouter.get('/institutions/:institutionId/loans/:loanId/installments', h(async (req, res) => {
   const rows = await withInstitution(req.user!, req.params.institutionId, viewRoles, async (client) =>
     (await client.query(
-      `SELECT installment_no,due_on,principal_due,principal_paid,status,
+      `SELECT installment_no,due_on,principal_due,principal_paid,interest_due,interest_paid,penalty_due,penalty_paid,status,
          GREATEST(0,current_date-due_on)::int AS days_past_due
        FROM mfi_loan_installments WHERE institution_id=$1 AND loan_id=$2 ORDER BY installment_no`,
       [req.params.institutionId, req.params.loanId],
@@ -1144,30 +1559,72 @@ mfiRouter.post('/institutions/:institutionId/npl-events/:eventId/decision', h(as
 mfiRouter.post('/institutions/:institutionId/loans', h(async (req, res) => {
   const body = z.object({
     member_id: z.string().uuid(),
-    product_id: z.string().uuid(),
+    product_id: z.string().uuid().optional(),
+    product_code: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{2,20}$/).optional(),
     principal_amount: amountSchema,
     term_months: z.number().int().min(1).max(360),
     purpose: z.string().trim().min(10).max(1000),
     monthly_income: z.string().regex(/^(?:0|[1-9]\d{0,13})(?:\.\d{1,2})?$/).refine((value) => decimalToCents(value) > 0n),
     monthly_expenses: z.string().regex(/^(?:0|[1-9]\d{0,13})(?:\.\d{1,2})?$/),
     monthly_debt: z.string().regex(/^(?:0|[1-9]\d{0,13})(?:\.\d{1,2})?$/),
-  }).parse(req.body);
+    customer_category: z.enum(['employee','individual','petty_trader','formal_business','partnership','plc','student','youth_entrepreneur','agriculture','group_member']).default('group_member'),
+    age: z.number().int().min(0).max(120).optional(),
+    business_months: z.number().int().min(0).max(1200).optional(),
+    employment_months: z.number().int().min(0).max(1200).optional(),
+    equity_amount: amountSchema.optional(),
+    collateral_value: amountSchema.optional(),
+    supplied_documents: z.array(z.string().trim().min(2).max(80)).max(30).default([]),
+    supplied_fields: z.array(z.string().trim().min(2).max(80)).max(30).default([]),
+  }).refine((value) => value.product_id || value.product_code, { message: 'Choose a loan product' }).parse(req.body);
   const loan = await withInstitution(req.user!, req.params.institutionId, ['institution_admin', 'loan_officer'], async (client) => {
     const member = (await client.query(
-      'SELECT id, created_at FROM mfi_members WHERE institution_id=$1 AND id=$2 AND status=\'active\'',
+      'SELECT id, created_at,kyc_status FROM mfi_members WHERE institution_id=$1 AND id=$2 AND status=\'active\' FOR UPDATE',
       [req.params.institutionId, body.member_id],
     )).rows[0];
     const product = (await client.query(
-      `SELECT id FROM mfi_products WHERE institution_id=$1 AND id=$2 AND product_type='loan' AND active`,
-      [req.params.institutionId, body.product_id],
+      `SELECT id,product_code FROM mfi_products
+       WHERE institution_id=$1 AND product_type='loan' AND active
+         AND ($2::uuid IS NULL OR id=$2) AND ($3::text IS NULL OR product_code=$3)`,
+      [req.params.institutionId, body.product_id ?? null, body.product_code ?? null],
     )).rows[0];
     if (!member) throw new HttpError(404, 'Active member not found');
+    if (member.kyc_status!=='verified') throw new HttpError(409,'Member KYC must be independently verified before applying for credit');
+    const riskHold = (await client.query(
+      `SELECT id,category FROM mfi_member_risk_flags WHERE institution_id=$1 AND member_id=$2 AND status='active' LIMIT 1`,
+      [req.params.institutionId,body.member_id],
+    )).rows[0];
+    if (riskHold) throw new HttpError(409, `Member is on an approved ${riskHold.category} lending hold`);
     if (!product) throw new HttpError(400, 'Choose an active loan product');
     const activePolicyRow = (await client.query(
       `SELECT version, policy FROM mfi_credit_policy_versions WHERE institution_id=$1 AND status='active'`, [req.params.institutionId],
     )).rows[0];
     if (!activePolicyRow) throw new HttpError(409, 'An approved credit policy must be configured before accepting loan applications');
     const policy = creditPolicySchema.parse(activePolicyRow.policy);
+    const versionRow = (await client.query(
+      `SELECT id,terms FROM mfi_loan_product_versions
+       WHERE institution_id=$1 AND product_id=$2 AND status='active'`,
+      [req.params.institutionId, product.id],
+    )).rows[0] ?? null;
+    if (body.product_code && !versionRow) throw new HttpError(409, 'This loan product has no approved version yet');
+    const productTerms = versionRow ? lendingProductTermsSchema.parse(versionRow.terms) : null;
+    const verifiedDocuments=productTerms ? (await client.query(
+      `SELECT DISTINCT document_type FROM mfi_loan_documents
+       WHERE institution_id=$1 AND member_id=$2 AND status='verified'`,
+      [req.params.institutionId,body.member_id],
+    )).rows.map((row)=>String(row.document_type)) : [];
+    if (productTerms && (productTerms.rejection_cooldown_days > 0 || productTerms.settlement_cooldown_days > 0)) {
+      const recent = (await client.query(
+        `SELECT max(l.reviewed_at) FILTER (WHERE l.status='rejected') AS rejected_at,
+                max(j.posted_at) FILTER (WHERE l.status='repaid' AND j.transaction_type='loan_repayment') AS settled_at
+         FROM mfi_loans l LEFT JOIN mfi_journals j
+           ON j.institution_id=l.institution_id AND j.loan_id=l.id AND j.status='posted'
+         WHERE l.institution_id=$1 AND l.member_id=$2`, [req.params.institutionId, body.member_id],
+      )).rows[0];
+      const rejectedDays = cooldownRemainingDays(recent.rejected_at, productTerms.rejection_cooldown_days);
+      if (rejectedDays > 0) throw new HttpError(409, `Product rejection cooldown is active for ${rejectedDays} more day(s)`);
+      const settlementDays = cooldownRemainingDays(recent.settled_at, productTerms.settlement_cooldown_days);
+      if (settlementDays > 0) throw new HttpError(409, `Product settlement cooldown is active for ${settlementDays} more day(s)`);
+    }
     const savingsBalance = (await client.query(
       `SELECT COALESCE(sum(l.credit-l.debit),0)::numeric(16,2) AS balance
        FROM mfi_member_accounts a JOIN mfi_journal_lines l ON l.institution_id=a.institution_id AND l.member_account_id=a.id
@@ -1176,28 +1633,71 @@ mfiRouter.post('/institutions/:institutionId/loans', h(async (req, res) => {
       [req.params.institutionId, body.member_id],
     )).rows[0].balance as string;
     const history = (await client.query(
-      `SELECT count(*)::int AS total, count(*) FILTER (WHERE status='repaid')::int AS repaid
-       FROM mfi_loans WHERE institution_id=$1 AND member_id=$2 AND status IN ('repaid','cancelled')`,
+      `SELECT count(*) FILTER (WHERE status IN ('repaid','cancelled'))::int AS total,
+              count(*) FILTER (WHERE status='repaid')::int AS repaid,
+              count(*) FILTER (WHERE status IN ('pending','approved','disbursed'))::int AS active
+       FROM mfi_loans WHERE institution_id=$1 AND member_id=$2`,
       [req.params.institutionId, body.member_id],
     )).rows[0];
     const membershipDays = Math.max(0, Math.floor((Date.now() - new Date(member.created_at).getTime()) / 86400000));
+    let proposedMonthlyPayment: string | undefined;
+    if (productTerms) {
+      const firstDue = new Date();
+      firstDue.setUTCMonth(firstDue.getUTCMonth() + 1);
+      const quote = quoteLoan({ principal: body.principal_amount, tenorMonths: body.term_months,
+        firstDueOn: firstDue.toISOString().slice(0, 10), terms: productTerms });
+      const highestInstallment = quote.installments.reduce((max, installment) =>
+        decimalToCents(installment.total_due) > max ? decimalToCents(installment.total_due) : max, 0n);
+      const annualPeriods = productTerms.repayment_frequency === 'monthly' ? 12
+        : productTerms.repayment_frequency === 'fortnightly' ? 26 : 52;
+      proposedMonthlyPayment = centsToAmount((highestInstallment * BigInt(annualPeriods) + 11n) / 12n);
+    }
     const assessment = scoreLoan({ policy, requestedAmount: body.principal_amount, termMonths: body.term_months,
       monthlyIncome: body.monthly_income, monthlyExpenses: body.monthly_expenses, monthlyDebt: body.monthly_debt,
-      savingsBalance, membershipDays, priorLoans: history.total, repaidLoans: history.repaid });
+      savingsBalance, membershipDays, priorLoans: history.total, repaidLoans: history.repaid, proposedMonthlyPayment });
+    let eligibilityContext: Record<string, unknown> | null = null;
+    if (productTerms) {
+      eligibilityContext = {
+        category: body.customer_category,
+        age: body.age,
+        businessMonths: body.business_months,
+        employmentMonths: body.employment_months,
+        equityAmount: body.equity_amount ?? '0.00',
+        collateralValue: body.collateral_value,
+        suppliedDocuments: verifiedDocuments,
+        suppliedFields: body.supplied_fields,
+        debtServiceBps: Math.ceil(Number(assessment.factors.debt_service_pct) * 100),
+        membershipDays,
+        savingsBalance,
+        activeLoans: history.active,
+      };
+      const eligibility = evaluateLoanEligibility({
+        terms: productTerms, category: body.customer_category, principal: body.principal_amount,
+        tenorMonths: body.term_months, debtServiceBps: Math.ceil(Number(assessment.factors.debt_service_pct) * 100),
+        membershipDays, savingsBalance, activeLoans: history.active, age: body.age,
+        businessMonths: body.business_months, employmentMonths: body.employment_months,
+        equityAmount: body.equity_amount ?? '0.00', collateralValue: body.collateral_value,
+        suppliedDocuments: verifiedDocuments, suppliedFields: body.supplied_fields,
+      });
+      if (!eligibility.eligible) throw new HttpError(409, `Loan product requirements are not met: ${eligibility.reasons.join(', ')}`);
+    }
     const row = (await client.query(
       `INSERT INTO mfi_loans (institution_id, member_id, product_id, principal_amount, term_months, purpose,
          monthly_income, monthly_expenses, monthly_debt, credit_score, credit_scorecard_version, credit_score_factors,
-         application_submitted_at, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),$13) RETURNING *`,
-      [req.params.institutionId, body.member_id, body.product_id, normalizeAmount(body.principal_amount), body.term_months,
+         application_submitted_at, created_by, product_version_id, product_terms, eligibility_context)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),$13,$14,$15::jsonb,$16::jsonb) RETURNING *`,
+      [req.params.institutionId, body.member_id, product.id, normalizeAmount(body.principal_amount), body.term_months,
         body.purpose, normalizeAmount(body.monthly_income), normalizeAmount(body.monthly_expenses), normalizeAmount(body.monthly_debt),
-        assessment.score, activePolicyRow.version, JSON.stringify(assessment.factors), req.user!.id],
+        assessment.score, activePolicyRow.version, JSON.stringify(assessment.factors), req.user!.id,
+        versionRow?.id ?? null, productTerms ? JSON.stringify(productTerms) : null,
+        eligibilityContext ? JSON.stringify(eligibilityContext) : null],
     )).rows[0];
     await auditMfi(client, req.params.institutionId, req.user!.id, 'mfi_loan_requested', 'mfi_loan', row.id, null, {
       member_id: row.member_id, principal_amount: row.principal_amount, term_months: row.term_months,
       credit_score: assessment.score, scorecard_version: activePolicyRow.version, factors: assessment.factors,
+      product_version_id: versionRow?.id ?? null, product_code: product.product_code,
     });
-    return { ...row, eligible_by_scorecard: assessment.eligible };
+    return { ...row, eligible_by_scorecard: assessment.eligible, product_eligibility: productTerms ? eligibilityContext : null };
   });
   res.status(201).json(loan);
 }));
@@ -1226,6 +1726,19 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/decision', h(async (r
           Number(old.credit_score_factors?.debt_service_pct ?? 10000) > policy.scorecard.maximum_debt_service_pct) {
         throw new HttpError(409, 'The application does not meet the approved scorecard threshold; reject it or reassess under a new application');
       }
+      if (old.product_version_id && old.product_terms && old.eligibility_context) {
+        const terms = lendingProductTermsSchema.parse(old.product_terms);
+        const context = old.eligibility_context;
+        const eligibility = evaluateLoanEligibility({
+          terms, category: context.category, principal: String(old.principal_amount), tenorMonths: Number(old.term_months),
+          debtServiceBps: Number(context.debtServiceBps), membershipDays: Number(context.membershipDays),
+          savingsBalance: String(context.savingsBalance), activeLoans: Number(context.activeLoans), age: context.age,
+          businessMonths: context.businessMonths, employmentMonths: context.employmentMonths,
+          equityAmount: String(context.equityAmount ?? '0'), collateralValue: context.collateralValue,
+          suppliedDocuments: context.suppliedDocuments ?? [], suppliedFields: context.suppliedFields ?? [],
+        });
+        if (!eligibility.eligible) throw new HttpError(409, `Loan product requirements are no longer satisfied: ${eligibility.reasons.join(', ')}`);
+      }
     }
     const updated = (await client.query(
       `UPDATE mfi_loans SET status=$3, checked_by=$4, decision_reason=$5, reviewed_at=now()
@@ -1249,6 +1762,14 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/disburse', h(async (r
       [req.params.institutionId, req.params.loanId],
     )).rows[0];
     if (!loan) throw new HttpError(404, 'Loan request not found');
+    const member=(await client.query('SELECT id,kyc_status FROM mfi_members WHERE institution_id=$1 AND id=$2 FOR UPDATE',
+      [req.params.institutionId,loan.member_id])).rows[0];
+    if(member?.kyc_status!=='verified')throw new HttpError(409,'Member KYC must be independently verified before disbursement');
+    const riskHold = (await client.query(
+      `SELECT id,category FROM mfi_member_risk_flags WHERE institution_id=$1 AND member_id=$2 AND status='active' LIMIT 1`,
+      [req.params.institutionId,loan.member_id],
+    )).rows[0];
+    if (riskHold) throw new HttpError(409, `Member is on an approved ${riskHold.category} disbursement hold`);
     const replay = await findJournalReplay(client, {
       institutionId: req.params.institutionId, idempotencyKey: body.idempotency_key,
       type: 'loan_disbursement', memberAccountId: null, loanId: req.params.loanId,
@@ -1270,8 +1791,25 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/disburse', h(async (r
     if (loan.created_by === req.user!.id || loan.checked_by === req.user!.id) {
       throw new HttpError(409, 'The loan originator and approver cannot disburse this loan');
     }
+    const firstDueOn = (await client.query("SELECT (current_date + interval '1 month')::date::text AS due_on")).rows[0].due_on as string;
+    const productTerms = loan.product_terms ? lendingProductTermsSchema.parse(loan.product_terms) : null;
+    const quote = productTerms ? quoteLoan({
+      principal: String(loan.principal_amount), tenorMonths: Number(loan.term_months), firstDueOn, terms: productTerms,
+    }) : null;
+    const feeAmount = decimalToCents(quote?.origination_fee ?? '0.00');
+    const netDisbursement = decimalToCents(String(loan.principal_amount)) - feeAmount;
+    if (netDisbursement <= 0n) throw new HttpError(409, 'The product fee must be less than the loan principal');
     await lockCashAccount(client, req.params.institutionId);
-    if (decimalToCents(await cashBalance(client, req.params.institutionId)) < decimalToCents(String(loan.principal_amount))) {
+    const activeDailyLimit=(await client.query("SELECT daily_limit::text FROM mfi_disbursement_limit_versions WHERE institution_id=$1 AND status='active'",[req.params.institutionId])).rows[0];
+    if(activeDailyLimit?.daily_limit!==null&&activeDailyLimit?.daily_limit!==undefined){
+      const disbursedToday=(await client.query(`SELECT coalesce(sum(j.amount),0)::text AS amount FROM mfi_journals j
+        WHERE j.institution_id=$1 AND j.transaction_type='loan_disbursement' AND j.status='posted' AND j.posted_at::date=current_date
+          AND NOT EXISTS(SELECT 1 FROM mfi_journals reversal WHERE reversal.institution_id=j.institution_id AND reversal.reversal_of=j.id)`,
+        [req.params.institutionId])).rows[0].amount as string;
+      if(decimalToCents(disbursedToday)+decimalToCents(String(loan.principal_amount))>decimalToCents(String(activeDailyLimit.daily_limit)))
+        throw new HttpError(409,'The approved daily institution disbursement limit would be exceeded');
+    }
+    if (decimalToCents(await cashBalance(client, req.params.institutionId)) < netDisbursement) {
       throw new HttpError(409, 'The institution has insufficient cash to disburse this loan');
     }
     const account = (await client.query(
@@ -1290,7 +1828,8 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/disburse', h(async (r
       actorId: req.user!.id,
       lines: [
         { code: '1300', memberAccountId: account.id, debit: String(loan.principal_amount), credit: '0' },
-        { code: '1000', debit: '0', credit: String(loan.principal_amount) },
+        ...(netDisbursement > 0n ? [{ code: '1000', debit: '0', credit: centsToAmount(netDisbursement) }] : []),
+        ...(feeAmount > 0n ? [{ code: '4200', debit: '0', credit: centsToAmount(feeAmount) }] : []),
       ],
     });
     await client.query(
@@ -1298,21 +1837,139 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/disburse', h(async (r
        WHERE institution_id=$1 AND id=$2`,
       [req.params.institutionId, loan.id, account.id, req.user!.id],
     );
-    const firstDueOn = (await client.query("SELECT (current_date + interval '1 month')::date::text AS due_on")).rows[0].due_on as string;
-    for (const installment of principalSchedule(String(loan.principal_amount), Number(loan.term_months), firstDueOn)) {
+    const schedule = quote?.installments ?? principalSchedule(String(loan.principal_amount), Number(loan.term_months), firstDueOn)
+      .map((item) => ({ ...item, interest_due: '0.00' }));
+    for (const installment of schedule) {
       await client.query(
-        `INSERT INTO mfi_loan_installments (institution_id, loan_id, installment_no, due_on, principal_due)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [req.params.institutionId, loan.id, installment.installment_no, installment.due_on, installment.principal_due],
+        `INSERT INTO mfi_loan_installments (institution_id, loan_id, installment_no, due_on, principal_due,interest_due)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [req.params.institutionId, loan.id, installment.installment_no, installment.due_on, installment.principal_due, installment.interest_due],
       );
     }
     await auditMfi(client, req.params.institutionId, req.user!.id, 'mfi_loan_disbursed', 'mfi_loan', loan.id, { status: loan.status }, {
       status: 'disbursed', account_number: account.account_number, journal_id: journal.id,
-      principal_only_schedule: Number(loan.term_months), first_due_on: firstDueOn,
+      principal_only_schedule: productTerms?.interest_method === 'none' || !productTerms,
+      product_version_id: loan.product_version_id ?? null,
+      quote: quote ?? { principal: String(loan.principal_amount), total_interest: '0.00', origination_fee: '0.00' },
+      net_disbursed: centsToAmount(netDisbursement), installment_count: schedule.length, first_due_on: firstDueOn,
     });
-    return { loan_id: loan.id, account, journal };
+    return { loan_id: loan.id, account, journal, quote, net_disbursed: centsToAmount(netDisbursement) };
   });
   res.status(result.journal.replayed ? 200 : 201).json(result);
+}));
+
+mfiRouter.get('/institutions/:institutionId/writeoffs',h(async(req,res)=>{
+  const rows=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','compliance','auditor'],async(client)=>(await client.query(
+      `SELECT writeoff.id,writeoff.loan_id,loan.member_id,loan.created_by AS loan_created_by,
+         loan.checked_by,loan.disbursed_by,member.member_number,member.full_name AS member_name,
+         writeoff.amount::text,writeoff.reason,writeoff.status,writeoff.created_by,writeoff.reviewed_by,
+         writeoff.reviewed_at,writeoff.review_reason,writeoff.journal_id,writeoff.created_at
+       FROM mfi_loan_writeoffs writeoff JOIN mfi_loans loan
+         ON loan.id=writeoff.loan_id AND loan.institution_id=writeoff.institution_id
+       JOIN mfi_members member ON member.id=loan.member_id AND member.institution_id=loan.institution_id
+       WHERE writeoff.institution_id=$1 ORDER BY writeoff.created_at DESC LIMIT 300`,[req.params.institutionId],
+    )).rows);
+  res.json(rows);
+}));
+
+mfiRouter.post('/institutions/:institutionId/loans/:loanId/writeoffs',h(async(req,res)=>{
+  const body=z.object({idempotency_key:z.string().uuid(),reason:z.string().trim().min(10).max(1000)}).strict().parse(req.body);
+  const request=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','compliance'],async(client)=>{
+      const loan=(await client.query(
+        `SELECT id,status,principal_amount::text,principal_repaid::text,created_by,checked_by,disbursed_by
+         FROM mfi_loans WHERE institution_id=$1 AND id=$2 FOR UPDATE`,[req.params.institutionId,req.params.loanId],
+      )).rows[0];
+      if(!loan)throw new HttpError(404,'Loan not found');
+      const outstanding=decimalToCents(String(loan.principal_amount))-decimalToCents(String(loan.principal_repaid));
+      if(loan.status!=='disbursed'||outstanding<=0n)throw new HttpError(409,'Only a disbursed loan with outstanding principal can be proposed for write-off');
+      const payloadHash=amountHash({loan_id:loan.id,amount:centsToAmount(outstanding),reason:body.reason});
+      const existing=(await client.query(
+        `SELECT id,loan_id,amount::text,status,created_by,reviewed_by,reviewed_at,review_reason,journal_id,reason,payload_hash
+         FROM mfi_loan_writeoffs WHERE institution_id=$1 AND idempotency_key=$2`,[req.params.institutionId,body.idempotency_key],
+      )).rows[0];
+      if(existing){
+        if(existing.payload_hash&&existing.payload_hash!==payloadHash)throw new HttpError(409,'Write-off idempotency key was used with different request details');
+        return {...existing,created:false};
+      }
+      const created=(await client.query(
+        `INSERT INTO mfi_loan_writeoffs(institution_id,loan_id,amount,idempotency_key,payload_hash,reason,created_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7)
+         RETURNING id,loan_id,amount::text,status,created_by,reviewed_by,reviewed_at,review_reason,journal_id,reason`,
+        [req.params.institutionId,loan.id,centsToAmount(outstanding),body.idempotency_key,payloadHash,body.reason,req.user!.id],
+      )).rows[0];
+      await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_loan_writeoff_proposed','mfi_loan_writeoff',created.id,null,
+        {loan_id:loan.id,amount:created.amount,reason:body.reason});
+      return {...created,created:true};
+    });
+  res.status(request.created?201:200).json(request);
+}));
+
+mfiRouter.post('/institutions/:institutionId/writeoffs/:writeoffId/decision',h(async(req,res)=>{
+  const body=z.object({decision:z.enum(['approve','reject']),reason:z.string().trim().min(10).max(1000)}).strict().parse(req.body);
+  const result=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','finance_manager','compliance'],async(client)=>{
+      const current=(await client.query(
+        `SELECT writeoff.*,loan.member_id,loan.member_account_id,loan.principal_amount::text,loan.principal_repaid::text,
+            loan.status AS loan_status,loan.created_by AS loan_created_by,loan.checked_by,loan.disbursed_by
+         FROM mfi_loan_writeoffs writeoff JOIN mfi_loans loan
+           ON loan.id=writeoff.loan_id AND loan.institution_id=writeoff.institution_id
+         WHERE writeoff.institution_id=$1 AND writeoff.id=$2 FOR UPDATE OF writeoff,loan`,
+        [req.params.institutionId,req.params.writeoffId],
+      )).rows[0];
+      if(!current)throw new HttpError(404,'Pending loan write-off was not found');
+      if(current.status!=='pending')throw new HttpError(409,'This loan write-off was already decided');
+      if([current.created_by,current.loan_created_by,current.checked_by,current.disbursed_by].includes(req.user!.id))
+        throw new HttpError(409,'The request maker, loan originator, approver, or disburser cannot approve this write-off');
+      if(body.decision==='reject'){
+        const rejected=(await client.query(
+          `UPDATE mfi_loan_writeoffs SET status='rejected',reviewed_by=$3,reviewed_at=now(),review_reason=$4
+           WHERE institution_id=$1 AND id=$2 RETURNING id,loan_id,amount::text,status,reviewed_by,reviewed_at,review_reason`,
+          [req.params.institutionId,current.id,req.user!.id,body.reason],
+        )).rows[0];
+        await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_loan_writeoff_rejected','mfi_loan_writeoff',current.id,
+          {status:'pending'},{status:'rejected',reason:body.reason});
+        return rejected;
+      }
+      const outstanding=decimalToCents(String(current.principal_amount))-decimalToCents(String(current.principal_repaid));
+      if(current.loan_status!=='disbursed'||outstanding<=0n||centsToAmount(outstanding)!==normalizeAmount(String(current.amount)))
+        throw new HttpError(409,'Loan balance changed after the write-off request; submit a new proposal for the current balance');
+      const journal=await postJournal(client,{
+        institutionId:req.params.institutionId,idempotencyKey:current.idempotency_key,type:'loan_writeoff',
+        memberAccountId:null,loanId:current.loan_id,writeoffId:current.id,amount:String(current.amount),actorId:req.user!.id,
+        lines:[
+          {code:'5100',debit:String(current.amount),credit:'0'},
+          {code:'1300',memberAccountId:current.member_account_id,debit:'0',credit:String(current.amount)},
+        ],
+      });
+      await client.query(
+        `UPDATE mfi_loan_installments SET status='waived'
+         WHERE institution_id=$1 AND loan_id=$2 AND status IN ('due','partial')`,
+        [req.params.institutionId,current.loan_id],
+      );
+      await client.query(
+        `UPDATE mfi_loans SET status='written_off' WHERE institution_id=$1 AND id=$2`,
+        [req.params.institutionId,current.loan_id],
+      );
+      const approved=(await client.query(
+        `UPDATE mfi_loan_writeoffs SET status='approved',reviewed_by=$3,reviewed_at=now(),review_reason=$4,journal_id=$5
+         WHERE institution_id=$1 AND id=$2
+         RETURNING id,loan_id,amount::text,status,reviewed_by,reviewed_at,review_reason,journal_id`,
+        [req.params.institutionId,current.id,req.user!.id,body.reason,journal.id],
+      )).rows[0];
+      await client.query(
+        `INSERT INTO mfi_member_risk_flags(institution_id,member_id,category,reason,status,created_by,reviewed_by,reviewed_at,review_reason)
+         VALUES($1,$2,'delinquency_restriction',$3,'active',$4,$5,now(),$6)`,
+        [req.params.institutionId,current.member_id,
+          `Member account restricted after approved loan write-off ${current.id}: ${body.reason}`,
+          current.created_by,req.user!.id,`Independent lending restriction following approved write-off ${current.id}`],
+      );
+      await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_loan_writeoff_approved','mfi_loan_writeoff',current.id,
+        {loan_status:current.loan_status,amount:current.amount},{loan_status:'written_off',journal_id:journal.id,risk_hold:true,reason:body.reason});
+      return {...approved,journal};
+    });
+  res.json(result);
 }));
 
 mfiRouter.post('/institutions/:institutionId/loans/:loanId/repay', h(async (req, res) => {
@@ -1329,11 +1986,53 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/repay', h(async (req,
       });
       if (replay) return replay;
     }
-    if (!loan || !['disbursed', 'repaid'].includes(loan.status) || !loan.member_account_id) {
+    if (!loan || loan.status !== 'disbursed' || !loan.member_account_id) {
       throw new HttpError(409, 'Only a disbursed loan can receive a repayment');
     }
-    const outstanding = decimalToCents(String(loan.principal_amount)) - decimalToCents(String(loan.principal_repaid));
-    if (decimalToCents(body.amount) > outstanding) throw new HttpError(409, 'Principal repayment cannot exceed the outstanding principal');
+    const terms = loan.product_terms ? lendingProductTermsSchema.parse(loan.product_terms) : null;
+    const latePenaltyBps = terms?.late_penalty_bps ?? 0;
+    const graceDays = terms?.grace_days ?? 0;
+    if (latePenaltyBps > 0) await client.query(
+      `UPDATE mfi_loan_installments SET
+         penalty_due=round(((principal_due-principal_paid)+(interest_due-interest_paid))*$4/10000,2),
+         penalty_assessed_at=now()
+       WHERE institution_id=$1 AND loan_id=$2 AND penalty_assessed_at IS NULL
+         AND due_on + $3::integer < current_date
+         AND (principal_paid<principal_due OR interest_paid<interest_due)`,
+      [req.params.institutionId, loan.id, graceDays, latePenaltyBps],
+    );
+    const installments = (await client.query(
+      `SELECT id,principal_due::text,principal_paid::text,interest_due::text,interest_paid::text,
+              penalty_due::text,penalty_paid::text
+       FROM mfi_loan_installments WHERE institution_id=$1 AND loan_id=$2
+       ORDER BY due_on,installment_no FOR UPDATE`,
+      [req.params.institutionId, loan.id],
+    )).rows;
+    let unallocated = decimalToCents(body.amount);
+    const paidTotals = { principal: 0n, interest: 0n, penalty: 0n };
+    const pendingUpdates = installments.map((row) => ({
+      id: row.id as string,
+      principalDue: decimalToCents(String(row.principal_due)), principalPaid: decimalToCents(String(row.principal_paid)),
+      interestDue: decimalToCents(String(row.interest_due)), interestPaid: decimalToCents(String(row.interest_paid)),
+      penaltyDue: decimalToCents(String(row.penalty_due)), penaltyPaid: decimalToCents(String(row.penalty_paid)),
+    }));
+    const priority = terms?.repayment_priority ?? ['principal','interest','penalty','fee'] as const;
+    for (const bucket of priority) {
+      if (bucket === 'fee') continue;
+      for (const row of pendingUpdates) {
+        if (unallocated === 0n) break;
+        const due = bucket === 'principal' ? row.principalDue : bucket === 'interest' ? row.interestDue : row.penaltyDue;
+        const paid = bucket === 'principal' ? row.principalPaid : bucket === 'interest' ? row.interestPaid : row.penaltyPaid;
+        const allocation = unallocated < due - paid ? unallocated : due - paid;
+        if (allocation <= 0n) continue;
+        if (bucket === 'principal') row.principalPaid += allocation;
+        else if (bucket === 'interest') row.interestPaid += allocation;
+        else row.penaltyPaid += allocation;
+        paidTotals[bucket] += allocation;
+        unallocated -= allocation;
+      }
+    }
+    if (unallocated > 0n) throw new HttpError(409, 'Repayment exceeds the total amount due under the product schedule');
     await lockCashAccount(client, req.params.institutionId);
     const journal = await postJournal(client, {
       institutionId: req.params.institutionId,
@@ -1345,19 +2044,147 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/repay', h(async (req,
       actorId: req.user!.id,
       lines: [
         { code: '1000', debit: normalizeAmount(body.amount), credit: '0' },
-        { code: '1300', memberAccountId: loan.member_account_id, debit: '0', credit: normalizeAmount(body.amount) },
+        ...(paidTotals.principal > 0n ? [{ code: '1300', memberAccountId: loan.member_account_id, debit: '0', credit: centsToAmount(paidTotals.principal) }] : []),
+        ...(paidTotals.interest > 0n ? [{ code: '4100', debit: '0', credit: centsToAmount(paidTotals.interest) }] : []),
+        ...(paidTotals.penalty > 0n ? [{ code: '4300', debit: '0', credit: centsToAmount(paidTotals.penalty) }] : []),
       ],
     });
     if (!journal.replayed) {
-      const paid = decimalToCents(String(loan.principal_repaid)) + decimalToCents(body.amount);
-      const repaid = paid === decimalToCents(String(loan.principal_amount));
+      for (const row of pendingUpdates) {
+        await client.query(
+          `UPDATE mfi_loan_installments SET principal_paid=$3,interest_paid=$4,penalty_paid=$5,
+             status=CASE WHEN $3::numeric=0::numeric THEN 'due'
+               WHEN $3::numeric=principal_due THEN 'paid' ELSE 'partial' END
+           WHERE institution_id=$1 AND id=$2`,
+          [req.params.institutionId, row.id, centsToAmount(row.principalPaid), centsToAmount(row.interestPaid), centsToAmount(row.penaltyPaid)],
+        );
+      }
+      const paid = decimalToCents(String(loan.principal_repaid)) + paidTotals.principal;
+      const remaining = (await client.query(
+        `SELECT coalesce(sum((principal_due-principal_paid)+(interest_due-interest_paid)+(penalty_due-penalty_paid)),0)::numeric(16,2)::text AS amount
+         FROM mfi_loan_installments WHERE institution_id=$1 AND loan_id=$2`,
+        [req.params.institutionId, loan.id],
+      )).rows[0].amount as string;
+      const repaid = decimalToCents(remaining) === 0n;
       await client.query(
         `UPDATE mfi_loans SET principal_repaid=$3, status=$4 WHERE institution_id=$1 AND id=$2`,
         [req.params.institutionId, loan.id, centsToAmount(paid), repaid ? 'repaid' : 'disbursed'],
       );
-      await allocateLoanPrincipal(client, req.params.institutionId, loan.id, centsToAmount(paid));
     }
     return journal;
   });
   res.status(result.replayed ? 200 : 201).json(result);
+}));
+
+mfiRouter.get('/institutions/:institutionId/complaints', h(async (req, res) => {
+  const rows = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','loan_officer','compliance','auditor'], async (client) =>
+      (await client.query(
+        `SELECT c.id,c.member_id,m.member_number,m.full_name AS member_name,c.reference,c.category,c.subject,
+                c.description,c.status,c.priority,c.resolution_due_at,c.assigned_to,c.resolution,c.resolved_by,
+                c.resolved_at,c.created_by,c.created_at,c.updated_at
+         FROM mfi_customer_complaints c JOIN mfi_members m ON m.id=c.member_id AND m.institution_id=c.institution_id
+         WHERE c.institution_id=$1 ORDER BY CASE c.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+                  c.created_at DESC LIMIT 500`, [req.params.institutionId],
+      )).rows);
+  res.json(rows);
+}));
+
+mfiRouter.post('/institutions/:institutionId/complaints', h(async (req, res) => {
+  const body = z.object({ member_id:z.string().uuid(), category:z.enum(['service','loan_decision','repayment','fees','privacy','fraud','other']),
+    subject:z.string().trim().min(5).max(160), description:z.string().trim().min(10).max(5000), priority:z.enum(['low','normal','high','urgent']).default('normal') }).strict().parse(req.body);
+  const complaint = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','loan_officer','compliance'], async (client) => {
+      const member = (await client.query('SELECT id FROM mfi_members WHERE institution_id=$1 AND id=$2',
+        [req.params.institutionId,body.member_id])).rows[0];
+      if (!member) throw new HttpError(404,'Member not found');
+      const reference = `MFI-${randomUUID().replaceAll('-','').slice(0,12).toUpperCase()}`;
+      const row = (await client.query(
+        `INSERT INTO mfi_customer_complaints(institution_id,member_id,reference,category,subject,description,priority,created_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING id,member_id,reference,category,subject,status,priority,resolution_due_at,created_at`,
+        [req.params.institutionId,body.member_id,reference,body.category,body.subject,body.description,body.priority,req.user!.id],
+      )).rows[0];
+      await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_complaint_opened','mfi_customer_complaint',row.id,null,row);
+      return row;
+    });
+  res.status(201).json(complaint);
+}));
+
+mfiRouter.post('/institutions/:institutionId/complaints/:complaintId/decision', h(async (req, res) => {
+  const complaintId=z.string().uuid().parse(req.params.complaintId);
+  const body=z.object({status:z.enum(['investigating','awaiting_customer','resolved','rejected']),priority:z.enum(['low','normal','high','urgent']).optional(),
+    assigned_to:z.string().uuid().nullable().optional(),resolution:z.string().trim().min(10).max(5000).optional()}).strict().parse(req.body);
+  const complaint=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','compliance'],async(client)=>{
+      const current=(await client.query('SELECT * FROM mfi_customer_complaints WHERE institution_id=$1 AND id=$2 FOR UPDATE',
+        [req.params.institutionId,complaintId])).rows[0];
+      if(!current)throw new HttpError(404,'Complaint not found');
+      if(['resolved','rejected'].includes(current.status))throw new HttpError(409,'Closed complaints cannot be changed');
+      if(['resolved','rejected'].includes(body.status)&&!body.resolution)throw new HttpError(422,'A resolution summary is required to close a complaint');
+      const updated=(await client.query(
+        `UPDATE mfi_customer_complaints SET status=$3,priority=coalesce($4,priority),assigned_to=coalesce($5,assigned_to),
+          resolution=CASE WHEN $3 IN ('resolved','rejected') THEN $6 ELSE resolution END,
+          resolved_by=CASE WHEN $3 IN ('resolved','rejected') THEN $7 ELSE null END,
+          resolved_at=CASE WHEN $3 IN ('resolved','rejected') THEN now() ELSE null END,updated_at=now()
+         WHERE institution_id=$1 AND id=$2 RETURNING id,reference,status,priority,assigned_to,resolution,resolved_by,resolved_at,updated_at`,
+        [req.params.institutionId,complaintId,body.status,body.priority??null,body.assigned_to??null,body.resolution??null,req.user!.id],
+      )).rows[0];
+      await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_complaint_updated','mfi_customer_complaint',complaintId,current,updated);
+      return updated;
+    });
+  res.json(complaint);
+}));
+
+mfiRouter.get('/institutions/:institutionId/members/:memberId/risk-flags', h(async(req,res)=>{
+  const memberId=z.string().uuid().parse(req.params.memberId);
+  const rows=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','loan_officer','compliance','auditor'],async(client)=>
+      (await client.query(`SELECT id,member_id,category,reason,status,created_by,reviewed_by,reviewed_at,review_reason,
+        released_by,released_at,release_reason,created_at FROM mfi_member_risk_flags
+        WHERE institution_id=$1 AND member_id=$2 ORDER BY created_at DESC`,[req.params.institutionId,memberId])).rows);
+  res.json(rows);
+}));
+
+mfiRouter.post('/institutions/:institutionId/members/:memberId/risk-flags', h(async(req,res)=>{
+  const memberId=z.string().uuid().parse(req.params.memberId);
+  const body=z.object({category:z.enum(['identity_mismatch','suspicious_activity','fraud','aml_hold','delinquency_restriction']),reason:z.string().trim().min(10).max(2000)}).strict().parse(req.body);
+  const row=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','credit_manager','compliance'],async(client)=>{
+      const member=(await client.query('SELECT id FROM mfi_members WHERE institution_id=$1 AND id=$2 FOR UPDATE',[req.params.institutionId,memberId])).rows[0];
+      if(!member)throw new HttpError(404,'Member not found');
+      const flag=(await client.query(`INSERT INTO mfi_member_risk_flags(institution_id,member_id,category,reason,created_by)
+        VALUES($1,$2,$3,$4,$5) RETURNING id,member_id,category,reason,status,created_at`,
+        [req.params.institutionId,memberId,body.category,body.reason,req.user!.id])).rows[0];
+      await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_member_risk_flag_submitted','mfi_member_risk_flag',flag.id,null,flag);
+      return flag;
+    });
+  res.status(201).json(row);
+}));
+
+mfiRouter.post('/institutions/:institutionId/risk-flags/:flagId/decision', h(async(req,res)=>{
+  const id=z.string().uuid().parse(req.params.flagId);
+  const body=z.object({decision:z.enum(['activate','reject','release']),reason:z.string().trim().min(10).max(2000)}).strict().parse(req.body);
+  const flag=await withInstitution(req.user!,req.params.institutionId,
+    ['institution_admin','credit_manager','compliance'],async(client)=>{
+      const current=(await client.query('SELECT * FROM mfi_member_risk_flags WHERE institution_id=$1 AND id=$2 FOR UPDATE',[req.params.institutionId,id])).rows[0];
+      if(!current)throw new HttpError(404,'Member risk flag not found');
+      await client.query('SELECT id FROM mfi_members WHERE institution_id=$1 AND id=$2 FOR UPDATE',[req.params.institutionId,current.member_id]);
+      if(current.created_by===req.user!.id)throw new HttpError(403,'The flag author cannot review or release their own risk flag');
+      if(body.decision==='release'){
+        if(current.status!=='active')throw new HttpError(409,'Only an active risk hold can be released');
+        const updated=(await client.query(`UPDATE mfi_member_risk_flags SET status='released',released_by=$3,released_at=now(),release_reason=$4
+          WHERE institution_id=$1 AND id=$2 RETURNING id,member_id,category,status,released_by,released_at,release_reason`,
+          [req.params.institutionId,id,req.user!.id,body.reason])).rows[0];
+        await auditMfi(client,req.params.institutionId,req.user!.id,'mfi_member_risk_hold_released','mfi_member_risk_flag',id,current,updated);
+        return updated;
+      }
+      if(current.status!=='pending_review')throw new HttpError(409,'Only a pending risk flag can be reviewed');
+      const updated=(await client.query(`UPDATE mfi_member_risk_flags SET status=$3,reviewed_by=$4,reviewed_at=now(),review_reason=$5
+        WHERE institution_id=$1 AND id=$2 RETURNING id,member_id,category,status,reviewed_by,reviewed_at,review_reason`,
+        [req.params.institutionId,id,body.decision==='activate'?'active':'rejected',req.user!.id,body.reason])).rows[0];
+      await auditMfi(client,req.params.institutionId,req.user!.id,`mfi_member_risk_flag_${body.decision}d`,'mfi_member_risk_flag',id,current,updated);
+      return updated;
+    });
+  res.json(flag);
 }));

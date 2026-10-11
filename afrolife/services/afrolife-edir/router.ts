@@ -281,7 +281,7 @@ edirRouter.post('/memberships', h(async (req, res) => {
 
 edirRouter.get('/memberships', requireEdirRegistryReader, h(async (_req, res) => {
   const memberships = await withUser(_req.user!, async (client) => (await client.query(
-    `SELECT m.id, m.user_id, m.created_by, m.member_number, m.full_name, m.phone, m.email, m.status,
+    `SELECT m.id, m.user_id, m.created_by, m.member_number, m.full_name, m.phone, m.email, m.status,m.kyc_status,m.kyc_reviewed_by,
             m.terms_version, m.terms_accepted_at, m.created_at, m.reviewed_by, m.reviewed_at, m.review_reason,
             (SELECT count(*)::int FROM edir_group_memberships gm WHERE gm.member_id = m.id) AS group_count
      FROM edir_memberships m ORDER BY m.created_at DESC`,

@@ -42,11 +42,14 @@ export function scoreLoan(input: {
   membershipDays: number;
   priorLoans: number;
   repaidLoans: number;
+  proposedMonthlyPayment?: string;
 }) {
   const { scorecard } = input.policy;
   const income = decimalToCents(input.monthlyIncome);
   const expenseAndDebt = decimalToCents(input.monthlyExpenses) + decimalToCents(input.monthlyDebt);
-  const proposedPayment = (decimalToCents(input.requestedAmount) + BigInt(input.termMonths) - 1n) / BigInt(input.termMonths);
+  const proposedPayment = input.proposedMonthlyPayment === undefined
+    ? (decimalToCents(input.requestedAmount) + BigInt(input.termMonths) - 1n) / BigInt(input.termMonths)
+    : decimalToCents(input.proposedMonthlyPayment);
   const dsrPct = income > 0n ? Number(((expenseAndDebt + proposedPayment) * 10000n) / income) / 100 : 10000;
   const affordability = Math.max(0, Math.min(100, Math.round((1 - dsrPct / scorecard.maximum_debt_service_pct) * 100)));
   const savingsTarget = decimalToCents(input.requestedAmount) * BigInt(Math.round(scorecard.savings_coverage_target_pct * 100));

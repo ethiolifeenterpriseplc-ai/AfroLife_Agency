@@ -26,6 +26,18 @@ test('credit score is explainable and flags unaffordable applications', () => {
   assert.equal(score.eligible, false);
 });
 
+test('product pricing installment is included in affordability assessment', () => {
+  const principalOnly = scoreLoan({ policy, requestedAmount: '12000.00', termMonths: 12,
+    monthlyIncome: '5000.00', monthlyExpenses: '1000.00', monthlyDebt: '1000.00',
+    savingsBalance: '3000.00', membershipDays: 365, priorLoans: 0, repaidLoans: 0 });
+  const priced = scoreLoan({ policy, requestedAmount: '12000.00', termMonths: 12,
+    monthlyIncome: '5000.00', monthlyExpenses: '1000.00', monthlyDebt: '1000.00',
+    savingsBalance: '3000.00', membershipDays: 365, priorLoans: 0, repaidLoans: 0,
+    proposedMonthlyPayment: '1500.00' });
+  assert.ok(priced.factors.debt_service_pct > principalOnly.factors.debt_service_pct);
+  assert.equal(priced.eligible, false);
+});
+
 test('principal schedule allocates every cent and clamps due days to valid month dates', () => {
   const schedule = principalSchedule('100.00', 3, '2026-01-31');
   assert.deepEqual(schedule.map((row) => row.principal_due), ['33.34', '33.33', '33.33']);
