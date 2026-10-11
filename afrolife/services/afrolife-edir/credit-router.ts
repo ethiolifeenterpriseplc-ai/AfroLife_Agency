@@ -145,7 +145,7 @@ edirCreditRouter.post('/complaints', h(async(req,res)=>{
   const body=z.object({category:z.enum(['service','loan_decision','repayment','fees','privacy','fraud','other']),
     subject:z.string().trim().min(5).max(160),description:z.string().trim().min(10).max(5000)}).strict().parse(req.body);
   const complaint=await withUser(req.user!,async(client)=>{
-    const member=(await client.query(`SELECT id FROM edir_memberships WHERE user_id=$1 AND status='active' FOR UPDATE`,[req.user!.id])).rows[0];
+    const member=(await client.query(`SELECT id FROM edir_memberships WHERE user_id=$1 AND status='active'`,[req.user!.id])).rows[0];
     if(!member)throw new HttpError(403,'An active Edir membership is required to file a complaint');
     const reference=`EDR-${randomUUID().replaceAll('-','').slice(0,12).toUpperCase()}`;
     const row=(await client.query(
@@ -172,7 +172,7 @@ edirCreditRouter.post('/complaints/:complaintId/decision',requireStaffRole(['edi
     const updated=(await client.query(
       `UPDATE edir_customer_complaints SET status=$2,priority=coalesce($3,priority),assigned_to=coalesce($4,assigned_to),
         resolution=CASE WHEN $2 IN ('resolved','rejected') THEN $5 ELSE resolution END,
-        resolved_by=CASE WHEN $2 IN ('resolved','rejected') THEN $6 ELSE null END,
+        resolved_by=CASE WHEN $2 IN ('resolved','rejected') THEN $6::uuid ELSE null END,
         resolved_at=CASE WHEN $2 IN ('resolved','rejected') THEN now() ELSE null END,updated_at=now()
        WHERE id=$1 RETURNING id,reference,status,priority,assigned_to,resolution,resolved_by,resolved_at,updated_at`,
       [id,body.status,body.priority??null,body.assigned_to??null,body.resolution??null,req.user!.id],

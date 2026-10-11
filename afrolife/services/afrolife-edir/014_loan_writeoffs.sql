@@ -1,6 +1,6 @@
 INSERT INTO edir_ledger_accounts(code,name,category,normal_balance)
 VALUES('5100','Loan write-off expense','expense','debit')
-ON CONFLICT(code) DO NOTHING;
+ON CONFLICT(organization_id,code) DO NOTHING;
 
 ALTER TABLE edir_loans DROP CONSTRAINT edir_loans_status_check;
 ALTER TABLE edir_loans ADD CONSTRAINT edir_loans_status_check

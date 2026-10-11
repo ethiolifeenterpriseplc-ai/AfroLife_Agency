@@ -202,6 +202,47 @@ I ran these checks independently of every historical status in the workbook:
 | Edir database migrations / E2E | BLOCKED | Local configuration has no `EDIR_MIGRATION_DATABASE_URL`; Edir schema/unit tests are not database-backed acceptance |
 | HTTP integration suite | NOT RUN | Harness requires an explicitly configured disposable `TEST_DATABASE_URL`; no disposable integration target was confirmed |
 
+### 11 October 2026 continuation: Edir database-backed UAT
+
+The previous Edir database blocker is resolved for the isolated local UAT
+target. `scripts/provision-local-edir.ps1` provisions the dedicated database
+`afrolife_edir_uat` on local PostgreSQL port 5433 and a restricted runtime role
+with neither superuser nor `BYPASSRLS` privileges. The environment is stored in
+the local AfroLife environment file; no credentials are recorded here. All 14
+Edir migrations applied successfully. This includes the corrected tenant-scoped
+conflict target in migration 014 (`organization_id, code`).
+
+`npm run build:edir` passed. The focused Edir/service migration and credit tests
+passed 37/37. `npm run test:edir:e2e:local` then passed all 7 synthetic API
+cases against the isolated local database:
+
+- A verified-KYC member can request membership; the request remains pending.
+- The requester cannot approve their own membership, and the failed attempt
+  does not change the pending state; a separate authorized administrator can
+  activate it.
+- An active member can file a complaint that receives a tracking reference and
+  future resolution target. Another member cannot read or manage it.
+- Complaint closure without a resolution summary is rejected. Staff can move
+  the complaint through investigation to resolution, and intake and resolution
+  are audited.
+
+The E2E journey exposed and fixed two defects before its passing run: complaint
+intake used a row lock that required update permission and hid the membership
+from an ordinary member; the complaint resolution SQL also needed an explicit
+UUID cast for `resolved_by`. Regression assertions cover both fixes. The most
+recent rerun passed all 7 cases. Its records are synthetic only; no production
+or customer records were used.
+
+This result validates membership and complaint API behavior only. It does not
+accept the remaining Edir loan journeys. Edir KYC document upload/review,
+application scoring and approval, offer acceptance, risk holds, disbursement
+caps, repayment/write-off posting, and financial reports still need dedicated
+database-backed UAT. Interest/fee/penalty servicing remains unimplemented for
+Edir. The 235 workbook cases have not each been run against both products.
+
+The earlier execution table's Edir migration/E2E blocker is superseded for the
+scope above; the full Edir lending UAT remains incomplete.
+
 The local MFI journey covered independent national-ID document review and KYC,
 KYC gating, maker-checker policy and product approvals, pricing snapshots,
 disbursement, repayment/reversal, NPL classification, collections, balanced

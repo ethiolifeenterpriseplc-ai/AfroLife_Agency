@@ -20,6 +20,7 @@
     "db:local:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-database.ps1 -Action Status",
     "check:local-deployment": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-local-deployment.ps1",
     "db:insurance:local:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/provision-local-insurance.ps1",
+    "db:edir:local:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/provision-local-edir.ps1",
     "android:add": "cap add android",
     "android:sync": "cap sync android",
     "android:open": "cap open android",
@@ -33,6 +34,7 @@
     "migrate:edir": "npm run build:edir && node dist/services/afrolife-edir/migrate.js",
     "test:unit": "tsx --test test/phone.test.ts test/domain.test.ts test/matching.test.ts test/rent-refunds.test.ts test/security.test.ts test/totp.test.ts test/csv.test.ts test/mfi.test.ts test/mfi-credit.test.ts test/lending-products.test.ts test/insurance-ledger.test.ts test/insurance-service-gateway.test.ts test/insurance-service-schema.test.ts test/edir-service-schema.test.ts test/edir-money.test.ts test/edir-credit.test.ts test/auth-role.test.ts test/api-errors.test.ts test/privacy-access.test.ts test/insurance-global-admin-access.test.ts test/rate-limit-store.test.ts test/runtime-config.test.ts test/migration-security.test.ts test/service-worker.test.ts",
     "test:mfi:e2e:local": "tsx scripts/local-mfi-e2e.ts",
+    "test:edir:e2e:local": "tsx scripts/local-edir-e2e.ts",
     "test:ui:e2e:local": "node scripts/local-ui-smoke.mjs",
     "test:integration": "tsx --test test/api.test.ts test/supply.test.ts",
     "test": "npm run test:unit"

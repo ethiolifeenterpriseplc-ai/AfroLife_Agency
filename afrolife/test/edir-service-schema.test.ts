@@ -17,6 +17,7 @@ const kycMigration = await readFile(new URL('../services/afrolife-edir/012_membe
 const documentMigration = await readFile(new URL('../services/afrolife-edir/013_loan_documents.sql', import.meta.url), 'utf8');
 const writeoffMigration = await readFile(new URL('../services/afrolife-edir/014_loan_writeoffs.sql', import.meta.url), 'utf8');
 const creditRouter = await readFile(new URL('../services/afrolife-edir/credit-router.ts', import.meta.url), 'utf8');
+const complaintIntakeRoute = creditRouter.split("edirCreditRouter.post('/complaints'")[1]?.split("edirCreditRouter.post('/complaints/:complaintId/decision'")[0] ?? '';
 const router = await readFile(new URL('../services/afrolife-edir/router.ts', import.meta.url), 'utf8');
 const migrationRunner = await readFile(new URL('../services/afrolife-edir/migrate.ts', import.meta.url), 'utf8');
 
@@ -111,6 +112,8 @@ test('Edir customer complaints support private member submission and tracked sta
   assert.match(creditRouter, /post\('\/complaints'/);
   assert.match(creditRouter, /post\('\/complaints\/:complaintId\/decision'/);
   assert.match(creditRouter, /A resolution summary is required to close a complaint/);
+  assert.doesNotMatch(complaintIntakeRoute, /SELECT id FROM edir_memberships WHERE user_id=\$1 AND status='active' FOR UPDATE/);
+  assert.match(creditRouter, /resolved_by=CASE WHEN \$2 IN \('resolved','rejected'\) THEN \$6::uuid ELSE null END/);
 });
 
 test('Edir risk holds require independent review and block member credit actions', () => {
@@ -179,6 +182,7 @@ test('Edir application intake enforces product cooldowns after rejection and set
 
 test('Edir full-principal write-off requires independent review and posts to loss expense', () => {
   assert.match(migrationRunner, /afrolife-edir-v14-loan-writeoffs/);
+  assert.match(writeoffMigration, /ON CONFLICT\(organization_id,code\) DO NOTHING/);
   assert.match(writeoffMigration, /CREATE TABLE edir_loan_writeoffs/);
   assert.match(writeoffMigration, /operation_type IN \('disbursement','repayment','writeoff'\)/);
   assert.match(writeoffMigration, /full current principal balance and independent authorized actors/);

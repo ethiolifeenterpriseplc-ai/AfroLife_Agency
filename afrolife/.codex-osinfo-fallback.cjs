@@ -1,4 +1,6 @@
 const os = require('node:os');
+// tsx's Windows loader falls back to os.userInfo() when geteuid is absent.
+if (typeof process.geteuid !== 'function') process.geteuid = () => -1;
 try {
   os.userInfo();
 } catch (error) {
