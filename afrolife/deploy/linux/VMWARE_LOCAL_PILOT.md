@@ -1,4 +1,4 @@
-# VMware Workstation local AfroLife pilot
+# VMware Workstation local EthioLife pilot
 
 This procedure installs AfroLife in the prepared Ubuntu Server VM on the
 Windows development computer. The VM uses VMware NAT networking: it can make
@@ -13,7 +13,7 @@ to the changing public egress address, not to this NAT guest.
 
 ## 1. Install Ubuntu in the VM
 
-The VM configuration and ISO are stored under:
+The existing VM configuration is stored under:
 
 ```text
 %USERPROFILE%\Documents\Virtual Machines\AfroLife-Ubuntu
@@ -31,6 +31,26 @@ setup:
   then reboot from the VM's virtual disk.
 
 Never paste the guest password or private SSH key into chat or commit them.
+
+Host preflight checked on 11 October 2026: the VMX is configured for NAT with
+2 vCPUs and 4 GB of memory. VMware Workstation and `vmrun.exe` are installed.
+The expected Ubuntu ISO path currently contains a 9.9 MB incomplete file and
+a 350 MB partial `.download` file; neither is a usable installer. Do not
+start the VM until the ISO download is complete and verified.
+
+Download the current Ubuntu Server 24.04 LTS AMD64 ISO and the official
+`SHA256SUMS` file from [Ubuntu releases](https://releases.ubuntu.com/24.04/).
+Compare the ISO's SHA-256 hash with the matching filename in that checksum
+file before attaching it to the VM. In PowerShell:
+
+```powershell
+Get-FileHash "$env:USERPROFILE\Documents\Virtual Machines\AfroLife-Ubuntu\ubuntu-24.04.5-live-server-amd64.iso" -Algorithm SHA256
+```
+
+If the official directory has a newer 24.04 point-release ISO, update the
+VM's CD/DVD filename to that exact verified filename. Delete or replace the
+partial download only after confirming it is incomplete; do not trust a
+download based only on its filename.
 
 ## 2. Prepare the guest
 

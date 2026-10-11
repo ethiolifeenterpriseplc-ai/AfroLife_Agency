@@ -1,4 +1,4 @@
-﻿# AfroLife production hardening checklist
+# EthioLife Agency production hardening checklist
 
 This is a release gate, not evidence that the listed operational work has already
 been completed. Use `.env.production.example` as a template only; do not deploy
@@ -87,15 +87,20 @@ gates below have been satisfied.
 
 ### DuckDNS and HTTPS
 
-The requested hostname is `afrolife-agency.duckdns.org`. As of 10 October
-2026, its A record matches this network's current public egress address, and
-the saved DuckDNS updater credential successfully updated the record. External
-TCP ports 80 and 443 remain unreachable. The host is behind a private LAN
-gateway; Windows Firewall has no enabled inbound allow rule for those ports.
-WSL Nginx and the API listen only on loopback ports 8080 and 3000, respectively.
-Local Windows IIS serves its stock landing page on HTTP, and no HTTPS binding
-is configured. DNS is therefore working, but the host is neither routed nor
-configured to serve the AfroLife app publicly.
+`ethiolife.life` is the brand-aligned hostname candidate, but its ownership
+and DNS control have not been verified. Do not assume it is available or
+configure it until the domain is registered to the project owner. Keep
+`afrolife-agency.duckdns.org` as a pilot alias only; point whichever hostname
+is approved at the actual public ingress, not at a changing developer egress
+address or a VMware NAT guest.
+
+The requested hostname is `afrolife-agency.duckdns.org`. On 11 October 2026,
+the hostname resolved to an A record, but bounded TCP connection checks from
+this Windows host to ports 80 and 443 both failed. DNS resolution alone does
+not establish that the hostname reaches the application. The host is behind a
+private LAN gateway; no public route, trusted TLS binding, or external app
+reachability has been verified. Do not publish the hostname as a working
+service URL until the checks below pass from an independent network.
 
 If this Windows host is to be used, confirm the gateway has a reachable public
 IPv4 address and configure inbound routing for TCP 80/443 to the host; if the
@@ -168,6 +173,12 @@ It can run the app and a separate PostgreSQL instance for validation, but
 public deployment still requires a reachable host and network, durable
 service startup, backups, and trusted TLS.
 
+Run `npm run check:local-deployment` from the project directory before local
+staging checks. It verifies the Node.js version, active WSL services,
+loopback-only listeners, database-backed API health, and whether the local
+proxy serves the same app title as this checkout. A passing result is local
+evidence only, not a public production approval.
+
 The local staging stack is installed under `/opt/afrolife/app`; PostgreSQL
 listens only on `127.0.0.1:5432`, the Node API only on `127.0.0.1:3000`, and
 the local Nginx proxy only on `127.0.0.1:8080`. The generated runtime secrets
@@ -185,6 +196,15 @@ The `AfroLife-Ubuntu-Staging` Windows Scheduled Task starts Ubuntu at the
 current user's logon and keeps WSL alive so its enabled systemd services can
 run. The local staging URL is `http://localhost:8080`; it is not HTTPS and
 must not be used for public traffic or real identity documents.
+
+On 11 October 2026, the WSL services were active, the API health endpoint and
+local proxy each returned HTTP 200, and the separate Windows synthetic-data
+database accepted connections on `127.0.0.1:5433`. However, the page served
+from the WSL proxy still displayed the older AfroLife title rather than this
+checkout's EthioLife title. The WSL deployment is therefore healthy but not
+the current workspace release. No files or database migrations were changed
+in that running deployment; take and verify a backup, review the migrations,
+and schedule a controlled release before replacing it.
 
 The Linux database has not been seeded with a Super Admin. When ready, open
 Ubuntu and run `sudo bash /opt/afrolife/app/deploy/linux/Seed-AfroLifeAdmin.sh`.

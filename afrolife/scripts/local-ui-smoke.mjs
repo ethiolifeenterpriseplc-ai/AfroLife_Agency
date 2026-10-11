@@ -21,6 +21,7 @@ const browser = spawn(chrome, [
 ], { stdio: 'ignore', windowsHide: true });
 
 let socket;
+let closeBrowser;
 try {
   let debuggingPort;
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -60,6 +61,7 @@ try {
     pending.set(id, (event) => { clearTimeout(timeout); event.error ? reject(new Error(event.error.message)) : resolve(event.result); });
     socket.send(JSON.stringify({ id, method, params }));
   });
+  closeBrowser = () => socket.send(JSON.stringify({ id: ++nextId, method: 'Browser.close' }));
   const evaluate = async (expression) => {
     const response = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
     if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
@@ -86,6 +88,7 @@ try {
   })()`);
   await waitFor("document.querySelector('#app-view')?.hidden === false", 'successful Super Admin sign in');
   await waitFor("document.querySelector('#mfi-tab')?.hidden === false", 'SACCO tab visibility');
+  await waitFor("!!document.querySelector('#mobile-workspace-nav [data-panel=\"overview\"][aria-current=\"page\"]')", 'accessible current-page state in mobile navigation');
   await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]')", 'role-aware mini-app launcher');
   await evaluate("document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]').click()");
   await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace rendering');
@@ -146,9 +149,15 @@ try {
   assert.ok(mobileNavigation.shortestTarget >= 44, `Mobile navigation targets are too small: ${JSON.stringify(mobileNavigation)}`);
   await evaluate("document.querySelector('#mobile-workspace-more').click()");
   await waitFor("document.querySelector('#workspace-more-dialog')?.open === true", 'mobile workspace sections sheet');
+  assert.equal(await evaluate("document.querySelector('#mobile-workspace-more').getAttribute('aria-expanded')"), 'true',
+    'More navigation should expose its expanded state');
   await waitFor("!!document.querySelector('#workspace-more-nav [data-panel=\"admin\"]')", 'additional role-visible sections');
+  assert.equal(await evaluate("document.querySelector('#mobile-workspace-more').getAttribute('aria-current')"), 'page',
+    'More navigation should identify the current page when it is in the additional sections');
   await evaluate("document.querySelector('#workspace-more-nav [data-panel=\"admin\"]').click()");
   await waitFor("document.querySelector('#workspace-more-dialog')?.open === false && document.querySelector('#page-title')?.textContent === 'Admin workspace'", 'More navigation selection');
+  assert.equal(await evaluate("document.querySelector('#mobile-workspace-more').getAttribute('aria-expanded')"), 'false',
+    'More navigation should report its collapsed state after selecting a section');
 
   const layouts = [];
   for (const [width, height, label] of [[390, 844, 'mobile'], [768, 1024, 'tablet'], [1440, 900, 'desktop']]) {
@@ -162,17 +171,33 @@ try {
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join('; ')}`);
   console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir mini-app shortcuts when enabled', 'mobile bottom navigation visibility and touch target sizing', 'More sections sheet navigation', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], mobileNavigation, layouts }, null, 2));
 } finally {
-  socket?.close();
-  if (Number.isInteger(browser.pid)) {
-    if (process.platform === 'win32') spawnSync('taskkill.exe', ['/PID', String(browser.pid), '/T', '/F'], { stdio: 'ignore' });
-    else browser.kill('SIGTERM');
+  if (closeBrowser) {
+    try { closeBrowser(); }
+    catch (error) {
+      if (browser.exitCode === null) console.warn(`Could not close the isolated Chrome session cleanly: ${error.message}`);
+    }
   }
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  socket?.close();
+  if (Number.isInteger(browser.pid) && browser.exitCode === null) {
+    await Promise.race([
+      new Promise((resolve) => browser.once('exit', resolve)),
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
+    if (browser.exitCode === null) {
+      if (process.platform === 'win32') {
+        spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+          `Stop-Process -Id ${browser.pid} -Force -ErrorAction SilentlyContinue`], { stdio: 'ignore' });
+      } else {
+        browser.kill('SIGTERM');
+      }
+    }
+  }
+  await new Promise((resolve) => setTimeout(resolve, 800));
   let removed = false;
   let cleanupError;
-  for (let attempt = 0; attempt < 5 && !removed; attempt++) {
+  for (let attempt = 0; attempt < 12 && !removed; attempt++) {
     try { rmSync(profile, { recursive: true, force: true }); removed = true; }
-    catch (error) { cleanupError = error; await new Promise((resolve) => setTimeout(resolve, 300)); }
+    catch (error) { cleanupError = error; await new Promise((resolve) => setTimeout(resolve, 500)); }
   }
   if (!removed) console.warn(`Could not clean isolated Chrome profile (${cleanupError?.code ?? 'unknown filesystem error'}).`);
 }

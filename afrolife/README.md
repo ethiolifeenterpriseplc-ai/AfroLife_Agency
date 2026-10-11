@@ -281,6 +281,7 @@ scenarios, launch evidence, and pilot operations.
 - `npm run test:mfi:e2e:local` — exercise the SACCO/MFI API journey against the running local app and isolated QA database
 - `npm run test:ui:e2e:local` — headless Chrome smoke check for Super Admin login, SACCO forms, responsive layouts, and browser errors; requires local QA accounts and Chrome
 - `npm run test:integration` — run API/database tests against a running local instance
+- `npm run check:local-deployment` — check local WSL service health, loopback-only listeners, and whether the proxy serves the current checkout
 - GitHub Actions runs browser syntax/config checks, the TypeScript build, and unit tests on relevant pushes and pull requests.
 - `npm run android:add` — generate the Capacitor Android project
 - `npm run android:sync` — copy the web app into Android and sync native plugins

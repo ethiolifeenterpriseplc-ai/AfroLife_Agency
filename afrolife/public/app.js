@@ -808,6 +808,7 @@ function renderMobileWorkspaceNav() {
   moreButton.setAttribute('aria-label', t('More workspace sections'));
   moreButton.setAttribute('aria-haspopup', 'dialog');
   moreButton.setAttribute('aria-controls', 'workspace-more-dialog');
+  moreButton.setAttribute('aria-expanded', 'false');
   const moreIcon = node('span', '⋯', 'workspace-nav-icon');
   moreIcon.setAttribute('aria-hidden', 'true');
   moreButton.append(moreIcon, node('span', 'More', 'workspace-nav-label'));
@@ -1478,9 +1479,18 @@ function renderSecurity() {
 
 function renderPanel() {
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.panel === state.panel));
-  document.querySelectorAll('.workspace-nav-link').forEach((link) => link.classList.toggle('active', link.dataset.panel === state.panel));
-  const primaryPanels = new Set([...document.querySelectorAll('#mobile-workspace-nav [data-panel]')].map((link) => link.dataset.panel));
-  $('#mobile-workspace-more')?.classList.toggle('active', !primaryPanels.has(state.panel));
+  document.querySelectorAll('.workspace-nav-link[data-panel]').forEach((link) => {
+    const isCurrent = link.dataset.panel === state.panel;
+    link.classList.toggle('active', isCurrent);
+    if (isCurrent) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+  const additionalPanels = new Set([...document.querySelectorAll('#workspace-more-nav [data-panel]')].map((link) => link.dataset.panel));
+  const moreButton = $('#mobile-workspace-more');
+  const moreIsCurrent = additionalPanels.has(state.panel);
+  moreButton?.classList.toggle('active', moreIsCurrent);
+  if (moreIsCurrent) moreButton?.setAttribute('aria-current', 'page');
+  else moreButton?.removeAttribute('aria-current');
   $('#page-title').textContent = t(state.panel === 'password' || state.panel === 'security' ? 'Account security' : state.panel === 'admin' ? 'Admin workspace' : state.panel === 'mfi' ? 'SACCO / MFI workspace' : 'Your workspace');
   if (state.panel === 'mfi') {
     $('#workspace').replaceChildren(createMfiWorkspace(api, state.user));
@@ -1932,7 +1942,9 @@ document.addEventListener('click', async (event) => {
     return;
   }
   if (event.target.closest('#mobile-workspace-more')) {
+    const moreButton = $('#mobile-workspace-more');
     $('#workspace-more-dialog').showModal();
+    moreButton.setAttribute('aria-expanded', 'true');
     return;
   }
   const tab = event.target.closest('.tab[data-panel]');
@@ -2335,6 +2347,9 @@ $('#retry-session').addEventListener('click', async () => {
   }
 });
 $('#refresh').addEventListener('click', () => refresh().catch((error) => showAlert(error.message, true)));
+$('#workspace-more-dialog').addEventListener('close', () => {
+  $('#mobile-workspace-more')?.setAttribute('aria-expanded', 'false');
+});
 $('#install-app').addEventListener('click', async () => {
   if (!deferredInstallPrompt) return;
   await deferredInstallPrompt.prompt();
