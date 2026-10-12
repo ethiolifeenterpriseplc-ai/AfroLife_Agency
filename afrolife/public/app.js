@@ -1774,7 +1774,8 @@ async function submitForm(form) {
       languages: values.languages.split(',').map((value) => value.trim()).filter(Boolean),
     }) });
   } else if (form.dataset.form === 'request') {
-    await api('/requests', { method: 'POST', body: JSON.stringify({
+    form.dataset.idempotencyKey ||= crypto.randomUUID();
+    await api('/requests', { method: 'POST', headers: { 'Idempotency-Key': form.dataset.idempotencyKey }, body: JSON.stringify({
       ...values,
       rate_offered: number(values.rate_offered),
       min_experience: Number(values.min_experience || 0),
@@ -1782,6 +1783,7 @@ async function submitForm(form) {
       skills_required: values.skills_required.split(',').map((value) => value.trim()).filter(Boolean),
       languages_required: values.languages_required.split(',').map((value) => value.trim()).filter(Boolean),
     }) });
+    delete form.dataset.idempotencyKey;
   } else if (form.dataset.form === 'user') {
     const payload = { ...values };
     if (!payload.territory_id) delete payload.territory_id;
@@ -1824,6 +1826,7 @@ async function showCandidates(requestId, container) {
     for (const person of candidates) {
       const item = card(person.name, t('{{years}} years · match score {{score}}%', { years: person.experience_years, score: person.score }), 'verified');
       item.append(matchBreakdown(person.parts));
+      item.append(matchEvaluation(person.evaluation));
       item.append(button('Propose match', 'propose', 'button button-primary', { id: requestId, worker: person.worker_id }));
       panel.append(item);
     }
@@ -1849,6 +1852,43 @@ function matchBreakdown(parts) {
   return details;
 }
 
+function matchEvaluation(evaluation) {
+  if (!evaluation || typeof evaluation !== 'object') return document.createDocumentFragment();
+  const details = document.createElement('details');
+  details.className = 'match-breakdown';
+  details.append(node('summary', 'Eligibility and scoring policy'));
+  const list = node('ul');
+  const labels = {
+    worker_verified: 'Worker verification',
+    worker_available: 'Worker availability',
+    sector_matches: 'Service sector',
+    current_national_id: 'Current national ID',
+    current_police_clearance: 'Current police clearance',
+    current_reference: 'Current reference',
+    current_certificate: 'Current certificate',
+    not_previously_proposed: 'Not already proposed for this request',
+  };
+  for (const [key, label] of Object.entries(labels)) {
+    if (typeof evaluation.eligibility?.[key] !== 'boolean') continue;
+    const required = key === 'current_reference' ? evaluation.eligibility.reference_required
+      : key === 'current_certificate' ? evaluation.eligibility.certificate_required : true;
+    const state = evaluation.eligibility[key] ? 'passed' : 'not present';
+    list.append(node('li', `${label}: ${state}${required ? ' (required)' : ' (optional)'}`));
+  }
+  if (evaluation.scoring?.weights) {
+    list.append(node('li', `Scoring policy: ${evaluation.policy_version ?? 'legacy'}`));
+    for (const [factor, weight] of Object.entries(evaluation.scoring.weights)) {
+      list.append(node('li', `${factor}: weight ${weight}`));
+    }
+  }
+  if (evaluation.evaluated_at) {
+    list.append(node('li', `Evaluated: ${new Date(evaluation.evaluated_at).toLocaleString()}`));
+  }
+  if (!list.children.length) list.append(node('li', 'Evaluation details are unavailable for this record.'));
+  details.append(list);
+  return details;
+}
+
 async function showMatches(requestId, container) {
   const existing = container.querySelector('.match-results');
   if (existing) { existing.remove(); return; }
@@ -1861,6 +1901,7 @@ async function showMatches(requestId, container) {
     for (const match of matches) {
       const item = card(match.worker_name, t('Match score {{score}}%', { score: match.score }), match.status);
       item.append(matchBreakdown(match.score_breakdown));
+      item.append(matchEvaluation(match.score_breakdown?._evaluation));
       if (match.status === 'proposed') {
         item.append(button('Confirm match & reserve', 'respond', 'button button-primary', { id: match.id, decision: 'accepted' }));
         item.append(button('Decline', 'respond', 'button button-outline', { id: match.id, decision: 'declined' }));

@@ -23,8 +23,11 @@ import { paymentWebhook } from './webhooks.js';
 import { dispatchOnce } from './dispatch.js';
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
+import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
 
 const app = express();
+app.use(correlationIdMiddleware);
+if (JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be set (32+ chars)');
 const runtimeConfig = loadRuntimeConfig(process.env);
 const corsOrigins = new Set((process.env.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
 // Behind a load balancer / reverse proxy every request looks like the same IP unless this is set, which makes the login rate limit hit everyone at once.
@@ -40,7 +43,8 @@ app.use((req, res, next) => {
   if (origin && corsOrigins.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-AfroLife-Edir-Id');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-AfroLife-Edir-Id, X-AfroLife-Correlation-Id');
+    res.setHeader('Access-Control-Expose-Headers', 'X-AfroLife-Correlation-Id');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(origin && !corsOrigins.has(origin) ? 403 : 204);
@@ -112,6 +116,42 @@ api.get('/features', (_req, res) => res.json({
 api.use(adminRouter);
 api.use(privacy);
 api.use(ops);
+const agencyDomainGateway = (serviceName: string, urlKey: string, secretKey: string): RequestHandler => {
+  const baseUrl = process.env[urlKey];
+  if (baseUrl) {
+    return createServiceGateway({
+      baseUrl,
+      secret: process.env[secretKey] ?? '',
+      servicePath: '/api/v1',
+      serviceName,
+      includeBaseUrl: true,
+    });
+  }
+  // An unset URL keeps this domain on the legacy router; configured services
+  // never fall back on request failure, so cutover remains explicit.
+  return (_req, _res, next) => next();
+};
+
+const workerManagementGateway = agencyDomainGateway(
+  'Worker Management service', 'WORKER_MANAGEMENT_SERVICE_URL', 'WORKER_MANAGEMENT_GATEWAY_SECRET',
+);
+const staffingGateway = agencyDomainGateway(
+  'Staffing service', 'STAFFING_SERVICE_URL', 'STAFFING_GATEWAY_SECRET',
+);
+const propertyManagementGateway = agencyDomainGateway(
+  'Property Management service', 'PROPERTY_MANAGEMENT_SERVICE_URL', 'PROPERTY_MANAGEMENT_GATEWAY_SECRET',
+);
+const marketplaceGateway = agencyDomainGateway(
+  'Marketplace service', 'MARKETPLACE_SERVICE_URL', 'MARKETPLACE_GATEWAY_SECRET',
+);
+
+api.post('/workers/:id/documents/upload', express.raw({ type: () => true, limit: '10mb' }));
+api.post('/properties/:id/photos/upload', express.raw({ type: () => true, limit: '100mb' }));
+api.post('/marketplace/listings/:id/media/upload', express.raw({ type: () => true, limit: '100mb' }));
+api.use(['/workers', '/documents'], workerManagementGateway);
+api.use(['/requests', '/matches'], staffingGateway);
+api.use('/properties', propertyManagementGateway);
+api.use('/marketplace', marketplaceGateway);
 api.use(supply);
 api.use('/insurance/requests', process.env.INSURANCE_SERVICE_URL
   ? createInsuranceRequestsServiceGateway({
@@ -331,14 +371,17 @@ api.post('/commissions/:id/release-held', requireRole('super_admin'), h(async (r
 app.use('/api/v1', api);
 
 // ---- Errors: translate validation and database rule violations into clear responses ----
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
-  if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', details: err.flatten() });
-  if (err?.code === '22P02') return res.status(400).json({ error: 'Invalid id or value' }); // e.g. a malformed UUID in the URL
-  if (err?.code === '23505') return res.status(409).json({ error: 'Duplicate record (e.g. phone already used, or commission already exists)' });
-  if (err?.code === 'P0001' || err?.code === '23514') return res.status(422).json({ error: err.message });
-  console.error(err);
-  res.status(500).json({ error: 'Internal error' });
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+  const correlationId = getCorrelationId(req);
+  const reply = (status: number, body: Record<string, unknown>) =>
+    res.status(status).json({ ...body, correlation_id: correlationId });
+  if (err instanceof HttpError) return reply(err.status, { error: err.message });
+  if (err instanceof z.ZodError) return reply(400, { error: 'Invalid input', details: err.flatten() });
+  if (err?.code === '22P02') return reply(400, { error: 'Invalid id or value' }); // e.g. a malformed UUID in the URL
+  if (err?.code === '23505') return reply(409, { error: 'Duplicate record (e.g. phone already used, or commission already exists)' });
+  if (err?.code === 'P0001' || err?.code === '23514') return reply(422, { error: err.message });
+  console.error('API request failed [' + correlationId + ']', err);
+  return reply(500, { error: 'Internal error' });
 });
 
 // Outbox: deliver queued WhatsApp/SMS/email through a signed webhook (e.g. a Make.com scenario) when configured.

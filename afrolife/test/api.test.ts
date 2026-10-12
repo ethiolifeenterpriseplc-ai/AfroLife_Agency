@@ -14,6 +14,10 @@ const API = (process.env.API_URL ?? 'http://localhost:3000') + '/api/v1';
 const SECRET = process.env.JWT_SECRET!;
 const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
 if (!testDatabaseUrl) throw new Error('TEST_DATABASE_URL must explicitly point to a disposable integration-test database');
+const testDatabaseName = decodeURIComponent(new URL(testDatabaseUrl).pathname.replace(/^\/+/, ''));
+if (!/^(?:test[_-]|afrolife[_-]test(?:[_-]|$))/i.test(testDatabaseName)) {
+  throw new Error('TEST_DATABASE_URL must target a database named test_* or afrolife_test*; refusing to modify a normal application database');
+}
 const db = new pg.Pool({ connectionString: testDatabaseUrl });
 const run = randomInt(0, 10_000_000).toString().padStart(7, '0');
 const uniquePhone = () => `+2519${randomInt(0, 100_000_000).toString().padStart(8, '0')}`;

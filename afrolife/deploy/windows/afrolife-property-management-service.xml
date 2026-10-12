@@ -1,0 +1,15 @@
+<service>
+  <id>AfroLifePropertyManagement</id>
+  <name>AfroLife Property Management Service</name>
+  <description>Private property management backend behind the AfroLife Super App gateway</description>
+  <executable>C:\Program Files\nodejs\node.exe</executable>
+  <arguments>C:\AfroLife\app\dist\services\property-management\server.js</arguments>
+  <workingdirectory>C:\AfroLife\app</workingdirectory>
+  <env name="AFROLIFE_ENV_FILE" value="C:\ProgramData\AfroLife\property-management.env" />
+  <env name="HOST" value="127.0.0.1" />
+  <env name="PORT" value="3402" />
+  <logpath>C:\ProgramData\AfroLife\logs\property-management</logpath>
+  <log mode="roll" />
+  <stoptimeout>30 sec</stoptimeout>
+  <onfailure action="restart" delay="10 sec" />
+</service>

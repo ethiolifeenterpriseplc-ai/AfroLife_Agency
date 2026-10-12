@@ -12,8 +12,7 @@ export type { AuthUser } from './auth-types.js';
 
 pg.types.setTypeParser(1082, (v: string) => v); // keep DATE columns as 'YYYY-MM-DD' text (no timezone shifts)
 export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-export const JWT_SECRET = process.env.JWT_SECRET as string;
-if (!JWT_SECRET || JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be set (32+ chars)');
+export const JWT_SECRET = process.env.JWT_SECRET ?? '';
 
 export async function assertRuntimeDatabaseSafety() {
   const role = (await pool.query(
@@ -107,6 +106,7 @@ async function currentState(id: string) {
 }
 
 export function authenticate(req: Request, _res: Response, next: NextFunction) {
+  if (JWT_SECRET.length < 32) return next(new HttpError(503, 'Authentication is not configured'));
   const h = req.headers.authorization;
   if (!h?.startsWith('Bearer ')) return next(new HttpError(401, 'Missing token'));
   let p: { sub: string; sid: string; rst?: string };

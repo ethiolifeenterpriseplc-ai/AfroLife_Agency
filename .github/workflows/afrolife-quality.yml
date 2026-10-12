@@ -41,8 +41,11 @@ jobs:
       - name: Validate app configuration JSON
         run: |
           node -e "for (const f of ['package.json','capacitor.config.json','public/manifest.webmanifest']) JSON.parse(require('node:fs').readFileSync(f,'utf8'))"
+      - name: Sync iOS Capacitor project
+        run: npm run ios:sync
       - run: npm run build
       - run: npm run build:insurance
       - run: npm run build:edir
       - run: npm run build:mfi
+      - run: npm run build:agency-domains
       - run: npm run test:unit

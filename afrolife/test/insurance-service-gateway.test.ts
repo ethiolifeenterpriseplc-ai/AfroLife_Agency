@@ -6,6 +6,7 @@ import {
   createInsuranceRequestsServiceGateway,
   createInsuranceServiceGateway,
   createMfiServiceGateway,
+  createServiceGateway,
   verifyInsuranceServiceAssertion,
   type InsuranceServiceAssertion,
 } from '../src/insurance-service-gateway.js';
@@ -20,10 +21,11 @@ const assertion = Buffer.from(JSON.stringify({
   issuedAt: 1_000_000,
 })).toString('base64url');
 
-function sign(requestBody = body, requestMethod = method, requestPath = path) {
+function sign(requestBody = body, requestMethod = method, requestPath = path, idempotencyKey?: string) {
   const bodyHash = createHash('sha256').update(JSON.stringify(requestBody)).digest('hex');
+  const canonical = `${assertion}\n${requestMethod}\n${requestPath}\n${bodyHash}`;
   return createHmac('sha256', secret)
-    .update(`${assertion}\n${requestMethod}\n${requestPath}\n${bodyHash}`)
+    .update(idempotencyKey ? `${canonical}\nidempotency-key:${idempotencyKey}` : canonical)
     .digest('hex');
 }
 
@@ -42,6 +44,14 @@ test('insurance gateway assertion rejects tampering, replay, and weak secrets', 
   assert.equal(verifyInsuranceServiceAssertion('weak', assertion, sign(), method, path, body, 1_030_000), null);
 });
 
+test('idempotency key is bound to the signed gateway request', () => {
+  const key = '8f7dd367-3b74-4e8c-9c44-89f884979fb3';
+  const signed = sign(body, method, path, key);
+  assert.ok(verifyInsuranceServiceAssertion(secret, assertion, signed, method, path, body, 1_030_000, key));
+  assert.equal(verifyInsuranceServiceAssertion(secret, assertion, signed, method, path, body, 1_030_000, '91af9759-4fc7-4cbd-8bab-b6d8f2ffef7e'), null);
+  assert.equal(verifyInsuranceServiceAssertion(secret, assertion, signed, method, path, body, 1_030_000), null);
+});
+
 test('insurance gateway forwards a signed identity and relays the service response', async (context) => {
   const service = express();
   service.use(express.json());
@@ -53,6 +63,8 @@ test('insurance gateway forwards a signed identity and relays the service respon
       req.method,
       req.originalUrl,
       req.body,
+      Date.now(),
+      req.get('idempotency-key') ?? null,
     );
     res.status(identity ? 201 : 401).json({ identity, received: req.body });
   });
@@ -89,7 +101,7 @@ test('insurance gateway forwards a signed identity and relays the service respon
   const apiPort = (apiServer.address() as import('node:net').AddressInfo).port;
   const response = await fetch(`http://127.0.0.1:${apiPort}/insurance/ledger/journals`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'idempotency-key': '8f7dd367-3b74-4e8c-9c44-89f884979fb3' },
     body: JSON.stringify(body),
   });
   assert.equal(response.status, 201);
@@ -200,6 +212,61 @@ test('SACCO/MFI gateway signs and forwards requests to the isolated service API'
   assert.equal(result.identity?.userId, '3cd21265-95d9-40a4-9e68-95538d8d6650');
   assert.equal(result.identity?.role, 'finance_manager');
   assert.deepEqual(result.received, body);
+});
+
+test('domain gateway signs the original path under a mounted service prefix', async (context) => {
+  const service = express();
+  service.use(express.json());
+  service.post('/api/v1/workers/:id', (req, res) => {
+    const identity = verifyInsuranceServiceAssertion(
+      secret,
+      req.get('x-afrolife-identity') ?? '',
+      req.get('x-afrolife-signature') ?? '',
+      req.method,
+      req.originalUrl,
+      req.body,
+    );
+    res.status(identity ? 200 : 401).json({ identity, path: req.originalUrl });
+  });
+  const serviceServer = service.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => serviceServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    serviceServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const api = express();
+  api.use(express.json());
+  api.use((req, _res, next) => {
+    req.user = {
+      id: '3cd21265-95d9-40a4-9e68-95538d8d6650',
+      role: 'field_agent',
+    };
+    next();
+  });
+  const port = (serviceServer.address() as import('node:net').AddressInfo).port;
+  api.use('/workers', createServiceGateway({
+    baseUrl: `http://127.0.0.1:${port}`,
+    secret,
+    servicePath: '/api/v1',
+    serviceName: 'Worker Management service',
+    includeBaseUrl: true,
+  }));
+  const apiServer = api.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => apiServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    apiServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const apiPort = (apiServer.address() as import('node:net').AddressInfo).port;
+  const response = await fetch(`http://127.0.0.1:${apiPort}/workers/123?view=summary`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  assert.equal(response.status, 200);
+  const result = await response.json() as { identity: InsuranceServiceAssertion | null; path: string };
+  assert.equal(result.identity?.userId, '3cd21265-95d9-40a4-9e68-95538d8d6650');
+  assert.equal(result.path, '/api/v1/workers/123?view=summary');
 });
 
 test('SACCO/MFI gateway signs and preserves private document upload bytes', async (context) => {

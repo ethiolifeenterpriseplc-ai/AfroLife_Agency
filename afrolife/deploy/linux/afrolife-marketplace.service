@@ -1,0 +1,24 @@
+[Unit]
+Description=AfroLife Marketplace API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=afrolife
+Group=afrolife
+WorkingDirectory=/opt/afrolife/app
+EnvironmentFile=/etc/afrolife/marketplace.env
+Environment=HOST=127.0.0.1
+Environment=PORT=3403
+ExecStart=/usr/bin/node /opt/afrolife/app/dist/services/marketplace/server.js
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/afrolife/private-files
+
+[Install]
+WantedBy=multi-user.target

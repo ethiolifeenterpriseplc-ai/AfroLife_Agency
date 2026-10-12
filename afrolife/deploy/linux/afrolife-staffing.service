@@ -1,0 +1,23 @@
+[Unit]
+Description=AfroLife Staffing API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=afrolife
+Group=afrolife
+WorkingDirectory=/opt/afrolife/app
+EnvironmentFile=/etc/afrolife/staffing.env
+Environment=HOST=127.0.0.1
+Environment=PORT=3401
+ExecStart=/usr/bin/node /opt/afrolife/app/dist/services/staffing/server.js
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

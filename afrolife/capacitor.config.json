@@ -3,6 +3,7 @@
   "appName": "ኢትዮ-ላይፍ ኤጀንሲ / EthioLife Agency",
   "webDir": "public",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "iosScheme": "https"
   }
 }

@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from 'express';
 import { HttpError } from './http-error.js';
+import { getCorrelationId } from './request-context.js';
 
 export interface InsuranceServiceAssertion {
   userId: string;
@@ -17,9 +18,10 @@ function requestBodyHash(body: unknown): string {
   return createHash('sha256').update(JSON.stringify(body ?? null)).digest('hex');
 }
 
-function signature(secret: string, assertion: string, method: string, path: string, bodyHash: string): string {
+function signature(secret: string, assertion: string, method: string, path: string, bodyHash: string, idempotencyKey?: string | null): string {
+  const canonical = `${assertion}\n${method}\n${path}\n${bodyHash}`;
   return createHmac('sha256', secret)
-    .update(`${assertion}\n${method}\n${path}\n${bodyHash}`)
+    .update(idempotencyKey ? `${canonical}\nidempotency-key:${idempotencyKey}` : canonical)
     .digest('hex');
 }
 
@@ -31,9 +33,11 @@ export function verifyServiceAssertion(
   path: string,
   body: unknown,
   now = Date.now(),
+  idempotencyKey?: string | null,
 ): InsuranceServiceAssertion | null {
   if (secret.length < 32 || !/^[\da-f]{64}$/i.test(suppliedSignature)) return null;
-  const expected = signature(secret, assertion, method, path, requestBodyHash(body));
+  if (idempotencyKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) return null;
+  const expected = signature(secret, assertion, method, path, requestBodyHash(body), idempotencyKey);
   const actual = Buffer.from(suppliedSignature, 'hex');
   const expectedBuffer = Buffer.from(expected, 'hex');
   if (actual.length !== expectedBuffer.length || !timingSafeEqual(actual, expectedBuffer)) return null;
@@ -62,11 +66,12 @@ export function createServiceGateway(options: {
   secret: string;
   servicePath: string;
   serviceName: string;
+  includeBaseUrl?: boolean;
 }): RequestHandler {
   if (options.secret.length < 32) {
     throw new Error(`Gateway secret must contain at least 32 characters for ${options.serviceName}`);
   }
-  if (!options.servicePath.startsWith('/api/v1/') || options.servicePath.includes('..')
+  if (!/^\/api\/v1(?:\/|$)/.test(options.servicePath) || options.servicePath.includes('..')
     || /[?#]/.test(options.servicePath)) {
     throw new Error(`Invalid service API path for ${options.serviceName}`);
   }
@@ -80,7 +85,12 @@ export function createServiceGateway(options: {
   }
 
   return (req, res, next) => {
-    const path = `${options.servicePath}${req.url}`;
+    const path = `${options.servicePath}${options.includeBaseUrl ? req.baseUrl : ''}${req.url}`;
+    const idempotencyKey = req.get('idempotency-key') ?? null;
+    if (idempotencyKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
+      next(new HttpError(400, 'Idempotency-Key must be a UUID'));
+      return;
+    }
     const issuedAt = Date.now();
     const assertion = Buffer.from(JSON.stringify({
       userId: req.user!.id,
@@ -93,13 +103,15 @@ export function createServiceGateway(options: {
       issuedAt,
     })).toString('base64url');
     const bodyHash = requestBodyHash(req.body);
-    const signed = signature(options.secret, assertion, req.method, path, bodyHash);
+    const signed = signature(options.secret, assertion, req.method, path, bodyHash, idempotencyKey);
     const rawBody = Buffer.isBuffer(req.body);
     const headers = new Headers({
       'x-afrolife-identity': assertion,
       'x-afrolife-signature': signed,
+      'x-afrolife-correlation-id': getCorrelationId(req),
       'content-type': rawBody ? (req.get('content-type') ?? 'application/octet-stream') : 'application/json',
     });
+    if (idempotencyKey) headers.set('idempotency-key', idempotencyKey);
     const body = req.method === 'GET' || req.method === 'HEAD' || req.body === undefined
       ? undefined
       : rawBody ? new Uint8Array(req.body as Buffer) : JSON.stringify(req.body);
@@ -115,7 +127,7 @@ export function createServiceGateway(options: {
       if (contentType) res.setHeader('content-type', contentType);
       res.send(Buffer.from(responseBody));
     }).catch((error: unknown) => {
-      console.error(`${options.serviceName} request failed`, error);
+      console.error(options.serviceName + ' request failed [' + getCorrelationId(req) + ']', error);
       next(new HttpError(502, `${options.serviceName} is unavailable`));
     });
   };
@@ -170,6 +182,7 @@ export function createPublicServiceGateway(options: {
       headers: {
         'x-afrolife-identity': assertion,
         'x-afrolife-signature': signed,
+        'x-afrolife-correlation-id': getCorrelationId(req),
         'content-type': 'application/json',
       },
       body: JSON.stringify(req.body),
@@ -181,7 +194,7 @@ export function createPublicServiceGateway(options: {
       if (contentType) res.setHeader('content-type', contentType);
       res.send(Buffer.from(responseBody));
     }).catch((error: unknown) => {
-      console.error(`${options.serviceName} request failed`, error);
+      console.error(options.serviceName + ' request failed [' + getCorrelationId(req) + ']', error);
       next(new HttpError(502, `${options.serviceName} is unavailable`));
     });
   };

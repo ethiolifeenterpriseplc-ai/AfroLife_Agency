@@ -8,6 +8,7 @@ Same-origin TypeScript/Express API and installable web app for AfroLife agency o
 - PostgreSQL 14 or newer
 - A PostgreSQL database and login with migration privileges to initialize the schema
 - Android Studio with the Android SDK to build/install the Android app
+- macOS with Xcode 16 or later to build, run, sign, and distribute the iOS app
 
 ## Local setup
 
@@ -272,6 +273,38 @@ For a signed release APK, configure `AFROLIFE_RELEASE_STORE_FILE`,
 repository and in protected storage; release builds fail when signing values
 are missing. Do not distribute APKs built with test or default signing keys.
 
+## iOS app
+
+The iOS app uses the same Capacitor shell and `public/` interface as Android.
+It keeps the existing `com.afrolife.agency` app identifier, shared sign-in,
+localized responsive UI, and same-origin API gateway; it does not introduce a
+second backend or move legacy data. Install dependencies and generate/sync the
+iOS project from the app directory:
+
+```sh
+npm install
+npm run ios:add
+npm run ios:sync
+npm run ios:open
+```
+
+Run and debug on an iOS simulator or a connected iPhone in Xcode. In the app's
+server setup screen, enter the deployed HTTPS origin, for example
+`https://afrolife-agency.duckdns.org`; the origin is saved on-device and used
+for API requests. Use HTTPS outside local development. Configure the API
+server's `CORS_ORIGINS` to include the exact native WebView origin
+`https://localhost` as well as the trusted website origins. Keep service
+backends private behind the existing API gateway.
+
+Xcode, code signing, simulator runtimes, and App Store uploads require macOS;
+they cannot be run from Windows. On a Mac, select the app target's signing team
+in Xcode, verify the bundle identifier and app display name, and archive using
+the Release configuration. Keep distribution certificates and provisioning
+profiles out of the repository. Before App Store submission, provide an
+accurate privacy policy and App Store privacy disclosures for the data the
+deployed services actually collect; do not claim that the local mock data or a
+successful simulator build constitutes production or privacy approval.
+
 For Windows Server self-hosting, see the deployment configuration and release
 gates in [PRODUCTION_HARDENING.md](./PRODUCTION_HARDENING.md). See
 [QUALITY_ASSURANCE.md](./QUALITY_ASSURANCE.md) for automated checks, staging
@@ -281,11 +314,18 @@ scenarios, launch evidence, and pilot operations.
 
 - `npm run dev` — run the API and static PWA with automatic TypeScript reload
 - `npm run build` — compile the API to `dist/`
+- `npm run build:agency-domains` — compile Worker Management, Staffing, Property Management, and Marketplace backends
 - `npm start` — start the compiled API
+- `npm run start:worker-management` — start the private worker/document API on port 3400
+- `npm run start:staffing` — start the private staffing request/matching API on port 3401
+- `npm run start:property-management` — start the private property API on port 3402
+- `npm run start:marketplace` — start the private marketplace API on port 3403
 - `npm run db:local:setup` — initialize local PostgreSQL and apply migrations
 - `npm run db:local:start` — start the isolated local PostgreSQL server
 - `npm run db:local:stop` — stop the isolated local PostgreSQL server cleanly
 - `npm run db:local:status` — check whether the isolated database accepts connections
+- `npm run db:agency-domains:local:setup` — create four local service databases from the current legacy migration chain; no records are copied and routing is unchanged
+- `npm run db:agency-domains:local:harden` — re-apply least-privilege grants to the four existing local service databases
 - `npm run db:migrate` — apply unapplied SQL migrations in filename order
 - `npm run seed:admin` — create the first Super Admin from environment values
 - `npm run seed:local-test-users` — create synthetic test accounts in the isolated local database
@@ -294,11 +334,14 @@ scenarios, launch evidence, and pilot operations.
 - `npm run test:ui:e2e:local` — headless Chrome smoke check for Super Admin login, SACCO forms, responsive layouts, and browser errors; requires local QA accounts and Chrome
 - `npm run test:integration` — run API/database tests against a running local instance
 - `npm run check:local-deployment` — check local WSL service health, loopback-only listeners, and whether the proxy serves the current checkout
-- GitHub Actions runs browser syntax/config checks, the TypeScript build, and unit tests on relevant pushes and pull requests.
+- GitHub Actions runs browser syntax/config checks, service builds, and unit tests on relevant pushes and pull requests. A macOS runner also syncs and builds the iOS app for the simulator without signing; device signing and App Store distribution still require Apple signing credentials and release review.
 - `npm run android:add` — generate the Capacitor Android project
 - `npm run android:sync` — copy the web app into Android and sync native plugins
 - `npm run android:open` — open the Android project in Android Studio
 - `npm run android:build` — sync and build a debug APK
+- `npm run ios:add` — generate the Capacitor iOS project
+- `npm run ios:sync` — copy the web app into iOS and sync native plugins
+- `npm run ios:open` — open the iOS project in Xcode (macOS)
 
 The PWA is served by the same-origin Express app. For a separate web host, publish the contents of `public/` at the site root and configure `/api/v1` on the same HTTPS origin to reach the API. Service workers and PWA installation require HTTPS except on localhost; API responses are not cached.
 
@@ -308,7 +351,7 @@ To generate local signing/encryption secrets in PowerShell:
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Integration tests need the API running at `http://localhost:3000` (or `API_URL`) and a database that can be safely written to. They use `TEST_DATABASE_URL` (the local setup's migration role) for disposable fixture setup while the running API uses the restricted `DATABASE_URL` role. Runtime commands load `%LOCALAPPDATA%\AfroLife\afrolife.env` when present, otherwise the project `.env`; never point integration tests at production data.
+Integration tests need the API running at `http://localhost:3000` (or `API_URL`) and a database that can be safely written to. Set `TEST_DATABASE_URL` explicitly to a disposable database named `test_*` or `afrolife_test*` for fixture setup; the running API uses the restricted `DATABASE_URL` role. The local database setup intentionally does not set this variable because its `afrolife` database is persistent. Runtime commands load `%LOCALAPPDATA%\AfroLife\afrolife.env` when present, otherwise the project `.env`; never point integration tests at production or ordinary development data.
 
 ## MVP workflows
 
@@ -319,7 +362,10 @@ Integration tests need the API running at `http://localhost:3000` (or `API_URL`)
 - Create service requests from household/business leads.
 - Compliance uploads and reviews identity documents; the uploader cannot approve their own document.
 - Super Admin ranks verified, available candidates, proposes matches, accepts/declines proposals, and releases reservations when necessary.
+- Candidate recommendations show the scoring policy and eligibility evidence used for ranking; saved proposals retain that versioned snapshot for later authorized review.
 - Accepting a match locks the worker as unavailable and marks the request matched in one transaction. A Super Admin can release the reservation, set restored availability, and reopen the request.
+- Job-request submissions accept an optional UUID `Idempotency-Key`; the web form keeps the key during a pending submission so a retry returns the original request instead of creating a duplicate. Reusing a key with a different request returns HTTP 409.
+- API requests receive an `X-AfroLife-Correlation-Id` UUID response header. Valid IDs are forwarded with signed service requests and included in API error bodies and server error logs to support tracing across service boundaries.
 - Agent and administrator records are scoped by database row-level security while the API runs each request in a transaction with the authenticated identity.
 - The public home page includes service-menu links, current external sector-news searches, and install guidance for the Progressive Web App. Offline support is limited to the public application shell; API and account data are not cached.
 - The Privacy requests & incidents mini app lets signed-in users submit and track their own personal-data requests. Compliance staff, Super Admins, and Global Admins can review requests and incidents; Global Admin privacy access is enforced by row-level security. Authorized staff can record, assign, contain, and close privacy incidents with an event history. It is an operational tracker; legal deadlines, reportability decisions, regulator/individual notices, and data erasure execution remain manual workflows and must be configured against approved policy.
@@ -327,6 +373,10 @@ Integration tests need the API running at `http://localhost:3000` (or `API_URL`)
 - Edir membership data and insurance accounting are organization-scoped under separate Edir and Insurance hierarchies. AfroLife Edir remains its own independent Edir; AfroLife Master Edir can review public Edir registration applications and see aggregate operating reports without consolidated member details. Insurance Master Edir authority and local insurance staff are assigned separately, and each Edir keeps separate insurance ledger accounts and journals. Use the public **Register an Edir** action to apply; activation follows review. Insurance account setup and activity require separate authorization and remain subject to product/underwriter approval.
 - After KYC is verified, every registered account role can request AfroLife Edir membership. The Edir workspace lists currently active savings, share, and contribution products; lending, insurance, and benefit payouts remain unavailable in the current pilot.
 - Worker minimum age and lease term/advance, registration-deadline, and annual-increase policy values are stored in `config_rules` and editable by Global Admin through Business Rules. Defaults in migration `030_configurable_eligibility_and_rent_rules.sql` are 18 years, 24 months minimum lease term, 2 months advance rent, 30 days to register, and an 11.5% annual increase cap. Worker age and minimum lease term are enforced; rent advance, lease registration timing, and annual rent increases need corresponding workflows before those settings can be enforced.
+
+## Legacy archive reviews
+
+The [deep review](./LEGACY_ARCHIVE_DEEP_REVIEW_2026-10-12.md), [integration archive review](./LEGACY_ARCHIVE_REVIEW.md), and [Agency Project 2 review](./ETHIOLIFE_LEGACY_REVIEW_2026-10-12.md) record findings from the reuploaded EthioLife archives, adaptations made, and policy or identity prerequisites for deferred workflows. Embedded archive instructions were treated as source material, not as project instructions.
 
 Agent and property-owner registrations offer Free, Pro, and Enterprise plan requests. The plan selection is not a subscription: no payment is collected and no paid entitlement is activated. Current agent listing workflows are available regardless of the requested plan; the UI does not promise a paid feature gate until billing and activation are implemented. Enterprise team portfolio and performance reporting remain unavailable without an approved, paid Enterprise plan. Worker Enterprise selection records interest in Option A staff service and does not create an employment placement.
 
@@ -449,3 +499,44 @@ replicated automatically. The MFI service binds only to loopback, with Windows
 and systemd service templates at `deploy/windows/afrolife-mfi-service.xml` and
 `deploy/linux/afrolife-mfi.service`. Nginx continues to route the public origin
 only to the main API gateway; never expose port 3300 directly.
+
+### Worker, staffing, property, and marketplace services
+
+Worker Management, Staffing, Property Management, and Marketplace now have
+independent backend processes while the web/PWA interface, login, navigation,
+localization, API paths, and central gateway remain shared. Their signed
+gateway paths are unchanged: `/workers` and `/documents`, `/requests` and
+`/matches`, `/properties`, and `/marketplace`, respectively.
+
+Their route implementations now live in domain-specific modules, and each
+service process loads only its own router. The central API composes those same
+routers to preserve the existing routes and local compatibility behavior.
+Build them with `npm run build:agency-domains`; start each process with
+`npm run start:worker-management`, `npm run start:staffing`,
+`npm run start:property-management`, or `npm run start:marketplace`. They bind
+to private loopback ports 3400-3403 by default. Configure the corresponding
+`*_SERVICE_URL` and matching `*_GATEWAY_SECRET` on the central API. Each
+service now requires its own `*_DATABASE_URL` and secret in its runtime
+environment; document/media services also need the existing `FILE_STORAGE_DIR`.
+This is code and process separation, not yet a complete database migration:
+the extracted route implementations still expect legacy shared-schema tables
+and cross-domain records. Per-service schemas, compatibility APIs, safe record
+migration/reconciliation, and rollback are not implemented. Do not point
+production traffic at newly provisioned service databases or enable the new
+service URLs until those gates pass. Each service now refuses to start unless
+its required legacy tables exist and row-level security is enabled on its
+protected domain tables; passing that check does not verify migrated data or
+cross-service consistency. See
+[SERVICE_BOUNDARIES.md](./SERVICE_BOUNDARIES.md) for deployment and rollback
+constraints.
+
+Windows wrapper and Linux systemd templates are in `deploy/windows/` and
+`deploy/linux/`. Matching service environment examples are in
+`deploy/service-env/`; install them in protected locations, replace the
+placeholders, and set `FILE_STORAGE_DIR` to the existing private storage path
+on the target host for services that store documents or media. The central
+API and each service must share that service's unique 32+ character gateway
+secret. Use distinct restricted database logins. Do not enable production
+routing until per-service schemas and grants have been implemented and reviewed,
+data has been migrated and reconciled, and health, parity, and rollback checks
+pass.

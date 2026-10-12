@@ -129,7 +129,6 @@ switch ($Action) {
       'PORT=3000',
       "DATABASE_URL=postgres://afrolife_app:$appPassword@127.0.0.1:$Port/afrolife",
       "MIGRATION_DATABASE_URL=postgres://postgres:$adminPassword@127.0.0.1:$Port/afrolife",
-      "TEST_DATABASE_URL=postgres://postgres:$adminPassword@127.0.0.1:$Port/afrolife",
       "JWT_SECRET=$jwtSecret",
       "MFA_ENC_KEY=$mfaKey",
       'FILE_STORAGE_DIR=./data/private-files',

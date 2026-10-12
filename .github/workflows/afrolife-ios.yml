@@ -1,0 +1,53 @@
+name: AfroLife iOS build
+
+on:
+  push:
+    paths:
+      - 'afrolife/package.json'
+      - 'afrolife/package-lock.json'
+      - 'afrolife/capacitor.config.json'
+      - 'afrolife/public/**'
+      - 'afrolife/ios/**'
+      - '.github/workflows/afrolife-ios.yml'
+  pull_request:
+    paths:
+      - 'afrolife/package.json'
+      - 'afrolife/package-lock.json'
+      - 'afrolife/capacitor.config.json'
+      - 'afrolife/public/**'
+      - 'afrolife/ios/**'
+      - '.github/workflows/afrolife-ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: afrolife
+
+jobs:
+  ios-simulator-build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: afrolife/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Sync Capacitor iOS project
+        run: npm run ios:sync
+      - name: Build iOS simulator app
+        run: >-
+          xcodebuild
+          -workspace ios/App/App.xcworkspace
+          -scheme App
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/afrolife-derived-data"
+          CODE_SIGNING_ALLOWED=NO
+          build

@@ -343,3 +343,18 @@ checks remain unverified in this run; the Edir database-backed E2E remains the
 current authenticated workflow evidence. The full workbook status is unchanged
 at 9 pass, 9 partial, and 217 open/unexecuted. The APK build does not close any
 of those database or provider-dependent workbook cases.
+
+### 12 October 2026 readiness continuation
+
+The controlled local checks were rerun without using production or customer data:
+
+- Unit suite: PASS, 127/127.
+- TypeScript no-emit checks: PASS for the main API, Edir, Insurance, and SACCO/MFI services.
+- Browser JavaScript syntax, Capacitor/package JSON parsing, and `git diff --check`: PASS.
+- Edir database-backed UAT: PASS, 13 scenarios against the isolated local UAT database. The run covered membership and independent KYC, maker-checker product/policy and loan decisions, consent, capped disbursement, repayment, write-off, balanced trial balance and reconciliation, and complaint privacy/resolution. Trial balance was ETB 22,250.00 on each side; no missing journals were reported. Records were synthetic.
+- SACCO/MFI database-backed UAT: BLOCKED at local Super Admin login (HTTP 401). The synthetic credential file was not altered or regenerated.
+- Local deployment readiness: FAIL. PostgreSQL on 127.0.0.1:5433 and API health are available, but WSL service inspection returned access denied and the local proxy did not serve this checkout's current release.
+- Public endpoint: BLOCKED. `afrolife-agency.duckdns.org` resolves to 196.189.145.142, but TCP 80 and 443 are unreachable from this host.
+- Android tester APK: the existing debug artifact checksum still matches the 11 October record. It is for controlled installation only; no release signing credentials are configured.
+
+The workbook trace remains 9 PASS, 9 PARTIAL, and 217 OPEN/unexecuted of 235 cases. This rerun adds Edir execution evidence but does not convert the workbook to full acceptance. Public distribution remains blocked by public ingress/TLS, the MFI fixture login, incomplete workbook execution, and unsigned Android release configuration.

@@ -13,6 +13,10 @@ const API = (process.env.API_URL ?? 'http://localhost:3000') + '/api/v1';
 const SECRET = process.env.JWT_SECRET!;
 const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
 if (!testDatabaseUrl) throw new Error('TEST_DATABASE_URL must explicitly point to a disposable integration-test database');
+const testDatabaseName = decodeURIComponent(new URL(testDatabaseUrl).pathname.replace(/^\/+/, ''));
+if (!/^(?:test[_-]|afrolife[_-]test(?:[_-]|$))/i.test(testDatabaseName)) {
+  throw new Error('TEST_DATABASE_URL must target a database named test_* or afrolife_test*; refusing to modify a normal application database');
+}
 const db = new pg.Pool({ connectionString: testDatabaseUrl });
 const run = Date.now().toString().slice(-7);
 const SECTOR = 'domestic-' + run; // unique per run so candidate lists are not polluted by other data
@@ -188,6 +192,30 @@ test('matching: unverified workers cannot be proposed; a verified one can, once'
   assert.equal(Number(m.body.score), 100);
   match = m.body;
   assert.equal((await call(admin, 'POST', `/requests/${request.id}/matches`, { worker_id: w1.id })).status, 409);
+});
+
+test('matching: acceptance rechecks live requirements and proposal notice contains no worker details', async () => {
+  const notice = await db.query(
+    "SELECT channel, payload FROM notifications WHERE user_id=$1 AND template='staffing_match_status' AND payload->>'match_id'=$2 AND payload->>'status'='proposed'",
+    [fb.id, match.id],
+  );
+  assert.equal(notice.rowCount, 2); // in-app and webhook outbox, written with the proposal
+  assert.equal('worker_id' in notice.rows[0].payload, false);
+
+  const settings = await call(globalAdmin, 'GET', '/business-rules');
+  const oldValue = Number(settings.body.find((rule: any) => rule.key === 'worker_requires_certificate').value);
+  try {
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
+      values: { worker_requires_certificate: 1 },
+    })).status, 200);
+    const stale = await call(admin, 'POST', `/matches/${match.id}/respond`, { decision: 'accepted' });
+    assert.equal(stale.status, 409);
+    assert.match(stale.body.error, /current verification|document requirements/i);
+  } finally {
+    assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
+      values: { worker_requires_certificate: oldValue },
+    })).status, 200);
+  }
 });
 
 test('database trigger: even a direct insert cannot match an unverified worker', async () => {

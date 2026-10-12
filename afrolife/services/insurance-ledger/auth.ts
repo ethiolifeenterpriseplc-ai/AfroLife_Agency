@@ -10,7 +10,7 @@ export const authenticateGateway: RequestHandler = (req, res, next) => {
   const assertion = req.get('x-afrolife-identity') ?? '';
   const signature = req.get('x-afrolife-signature') ?? '';
   const user = verifyInsuranceServiceAssertion(
-    secret, assertion, signature, req.method, req.originalUrl, req.body,
+    secret, assertion, signature, req.method, req.originalUrl, req.body, Date.now(), req.get('idempotency-key') ?? null,
   );
   if (!user) {
     res.status(401).json({ error: 'Invalid or expired gateway identity assertion' });
