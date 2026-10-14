@@ -33,7 +33,7 @@ $psql = Join-Path $postgresInstall.FullName 'bin\psql.exe'
 . (Join-Path $PSScriptRoot 'agency-domain-runtime-privileges.ps1')
 
 $services = @(
-  @{ Domain = 'worker-management'; Database = 'afrolife_worker_management'; Role = 'afrolife_worker' },
+  @{ Domain = 'workforce-management'; Database = 'afrolife_worker_management'; Role = 'afrolife_worker' },
   @{ Domain = 'staffing'; Database = 'afrolife_staffing'; Role = 'afrolife_staffing' },
   @{ Domain = 'property-management'; Database = 'afrolife_property_management'; Role = 'afrolife_property' },
   @{ Domain = 'marketplace'; Database = 'afrolife_marketplace'; Role = 'afrolife_marketplace' }

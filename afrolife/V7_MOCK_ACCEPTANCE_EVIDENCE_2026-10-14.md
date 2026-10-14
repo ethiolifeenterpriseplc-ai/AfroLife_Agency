@@ -1,0 +1,38 @@
+# V7 mock acceptance evidence — 14 October 2026
+
+## Scope and evidence rules
+
+This report records a local mock-data exercise requested for the V7 release gates. It is supplemental engineering evidence, not production acceptance, vendor approval, legal advice, or business-owner sign-off. All test accounts, institution data, leads, and recovery files were synthetic. The exercise used a disposable local PostgreSQL database named `afrolife_test_*`, a loopback API on port 3318, and a private temporary file directory. No production or staging endpoint, real provider credential, payment rail, or real customer data was used.
+
+## Results
+
+| Gate | Mock exercise and result | Production acceptance disposition |
+|---|---|---|
+| Cross-route isolation | The API/supply integration suite completed 45 of 46 checks after provisioning the restricted application role. Scoped agent leads, worker visibility, owner listings, property access, document downloads, and role-gated operations were exercised. One signup scenario received HTTP 429 during a run that overlapped the browser exercise. A separate runtime-ACL checker flagged broad UPDATE permission on `insurance_ledger_accounts` after applying the local-development grant profile. | Partial. Rerun the suite without concurrent UI traffic; review the insurance ledger ACL finding; inventory and test every route, export, report, background job, integration, and file path using production-equivalent restricted roles. The exercise does not establish complete cross-route isolation. |
+| Performance/capacity | Seeded 50,000 synthetic lead records and attempted the authenticated `/api/v1/leads` load smoke. The load run did not complete with a usable latency report. The previously recorded 500-request/25-concurrency health check (p95 105.3 ms, p99 172.3 ms) remains a health-only result. | Open. No representative endpoint latency, sustained run, saturation result, production-like host, 1,000-session workload, or product peak forecast is evidenced. |
+| Database and file recovery | Dumped and restored the disposable database and a synthetic private-file archive. Source and restore control totals matched: 50,006 leads, 64 users, and 61 migration records. The mock file SHA-256 matched. Combined local dump/restore elapsed time was 18.2 seconds. | Partial. Demonstrates a local snapshot restore only. It does not demonstrate point-in-time recovery, transaction-log replay, encrypted/off-host backup, access separation, or a witnessed recovery on target infrastructure. Proposed RPO 15 minutes and RTO 4 hours are not ratified or proven. |
+| Accessibility and localisation | Automated browser smoke checked document language, a visible main heading, control names, image alternatives, responsive widths of 320/390/768/1440 px, and role navigation. Those checks ran before the final harness assertion. The UI exercise reached the role sweep but ended with two unexpected 401 background responses (`/insurance/requests`, `/properties`) while accounts were switching. | Partial. The browser script did not report a clean pass. No manual keyboard, screen-reader, zoom/reflow, contrast, Amharic/English content, Ethiopian calendar, or supported-device review was completed. |
+| Provider integrations | Created a synthetic SACCO institution through the local sandbox path. Payment webhooks remained disabled without a configured secret. No external transaction or provider call was made. | Open. No provider contract, sandbox credentials, data-transfer review, callback verification, reconciliation owner, or operational failure exercise exists. All real providers remain disabled. |
+| Legal and policy controls | Engineering policy defaults and conservative feature boundaries are recorded in `V7_RELEASE_BASELINES_AND_POLICY.md`, including data minimisation, restricted-data handling, human review, incident escalation, configurable labour rules, no implied legal effect for uploaded lease evidence, and disabled real screening/payment/e-invoice/signature activation pending owner decisions. | Implemented as defaults; approval remains open. This is not a controller determination, legal opinion, regulator approval, or signed policy. Named Legal/Privacy, HR, Finance, Leasing, and sponsor decisions remain required. |
+| Migration and cutover | A clean disposable database accepted migrations 001–061. The restored synthetic clone accepted a repeat migration run as a no-op. Restore control totals matched. | Partial. This is a mock schema/clone rehearsal only. No real source inventory, business mapping, exception register, approved control totals, delta/freeze plan, deployment-window cutover, rollback decision, or staging environment rehearsal was performed. |
+| Operations | The local health endpoint responded and the API ran on a workstation. | Open. No staging/production monitoring, alert routing, on-call, incident drill, support target, maintenance window, operator training, or service-owner acceptance was tested. |
+| Business-owner UAT | Synthetic role profiles were seeded for Super Admin, Corporate Business Manager, Compliance, Finance, Finance Manager, Master Agent, Field Agent, Customer, Worker, and Property Owner. Browser role-navigation exercises reached these profiles; the final browser result was partial as described above. | Open. The synthetic profiles are not business participants. Named owners, work emails, dated scenarios, defect disposition, and explicit signatures remain pending. Role-title placeholders are used by instruction. |
+
+## Synthetic dataset and recovery identifiers
+
+- Migrated test database: `afrolife_test_v7_mock_564b7ab942`.
+- Restored mock clone: `afrolife_test_v7_restore_829c512e`.
+- The first database contains the seeded role accounts, a synthetic MFI institution, integration fixtures, and 50,000 generated leads. Integration tests added additional synthetic users and records before the dump.
+- Credentials and mock files were kept outside the repository. They are local test artifacts and must not be used outside local development.
+
+## Required follow-up before production acceptance
+
+1. Re-run the API/supply suite without browser traffic, resolve the `insurance_ledger_accounts` ACL finding, then perform a route/resource inventory and negative-access sweep across every API, service, export, report, file, job, and integration.
+2. Diagnose the authenticated lead-list load-run stall, then publish the approved representative workload report on target-like infrastructure with p50/p95/p99, errors, duration, saturation, and twice-peak evidence when Product/IT supplies a forecast.
+3. Ratify recovery targets; implement encrypted off-host database and private-file backups with transaction-log/PITR coverage; witness a timed restore, integrity/access check, and rollback/roll-forward drill.
+4. Complete manual WCAG 2.2 AA and English/Amharic/local-calendar review on named supported browsers and physical devices.
+5. Select each real provider, complete contracts and data-protection/transfer review, provision secret-manager credentials, and test signed callbacks, duplicates, timeouts, unknown outcomes, reconciliation, and failure runbooks in provider sandboxes.
+6. Run source-to-staging migration and cutover rehearsal with business-approved mappings, exception register, control totals, freeze/delta plan, rollback, and reconciliation.
+7. Assign named UAT owners using the role-title placeholders in `V7_RELEASE_ACCEPTANCE_RECORD.md`; have each owner execute assigned scenarios, resolve defects/waivers, and sign the exact release candidate.
+
+**Mock disposition:** useful supplemental evidence recorded; V7 production acceptance remains open.

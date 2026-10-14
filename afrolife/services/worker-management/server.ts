@@ -1,3 +1,2 @@
-import { startAgencyDomainService } from '../agency-domain/runtime.js';
-
-await startAgencyDomainService('worker-management', 3400);
+// Legacy entry point retained for existing deployments; the canonical service is workforce-management.
+import '../workforce-management/server.js';

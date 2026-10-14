@@ -11,6 +11,7 @@ export const BUSINESS_RULES = [
   { key: 'agent_pro_monthly_etb', group: 'Agent plans', label: 'Pro monthly price (ETB)', min: 1, max: 10000000, step: 1 },
   { key: 'agent_enterprise_monthly_etb', group: 'Agent plans', label: 'Enterprise monthly price (ETB)', min: 1, max: 10000000, step: 1 },
   { key: 'agent_subscription_grace_days', group: 'Agent plans', label: 'Paid-plan renewal grace period (days)', min: 0, max: 30, step: 1 },
+  { key: 'lead_protection_days', group: 'Agency operations', label: 'Lead ownership protection period (days)', min: 1, max: 365, step: 1 },
   { key: 'match_w_skills', group: 'Worker matching', label: 'Skills match weight', min: 0, max: 100, step: 0.01 },
   { key: 'match_w_location', group: 'Worker matching', label: 'Location match weight', min: 0, max: 100, step: 0.01 },
   { key: 'match_w_availability', group: 'Worker matching', label: 'Availability match weight', min: 0, max: 100, step: 0.01 },

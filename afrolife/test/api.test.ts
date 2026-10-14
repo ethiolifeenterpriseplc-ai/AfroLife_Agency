@@ -69,6 +69,8 @@ const globalAdmin = await mkUser('global_admin', 10);
 const compliance = await mkUser('compliance', 2);
 const fin1 = await mkUser('finance', 3);
 const fin2 = await mkUser('finance_manager', 4);
+const learningManager = await mkUser('corporate_business_manager', 11);
+const learningCustomer = await mkUser('customer', 12);
 const master = await mkUser('master_agent', 5);
 const fa = await mkUser('field_agent', 6);
 const fb = await mkUser('field_agent', 7);
@@ -98,6 +100,88 @@ async function drive(agent: U, contractId: string, amount: number) {
 }
 
 let A: Awaited<ReturnType<typeof newContract>>;
+
+test('role access and learning content work through the restricted API runtime', async () => {
+  const roleAccess = await call(admin, 'GET', '/role-access');
+  assert.equal(roleAccess.status, 200);
+  assert.equal(roleAccess.body.roles.find((role: any) => role.key === 'super_admin').editable, false);
+  assert.equal((await call(globalAdmin, 'GET', '/role-access')).status, 403);
+  const accessHistoryUser = await mkUser('customer', 92);
+  assert.equal((await call(admin, 'POST', `/users/${accessHistoryUser.id}/deactivate`, {
+    reason: 'Synthetic UAT account deactivation for access history verification',
+  })).status, 200);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const inactiveAt = new Date(Date.now() - 10).toISOString();
+  assert.equal((await call(admin, 'POST', `/users/${accessHistoryUser.id}/activate`, {
+    reason: 'Synthetic UAT account reactivation after access history verification',
+  })).status, 200);
+  const accessHistory = await call(admin, 'GET', `/users/${accessHistoryUser.id}/access-history`);
+  assert.equal(accessHistory.status, 200);
+  assert.equal(accessHistory.body.history[0].current_active, true);
+  assert.equal(accessHistory.body.history[0].actor_id, admin.id);
+  assert.ok(accessHistory.body.history.some((event: any) =>
+    event.current_active === false
+    && event.actor_id === admin.id
+    && event.reason === 'Synthetic UAT account deactivation for access history verification'));
+  const historicalState = await call(admin, 'GET',
+    `/users/${accessHistoryUser.id}/access-history?at=${encodeURIComponent(inactiveAt)}`);
+  assert.equal(historicalState.status, 200);
+  assert.equal(historicalState.body.state_at_time.active, false);
+  assert.equal((await call(accessHistoryUser, 'GET', `/users/${accessHistoryUser.id}/access-history`)).status, 403);
+  assert.equal((await call(admin, 'GET', '/role-access/history?limit=1')).status, 200);
+  assert.equal((await call(admin, 'PATCH', '/role-access', {
+    changes: [{ role: 'super_admin', activity: 'learning.content.view', enabled: false }],
+  })).status, 422);
+
+  const denied = await call(admin, 'PATCH', '/role-access', {
+    changes: [{ role: 'customer', activity: 'learning.content.view', enabled: false }],
+  });
+  assert.equal(denied.status, 200);
+  assert.equal((await call(learningCustomer, 'GET', '/learning/content')).status, 403);
+  assert.equal((await call(fin1, 'POST', '/learning/content', {
+    title: 'Unauthorized UAT content',
+    summary: 'Finance role cannot publish learning materials',
+    category: 'general_support',
+    content_type: 'article',
+    audience_roles: ['customer'],
+    body: 'This content must not be created.',
+    status: 'published',
+  })).status, 403);
+
+  const restored = await call(admin, 'PATCH', '/role-access', {
+    changes: [{ role: 'customer', activity: 'learning.content.view', enabled: true }],
+  });
+  assert.equal(restored.status, 200);
+  const content = await call(learningManager, 'POST', '/learning/content', {
+    title: 'UAT Tenant Guide',
+    summary: 'Synthetic customer-targeted training content',
+    category: 'tenant_support',
+    content_type: 'video',
+    audience_roles: ['customer'],
+    video_url: 'https://example.invalid/uat-guide',
+    body: 'Synthetic training content for disposable UAT only.',
+    status: 'published',
+  });
+  assert.equal(content.status, 201);
+  const audience = await call(learningCustomer, 'GET', '/learning/content');
+  assert.equal(audience.status, 200);
+  assert.ok(audience.body.some((item: any) => item.id === content.body.id));
+
+  const updated = await call(learningManager, 'PATCH', `/learning/content/${content.body.id}`, {
+    title: 'Updated UAT Tenant Guide',
+  });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.title, 'Updated UAT Tenant Guide');
+  assert.equal((await call(learningManager, 'DELETE', `/learning/content/${content.body.id}`)).status, 200);
+  const noLongerPublished = await call(learningCustomer, 'GET', '/learning/content');
+  assert.ok(!noLongerPublished.body.some((item: any) => item.id === content.body.id));
+
+  const audit = await db.query(
+    'SELECT action FROM learning_content_audit WHERE content_id=$1 ORDER BY id',
+    [content.body.id],
+  );
+  assert.deepEqual(audit.rows.map((row) => row.action), ['published', 'updated', 'archived']);
+});
 
 test('login returns a token for an active user', async () => {
   const r = await fetch(API + '/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone: admin.phone, password: PW }) });
@@ -324,8 +408,42 @@ test('property-owner sign-up completes national-ID review and remains an owner r
 test('Gate 3: lead is attributed to its agent; duplicate phone is rejected', async () => {
   A = await newContract(fa, 'A', 1);
   assert.equal(A.lead.source_agent_id, fa.id);
+  assert.ok(new Date(A.lead.protected_until).getTime() > Date.now() + 89 * 86400000);
   const dup = await call(fb, 'POST', '/leads', { lead_type: 'household', name: 'Copy', phone: A.lead.phone });
   assert.equal(dup.status, 409);
+});
+
+test('Global Admin can formally reassign an unconverted lead with an immutable attribution trail', async () => {
+  const created = await call(fa, 'POST', '/leads', {
+    lead_type: 'business', name: 'Reassignment test', phone: uniquePhone(),
+  });
+  assert.equal(created.status, 201);
+  const before = await call(fa, 'GET', `/leads/${created.body.id}/attribution-history`);
+  assert.equal(before.status, 200);
+  assert.equal(before.body.length, 1);
+  assert.equal(before.body[0].event_type, 'created');
+
+  const moved = await call(globalAdmin, 'POST', `/admin/leads/${created.body.id}/reassign`, {
+    target_agent_id: fb.id, reason: 'Territory coverage requires an accountable reassignment',
+  });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.source_agent_id, fb.id);
+  assert.ok(new Date(moved.body.protected_until).getTime() > Date.now() + 89 * 86400000);
+  const after = await call(fb, 'GET', `/leads/${created.body.id}/attribution-history`);
+  assert.equal(after.status, 200);
+  assert.deepEqual(after.body.map((event: any) => event.event_type), ['created','reassigned']);
+  assert.equal((await call(fa, 'GET', `/leads/${created.body.id}/attribution-history`)).status, 404);
+  assert.equal((await call(globalAdmin, 'POST', `/admin/leads/${created.body.id}/reassign`, {
+    target_agent_id: fa.id, reason: 'short',
+  })).status, 400);
+
+  const activeLead = await call(fb, 'POST', '/leads', {
+    lead_type: 'household', name: 'Contracted lead', phone: uniquePhone(),
+  });
+  assert.equal((await call(fb, 'POST', `/leads/${activeLead.body.id}/contracts`, { track: 'A', base_value: 100000 })).status, 201);
+  assert.equal((await call(globalAdmin, 'POST', `/admin/leads/${activeLead.body.id}/reassign`, {
+    target_agent_id: fa.id, reason: 'Attempt to move a converted lead for test',
+  })).status, 409);
 });
 
 test('Gate 8: agents cannot see each other\'s leads; master sees the downline', async () => {
@@ -545,6 +663,13 @@ test('lease defaults and maximum duration follow business rules', async () => {
     assert.equal((await call(fa, 'POST', '/leases', lease)).status, 422);
     const created = await call(fa, 'POST', '/leases', { ...lease, months: 2 });
     assert.equal(created.status, 201);
+    assert.equal(created.body.status, 'active');
+    const leaseEvidence = await db.query(
+      'SELECT snapshot FROM lease_versions WHERE lease_id=$1 AND version=1',
+      [created.body.id],
+    );
+    assert.equal(leaseEvidence.rows[0].snapshot.legacy_immediate_active_path, true);
+    assert.equal(leaseEvidence.rows[0].snapshot.signature_evidence_available, false);
     const charges = await db.query(
       'SELECT due_on::text FROM rent_charges WHERE lease_id = $1 ORDER BY period',
       [created.body.id],
@@ -555,6 +680,93 @@ test('lease defaults and maximum duration follow business rules', async () => {
       values: { lease_default_due_day: oldDueDay, lease_min_term_months: oldMinMonths, lease_max_months: oldMaxMonths },
     })).status, 200);
   }
+});
+
+test('opt-in lease lifecycle requires independent approval, signature evidence, and handover before activation', async () => {
+  const property = await call(fa, 'POST', '/properties', {
+    address: `Workflow test property ${run}`,
+    ptype: 'apartment_building',
+    territory_id: tid,
+    units: [{ unit_no: `W${run}`, rent: 12000 }],
+  });
+  assert.equal(property.status, 201);
+  const unit = (await db.query('SELECT id FROM property_units WHERE property_id=$1', [property.body.id])).rows[0];
+  const tenant = await call(fa, 'POST', '/tenants', {
+    name: 'Workflow Test Tenant',
+    phone: `+2517${run}1`,
+  });
+  assert.equal(tenant.status, 201);
+  const lease = await call(fa, 'POST', '/leases/workflow', {
+    unit_id: unit.id,
+    tenant_id: tenant.body.id,
+    rent: 12000,
+    deposit: 24000,
+    start_date: '2031-01-01',
+    months: 24,
+  });
+  assert.equal(lease.status, 201, JSON.stringify(lease.body));
+  assert.equal(lease.body.status, 'draft');
+  assert.equal((await db.query('SELECT occupancy FROM property_units WHERE id=$1', [unit.id])).rows[0].occupancy, 'vacant');
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM rent_charges WHERE lease_id=$1', [lease.body.id])).rows[0].count, 0);
+
+  const reason = 'Terms reviewed for workflow UAT.';
+  assert.equal((await call(fa, 'POST', `/leases/${lease.body.id}/submit-for-approval`, { reason })).status, 200);
+  assert.equal((await call(fa, 'POST', `/leases/${lease.body.id}/approve`, { reason })).status, 403);
+  const approved = await call(compliance, 'POST', `/leases/${lease.body.id}/approve`, { reason });
+  assert.equal(approved.status, 200, JSON.stringify(approved.body));
+  assert.equal(approved.body.status, 'pending_signature');
+
+  const handover = { reason, handover_date: '2031-01-01', move_in_inspection_completed: true };
+  assert.equal((await call(learningManager, 'POST', `/leases/${lease.body.id}/execute`, handover)).status, 409);
+  for (const party of ['tenant', 'owner']) {
+    const uploaded = await callFile(
+      fa,
+      `/leases/${lease.body.id}/signature-documents?party=${party}&signer_name=${encodeURIComponent(party === 'tenant' ? tenant.body.name : 'Workflow Property Owner')}`,
+      PNG,
+    );
+    assert.equal(uploaded.status, 201, JSON.stringify(uploaded.body));
+    assert.equal(uploaded.body.signature_evidence_only, true);
+  }
+  assert.equal((await call(compliance, 'POST', `/leases/${lease.body.id}/execute`, handover)).status, 403);
+  const executed = await call(learningManager, 'POST', `/leases/${lease.body.id}/execute`, handover);
+  assert.equal(executed.status, 200, JSON.stringify(executed.body));
+  assert.equal(executed.body.lease.status, 'active');
+  assert.match(executed.body.lease.execution_hash, /^[0-9a-f]{64}$/);
+  assert.equal(executed.body.signature_evidence_only, true);
+  assert.equal((await db.query('SELECT occupancy FROM property_units WHERE id=$1', [unit.id])).rows[0].occupancy, 'occupied');
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM rent_charges WHERE lease_id=$1', [lease.body.id])).rows[0].count, 24);
+  const notice = {
+    idempotency_key: randomUUID(),
+    notice_type: 'tenant_to_owner',
+    received_on: new Date().toISOString().slice(0, 10),
+    proposed_effective_on: '2032-01-01',
+    summary: 'Tenant reported an intended move-out date for review.',
+  };
+  assert.equal((await call(compliance, 'POST', `/leases/${lease.body.id}/notices`, notice)).status, 403);
+  const recordedNotice = await call(fa, 'POST', `/leases/${lease.body.id}/notices`, notice);
+  assert.equal(recordedNotice.status, 201, JSON.stringify(recordedNotice.body));
+  assert.equal(recordedNotice.body.legal_effect, 'record_only');
+  assert.match(recordedNotice.body.notice_disclaimer, /does not verify service/);
+  assert.equal((await call(fa, 'POST', `/leases/${lease.body.id}/notices`, notice)).status, 200);
+  assert.equal((await call(fa, 'POST', `/leases/${lease.body.id}/notices`, {
+    ...notice, summary: 'Changed content reusing the original request key.',
+  })).status, 409);
+  const notices = await call(fa, 'GET', `/leases/${lease.body.id}/notices`);
+  assert.equal(notices.status, 200);
+  assert.equal(notices.body.length, 1);
+  const leaseSummary = await call(fa, 'GET', '/leases');
+  const leaseSummaryRow = leaseSummary.body.find((row: any) => row.id === lease.body.id);
+  assert.equal(leaseSummaryRow.notice_type, 'tenant_to_owner');
+  assert.equal(leaseSummaryRow.proposed_effective_on, '2032-01-01');
+  assert.equal((await db.query('SELECT status FROM leases WHERE id=$1', [lease.body.id])).rows[0].status, 'active');
+  await assert.rejects(
+    db.query('UPDATE lease_notices SET summary=$2 WHERE id=$1', [recordedNotice.body.notice.id, 'Tampered notice summary']),
+    /Lease notice records are append-only/,
+  );
+  await assert.rejects(
+    db.query('UPDATE leases SET rent=rent+1 WHERE id=$1', [lease.body.id]),
+    /Versioned lease terms are immutable/,
+  );
 });
 
 test.after(() => db.end());

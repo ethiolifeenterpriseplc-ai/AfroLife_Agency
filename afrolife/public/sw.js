@@ -1,5 +1,8 @@
-const CACHE = 'afrolife-shell-v17';
-const SHELL = ['/', '/styles.css', '/app.js', '/api-errors.js', '/mfi.js', '/edir.js', '/privacy.js', '/i18n.js', '/manifest.webmanifest', '/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'afrolife-shell-v21';
+const SHELL = ['/', '/styles.css', '/app.js', '/api-errors.js', '/mfi.js', '/edir.js', '/privacy.js', '/i18n.js', '/manifest.webmanifest', '/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/ethio-life-icon-192.png', '/icons/ethio-life-icon-512.png',
+  '/mini-apps/marketplace/logo.svg', '/mini-apps/property-management/logo.svg', '/mini-apps/staffing/logo.svg', '/mini-apps/workforce-management/logo.svg',
+  '/mini-apps/leads/logo.svg', '/mini-apps/contracts/logo.svg', '/mini-apps/commissions/logo.svg', '/mini-apps/rent/logo.svg', '/mini-apps/agents/logo.svg',
+  '/mini-apps/edir/logo.svg', '/mini-apps/mfi/logo.svg', '/mini-apps/insurance/logo.svg'];
 const SHELL_PATHS = new Set(SHELL);
 
 self.addEventListener('install', (event) => {

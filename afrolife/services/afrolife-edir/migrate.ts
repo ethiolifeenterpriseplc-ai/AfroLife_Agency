@@ -30,6 +30,11 @@ const migrations = await Promise.all([
   ['afrolife-edir-v16-atomic-writeoff-posting', '016_atomic_writeoff_posting.sql'],
   ['afrolife-edir-v17-remove-stale-loan-status-check', '017_remove_stale_loan_status_check.sql'],
   ['afrolife-edir-v18-remove-stale-installment-check', '018_remove_stale_installment_check.sql'],
+  ['afrolife-edir-v19-platform-disbursement-limits', '019_platform_disbursement_limits.sql'],
+  ['afrolife-edir-v20-platform-disbursement-cap-guard', '020_platform_disbursement_cap_guard.sql'],
+  ['afrolife-edir-v21-organization-ledger-bootstrap', '021_organization_ledger_bootstrap.sql'],
+  ['afrolife-edir-v22-member-credit-control-lock', '022_member_credit_control_lock.sql'],
+  ['afrolife-edir-v23-member-credit-control-posting-roles', '023_member_credit_control_posting_roles.sql'],
 ].map(async ([version, filename]) => ({
   version,
   source: await readFile(join(process.cwd(), 'services', 'afrolife-edir', filename), 'utf8'),

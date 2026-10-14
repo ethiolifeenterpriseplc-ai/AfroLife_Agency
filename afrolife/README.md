@@ -1,4 +1,4 @@
-﻿# አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency
+# አፍሮ - ላይፍ ኤጀንሲ / AfroLife Agency
 
 Same-origin TypeScript/Express API and installable web app for AfroLife agency operations, workforce onboarding, verified-worker matching, and role-scoped platform oversight.
 
@@ -161,7 +161,7 @@ international and local standards references, mapped controls, and release gaps.
 See [SACCO_SERVICE_ROLLOUT.md](./SACCO_SERVICE_ROLLOUT.md) for each service's
 current release state and the evidence required before it can be marked Live.
 
-The **SACCO / MFI** workspace adds a separate institution-scoped operational area without replacing AfroLife's agency, marketplace, contract, rent, or workforce records. Run `npm run db:migrate` to apply the MFI schema. The workspace is enabled by default; set `MFI_PILOT_ENABLED=0` to hide and disable it. Institution operations remain limited to authorized staff with active institution membership and are checked against each user's institution role. Verified users can request membership; an independent institution administrator or compliance reviewer must approve it before the member record is linked. Linked members can view their own account balances, loan schedules, and posted transaction detail, read-only. These are not digital wallets, and no member payments or transfers are enabled. A Super Admin can register an institution; the creator becomes its first institution administrator. That administrator can provision existing active AfroLife finance/compliance staff by phone and assign an institution role.
+The **SACCO / MFI** workspace adds a separate institution-scoped operational area without replacing AfroLife's agency, marketplace, contract, rent, or workforce records. Run `npm run db:migrate` to apply the MFI schema. It is enabled by default in local development; production defaults to disabled and requires explicit `MFI_PILOT_ENABLED=1` plus a separately configured service URL and gateway secret. Institution operations remain limited to authorized staff with active institution membership and are checked against each user's institution role. Verified users can request membership; an independent institution administrator or compliance reviewer must approve it before the member record is linked. Linked members can view their own account balances, loan schedules, and posted transaction detail, read-only. These are not digital wallets, and no member payments or transfers are enabled. A Super Admin can register an institution; the creator becomes its first institution administrator. That administrator can provision existing active AfroLife finance/compliance staff by phone and assign an institution role.
 
 The workspace now presents a service menu across institution governance, members/KYC, products, savings, shares, credit, IFB, payments, wallets, agent/field operations, collections, accounting, treasury, reconciliation, AML/compliance, risk/fraud, regulatory reporting, CRM, digital channels, analytics, documents, staff, audit/security, exceptions, and cooperative governance. Each service is labelled `Pilot`, `Partial`, or `Not live`; selecting a not-live service shows its baseline scope and explicitly does not accept or post activity. Platform Super Admins can access every institution and all currently implemented institution operations/configuration regardless of institution membership; each institution-scoped request is written to that institution's append-only audit trail. Super Admin access does not make unavailable SRS capabilities live. This menu is a capability map, not a claim that every SRS requirement is implemented.
 
@@ -264,6 +264,27 @@ npm run android:build
 
 The debug APK is written to `%LOCALAPPDATA%\AfroLife\android-build\_app\outputs\apk\debug\app-debug.apk`.
 
+For an Android device on the same Wi-Fi as the development PC, start the local
+API, then run this command from an elevated PowerShell:
+
+Open PowerShell **as Administrator** and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-local-android-lan.ps1
+```
+
+Before running it, start the current workspace on this PC with `PORT=3001`
+and `HOST=127.0.0.1` (for PowerShell: `$env:PORT='3001'; $env:HOST='127.0.0.1'; npm run dev`).
+The setup checks this API and creates
+a short-lived, subnet-restricted HTTPS gateway to the API that remains bound
+to loopback, and places a debug-only CA certificate at
+`artifacts/EthioLife-LAN-Preview-CA.cer`. Install that CA on the test Android
+device, install the debug APK, then enter the printed `https://<PC-Wi-Fi-IP>:8443`
+address in the app. The debug APK trusts user-installed certificates; release
+builds trust system certificates only. Stop the preview and remove its
+firewall rule with `scripts/stop-local-android-lan.ps1` when testing ends.
+This LAN preview is for synthetic data and internal testing only.
+
 On first launch, enter the deployed AfroLife server's HTTPS origin (the selected hostname is `https://afrolife-agency.duckdns.org`, once claimed and configured). The app stores that origin locally and uses it for API requests; it rejects plain HTTP except for localhost development. Configure the API server with the exact production PWA origin and `https://localhost` so the Android WebView origin is allowed, then restart the API. Keep the Android app and API on HTTPS in production.
 
 For a signed release APK, configure `AFROLIFE_RELEASE_STORE_FILE`,
@@ -314,9 +335,15 @@ scenarios, launch evidence, and pilot operations.
 
 - `npm run dev` — run the API and static PWA with automatic TypeScript reload
 - `npm run build` — compile the API to `dist/`
-- `npm run build:agency-domains` — compile Worker Management, Staffing, Property Management, and Marketplace backends
+- `npm run build:workforce-management` — compile the Workforce Management service independently
+- `npm run build:worker-management` — deprecated compatibility alias for the Workforce Management build
+- `npm run build:staffing` — compile Staffing independently
+- `npm run build:property-management` — compile Property Management independently
+- `npm run build:marketplace` — compile Marketplace independently
+- `npm run build:agency-domains` — compile all four Agency domain backends
 - `npm start` — start the compiled API
-- `npm run start:worker-management` — start the private worker/document API on port 3400
+- `npm run start:workforce-management` — start the private workforce/document API on port 3400
+- `npm run start:worker-management` — deprecated compatibility alias for the Workforce Management service
 - `npm run start:staffing` — start the private staffing request/matching API on port 3401
 - `npm run start:property-management` — start the private property API on port 3402
 - `npm run start:marketplace` — start the private marketplace API on port 3403
@@ -502,20 +529,33 @@ only to the main API gateway; never expose port 3300 directly.
 
 ### Worker, staffing, property, and marketplace services
 
-Worker Management, Staffing, Property Management, and Marketplace now have
+Workforce Management, Staffing, Property Management, and Marketplace now have
 independent backend processes while the web/PWA interface, login, navigation,
 localization, API paths, and central gateway remain shared. Their signed
 gateway paths are unchanged: `/workers` and `/documents`, `/requests` and
 `/matches`, `/properties`, and `/marketplace`, respectively.
 
-Their route implementations now live in domain-specific modules, and each
-service process loads only its own router. The central API composes those same
+Their route implementations now live in the corresponding service directories,
+and each service has an independent TypeScript build target. Service processes
+load only their own router after selecting their database. The central API composes those same
 routers to preserve the existing routes and local compatibility behavior.
-Build them with `npm run build:agency-domains`; start each process with
+The shared workspace launcher reads each mini-app's title, description, panel,
+and same-origin API paths from `public/mini-apps/<service>/manifest.js`; the
+mini-apps continue to use the shared sign-in, shell, responsive navigation, and
+localization.
+Build one with its corresponding `npm run build:worker-management`,
+`npm run build:staffing`, `npm run build:property-management`, or
+`npm run build:marketplace` command (or build all with
+`npm run build:agency-domains`); start each process with
 `npm run start:worker-management`, `npm run start:staffing`,
 `npm run start:property-management`, or `npm run start:marketplace`. They bind
 to private loopback ports 3400-3403 by default. Configure the corresponding
-`*_SERVICE_URL` and matching `*_GATEWAY_SECRET` on the central API. Each
+`*_SERVICE_URL`, matching unique `*_GATEWAY_SECRET`, and
+`*_SERVICE_CUTOVER_READY=1` on the central API only after that domain's data,
+contract, route-parity, backup/restore, and rollback gates are reviewed. Leave
+the URLs empty and readiness flags at `0` to preserve legacy central routing.
+The readiness flag is an operator attestation, not an automated proof of those
+gates. Each
 service now requires its own `*_DATABASE_URL` and secret in its runtime
 environment; document/media services also need the existing `FILE_STORAGE_DIR`.
 This is code and process separation, not yet a complete database migration:
@@ -529,6 +569,23 @@ protected domain tables; passing that check does not verify migrated data or
 cross-service consistency. See
 [SERVICE_BOUNDARIES.md](./SERVICE_BOUNDARIES.md) for deployment and rollback
 constraints.
+
+#### Local, anonymized Agency-domain UAT data
+
+After local Agency-domain databases are initialized, the reviewed UAT importer
+can copy a small anonymized subset from `127.0.0.1:5433/afrolife` into the four
+allowlisted local domain databases. First run
+`npm run migrate:agency-domains:uat:dry-run`; it validates source references,
+target schemas, and target readiness while reporting counts only. If that
+preflight succeeds, run `npm run migrate:agency-domains:uat`. Each target copy
+is committed in its own transaction and can be safely rerun using its migration
+marker. The importer pseudonymizes contact details, replaces prices and free
+text, resets account credentials and disables copied accounts. It does not copy
+passwords, MFA secrets, document records or binaries, media, audit data,
+notifications, or financial records. The current source has no Marketplace
+listings, so that service still needs synthetic fixtures for listing-specific
+UAT. This is local test data only; it does not complete schema ownership,
+service reconciliation, or production cutover gates.
 
 Windows wrapper and Linux systemd templates are in `deploy/windows/` and
 `deploy/linux/`. Matching service environment examples are in

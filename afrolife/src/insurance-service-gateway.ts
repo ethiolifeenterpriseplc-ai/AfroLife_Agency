@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from 'express';
 import { HttpError } from './http-error.js';
 import { getCorrelationId } from './request-context.js';
+import { isRoleActivityOverrides, type RoleActivityOverrides } from './role-activities.js';
 
 export interface InsuranceServiceAssertion {
   userId: string;
@@ -11,6 +12,7 @@ export interface InsuranceServiceAssertion {
   email?: string | null;
   kycStatus?: string;
   organizationId?: string;
+  rolePermissions?: RoleActivityOverrides;
   issuedAt: number;
 }
 
@@ -54,6 +56,7 @@ export function verifyServiceAssertion(
     || (decoded.email !== undefined && decoded.email !== null && typeof decoded.email !== 'string')
     || (decoded.kycStatus !== undefined && !['uploaded', 'under_review', 'verified', 'rejected'].includes(decoded.kycStatus))
     || (decoded.organizationId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(decoded.organizationId))
+    || (decoded.rolePermissions !== undefined && !isRoleActivityOverrides(decoded.rolePermissions))
     || !Number.isSafeInteger(decoded.issuedAt)
     || Math.abs(now - decoded.issuedAt) > 60_000) return null;
   return decoded;
@@ -100,6 +103,7 @@ export function createServiceGateway(options: {
       ...(req.user!.email !== undefined ? { email: req.user!.email } : {}),
       ...(req.user!.kyc_status ? { kycStatus: req.user!.kyc_status } : {}),
       ...(req.get('x-afrolife-edir-id') ? { organizationId: req.get('x-afrolife-edir-id') } : {}),
+      ...(req.user!.rolePermissions ? { rolePermissions: req.user!.rolePermissions } : {}),
       issuedAt,
     })).toString('base64url');
     const bodyHash = requestBodyHash(req.body);

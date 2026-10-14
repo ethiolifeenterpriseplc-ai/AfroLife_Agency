@@ -1,0 +1,15 @@
+<service>
+  <id>AfroLifeWorkforceManagement</id>
+  <name>AfroLife Workforce Management Service</name>
+  <description>Private worker and document backend behind the AfroLife Super App gateway</description>
+  <executable>C:\Program Files\nodejs\node.exe</executable>
+  <arguments>C:\AfroLife\app\dist\services\workforce-management\server.js</arguments>
+  <workingdirectory>C:\AfroLife\app</workingdirectory>
+  <env name="AFROLIFE_ENV_FILE" value="C:\ProgramData\AfroLife\workforce-management.env" />
+  <env name="HOST" value="127.0.0.1" />
+  <env name="PORT" value="3400" />
+  <logpath>C:\ProgramData\AfroLife\logs\workforce-management</logpath>
+  <log mode="roll" />
+  <stoptimeout>30 sec</stoptimeout>
+  <onfailure action="restart" delay="10 sec" />
+</service>

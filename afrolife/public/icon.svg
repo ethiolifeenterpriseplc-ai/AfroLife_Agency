@@ -1,8 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="t">
-  <title id="t">ኢትዮ-ላይፍ ኤጀንሲ / EthioLife Agency</title>
-  <rect width="96" height="96" rx="20" fill="#0f6b66"/>
-  <path d="M48 37 27 55M48 37l21 18" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="48" cy="28" r="9" fill="#f2b632"/>
-  <circle cx="27" cy="64" r="9" fill="#fff"/>
-  <circle cx="69" cy="64" r="9" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">EthioLife Agency — opportunity mark</title>
+  <rect width="96" height="96" rx="20" fill="#174b3d"/>
+  <path fill="#fff" d="M26 24h40v11H38v8h21v10H38v8h30v11H26z"/>
+  <path fill="#d7ad59" d="m75 15 3.5 8.5L87 27l-8.5 3.5L75 39l-3.5-8.5L63 27l8.5-3.5z"/>
 </svg>

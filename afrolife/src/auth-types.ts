@@ -1,3 +1,5 @@
+import type { RoleActivityOverrides } from './role-activities.js';
+
 export interface AuthUser {
   id: string;
   role: string;
@@ -8,6 +10,7 @@ export interface AuthUser {
   email?: string | null;
   kyc_status?: string;
   edir_id?: string;
+  rolePermissions?: RoleActivityOverrides;
 }
 
 export function isPlatformAdminRole(role: string): boolean {

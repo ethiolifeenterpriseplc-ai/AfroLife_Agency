@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { isPlatformAdminRole, type AuthUser } from './auth-types.js';
 import { HttpError } from './http-error.js';
 import { sessionIdleTimeoutMinutes } from './runtime-config.js';
+import { hasRoleActivityAccess, isRoleActivityOverrides, type RoleActivityKey, type RoleActivityOverrides } from './role-activities.js';
 export { HttpError } from './http-error.js';
 
 export { isPlatformAdminRole } from './auth-types.js';
@@ -39,8 +40,8 @@ export async function withUser<T>(u: AuthUser, fn: (c: PoolClient) => Promise<T>
   const c = await pool.connect();
   try {
     await c.query('BEGIN');
-    await c.query("SELECT set_config('app.user_id',$1,true), set_config('app.role',$2,true), set_config('app.edir_id',$3,true)",
-      [u.id, u.role, u.edir_id ?? '00000000-0000-4000-8000-000000000002']);
+    await c.query("SELECT set_config('app.user_id',$1,true), set_config('app.role',$2,true), set_config('app.edir_id',$3,true), set_config('app.role_permissions',$4,true)",
+      [u.id, u.role, u.edir_id ?? '00000000-0000-4000-8000-000000000002', JSON.stringify(u.rolePermissions ?? {})]);
     const r = await fn(c);
     await c.query('COMMIT');
     return r;
@@ -75,6 +76,7 @@ const stateCache = new Map<string, {
   at: number;
   active: boolean;
   role: string;
+  role_permissions?: RoleActivityOverrides;
   legal_name?: string;
   phone?: string;
   email?: string | null;
@@ -88,7 +90,13 @@ async function currentState(id: string) {
   const hit = stateCache.get(id);
   if (hit && Date.now() - hit.at < STATE_TTL_MS) return hit;
   const r = (await pool.query(
-    'SELECT active, role, legal_name, phone, email, kyc_status FROM users WHERE id = $1',
+    `SELECT u.active, u.role, u.legal_name, u.phone, u.email, u.kyc_status,
+       coalesce((
+         SELECT jsonb_object_agg(p.activity_key, p.enabled)
+         FROM role_activity_permissions p
+         WHERE p.role_name = u.role
+       ), '{}'::jsonb) AS role_permissions
+     FROM users u WHERE u.id = $1`,
     [id],
   )).rows[0];
   const row = {
@@ -99,7 +107,11 @@ async function currentState(id: string) {
     phone: r?.phone as string | undefined,
     email: r?.email as string | null | undefined,
     kyc_status: r?.kyc_status as string | undefined,
+    role_permissions: r?.role_permissions as RoleActivityOverrides | undefined,
   };
+  if (row.role_permissions && !isRoleActivityOverrides(row.role_permissions)) {
+    throw new Error('Stored role activity permissions are invalid');
+  }
   if (stateCache.size > 5000) stateCache.clear();
   stateCache.set(id, row);
   return row;
@@ -139,6 +151,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
         phone: s.phone,
         email: s.email,
         kyc_status: s.kyc_status,
+        rolePermissions: s.role_permissions,
       }; // Identity fields and role come from the database, not the token.
       next();
     },
@@ -151,3 +164,21 @@ export const requireRole = (...roles: string[]) => (req: Request, _res: Response
     || (req.user!.role === 'global_admin' && roles.includes('super_admin')))
     ? next()
     : next(new HttpError(403, 'Your role cannot do this'));
+
+export const requireActivity = (activity: RoleActivityKey) => (req: Request, _res: Response, next: NextFunction) =>
+  hasRoleActivityAccess(req.user!.role, activity, req.user!.rolePermissions)
+    ? next()
+    : next(new HttpError(403, 'Your role is not enabled for this activity'));
+
+export const requireAnyActivity = (...activities: RoleActivityKey[]) => (req: Request, _res: Response, next: NextFunction) =>
+  activities.some((activity) => hasRoleActivityAccess(req.user!.role, activity, req.user!.rolePermissions))
+    ? next()
+    : next(new HttpError(403, 'Your role is not enabled for this activity'));
+
+export function hasActivity(req: Request, activity: RoleActivityKey): boolean {
+  return hasRoleActivityAccess(req.user!.role, activity, req.user!.rolePermissions);
+}
+
+export function invalidateRolePermissions() {
+  stateCache.clear();
+}

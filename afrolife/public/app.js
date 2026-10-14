@@ -3,6 +3,7 @@ import { ApiError, optionalApiFallback } from './api-errors.js';
 import { createMfiWorkspace } from './mfi.js';
 import { createEdirWorkspace } from './edir.js';
 import { createPrivacyWorkspace } from './privacy.js';
+import { miniAppByPanel } from './mini-apps/registry.js';
 
 const WEB_API_ROOT = '/api/v1';
 let API_ROOT = WEB_API_ROOT;
@@ -14,7 +15,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [] };
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
 let sessionIdleTimer = null;
@@ -68,6 +69,10 @@ function setLocalizedText(element, message, values = {}) {
 
 function isPlatformAdmin(role = state.user?.role) {
   return role === 'global_admin' || role === 'super_admin';
+}
+
+function hasActivity(activity) {
+  return state.user?.role_activities?.[activity] === true;
 }
 
 function showAlert(message, error = false, values = {}) {
@@ -150,6 +155,7 @@ async function login(event) {
       setLocalizedText(error, 'Enter the six-digit code from your authenticator app.');
       return;
     }
+    state.panel = 'overview';
     sessionStorage.setItem(TOKEN_KEY, result.token);
     state.mfaRequired = result.restrict === 'mfa';
     await loadWorkspace();
@@ -521,6 +527,15 @@ function signOut({ revoke = true, message = '' } = {}) {
   stopSessionActivity();
   sessionStorage.removeItem(TOKEN_KEY);
   state.user = null;
+  state.panel = 'overview';
+  Object.assign(state, {
+    leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [],
+    commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
+    roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
+    marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
+    insuranceStaffRequests: [], edirMe: null, mfaSetup: null,
+  });
+  state.features = { mfiPilotEnabled: false, edirEnabled: false };
   $('#app-view').hidden = true;
   $('#mobile-workspace-nav').hidden = true;
   if ($('#workspace-more-dialog').open) $('#workspace-more-dialog').close();
@@ -553,7 +568,8 @@ async function loadWorkspace() {
     tab.hidden = false;
   });
   $('#admin-tab').hidden = !['global_admin', 'super_admin', 'compliance', 'corporate_business_manager'].includes(state.user.role);
-  const canUseListings = ['global_admin', 'super_admin', 'corporate_business_manager', 'customer', 'master_agent', 'field_agent', 'property_owner'].includes(state.user.role);
+  $('#learning-tab').hidden = !hasActivity('learning.content.view') && !hasActivity('learning.content.manage');
+  const canUseListings = hasActivity('property.listings.view');
   $('#properties-tab').hidden = !canUseListings;
   $('#marketplace-tab').hidden = false;
   if (!canUseListings && state.panel === 'properties') state.panel = 'overview';
@@ -562,7 +578,7 @@ async function loadWorkspace() {
   $('#commissions-tab').hidden = !canUseCommissions;
   if (!canUseCommissions && state.panel === 'commissions') state.panel = 'overview';
   $('#agents-tab').hidden = !['global_admin', 'super_admin', 'master_agent'].includes(state.user.role);
-  $('#rent-tab').hidden = ['customer', 'worker', 'property_owner', 'compliance'].includes(state.user.role);
+  $('#rent-tab').hidden = !['property.tenancy.manage', 'rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity);
   $('#mfi-tab').hidden = !state.features.mfiPilotEnabled;
   $('#edir-tab').hidden = !state.features.edirEnabled;
   if ($('#mfi-tab').hidden && state.panel === 'mfi') state.panel = 'overview';
@@ -570,11 +586,37 @@ async function loadWorkspace() {
   const sharedPanels = ['overview', 'marketplace', 'edir', 'insurance', 'mfi', 'security', 'privacy'];
   document.querySelectorAll('.tab').forEach((tab) => {
     if (['property_owner', 'customer'].includes(state.user.role)) {
-      tab.hidden = ![...sharedPanels, 'properties'].includes(tab.dataset.panel);
+      const allowed = new Set([...sharedPanels, ...(canUseListings ? ['properties'] : [])]);
+      if (hasActivity('learning.content.view') || hasActivity('learning.content.manage')) allowed.add('learning');
+      if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
+      if (hasActivity('staffing.requests.manage')) allowed.add('requests');
+      if (['rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity)) allowed.add('rent');
+      tab.hidden = !allowed.has(tab.dataset.panel);
     } else if (['worker', 'corporate_business_manager', 'master_agent', 'field_agent'].includes(state.user.role)) {
-      tab.hidden = ![...sharedPanels, 'leads', 'workers', 'requests', 'properties', 'contracts', 'commissions', 'agents'].includes(tab.dataset.panel);
+      const allowed = new Set([
+        ...sharedPanels,
+        ...(state.user.role === 'corporate_business_manager' ? ['admin'] : []),
+        'leads', 'contracts', 'commissions', 'agents',
+      ]);
+      if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
+      if (hasActivity('staffing.requests.manage')) allowed.add('requests');
+      if (canUseListings) allowed.add('properties');
+      if (hasActivity('learning.content.view') || hasActivity('learning.content.manage')) allowed.add('learning');
+      if (['rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity)) allowed.add('rent');
+      tab.hidden = !allowed.has(tab.dataset.panel);
     }
   });
+  for (const [panel, enabled] of [
+    ['workers', hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')],
+    ['requests', hasActivity('staffing.requests.manage')],
+    ['properties', canUseListings],
+    ['learning', hasActivity('learning.content.view') || hasActivity('learning.content.manage')],
+  ]) {
+    if (enabled) {
+      const tab = document.querySelector(`.tab[data-panel="${panel}"]`);
+      if (tab) tab.hidden = false;
+    }
+  }
   renderMobileWorkspaceNav();
   if (state.user.must_change_password) {
     state.panel = 'password';
@@ -586,6 +628,7 @@ async function loadWorkspace() {
     renderPanel();
     return;
   }
+  renderPanel();
   await refresh();
 }
 
@@ -610,7 +653,7 @@ async function refresh() {
     state.leads = leads;
     state.workers = workers;
     state.requests = requests;
-    const canUseListings = ['global_admin','super_admin','corporate_business_manager','customer','master_agent','field_agent','property_owner'].includes(state.user.role);
+    const canUseListings = hasActivity('property.listings.view');
     state.properties = canUseListings
       ? await api('/properties')
       : [];
@@ -630,6 +673,10 @@ async function refresh() {
     state.team = ['global_admin', 'super_admin', 'master_agent'].includes(state.user.role) ? await getOptional('/agents/team', []) : [];
     state.businessRules = state.user.role === 'global_admin' ? await api('/business-rules') : [];
     state.globalAdminPromotions = isPlatformAdmin() ? await api('/global-admin-promotions') : [];
+    state.roleAccess = state.user.role === 'super_admin' ? await api('/role-access') : null;
+    state.learningContent = hasActivity('learning.content.view') || hasActivity('learning.content.manage')
+      ? await api('/learning/content')
+      : [];
     [state.marketplaceConfig, state.marketplaceListings] = await Promise.all([
       getOptional('/marketplace/config', {}), getOptional('/marketplace/listings', []),
     ]);
@@ -718,10 +765,6 @@ function renderOverview() {
 
 const serviceDescriptions = {
   leads: 'Register and follow up on customer and business opportunities.',
-  workers: 'Review workforce profiles and service readiness.',
-  requests: 'Match service requests with available providers.',
-  properties: 'Manage property listings, units, and availability.',
-  marketplace: 'Discover and manage marketplace activity.',
   contracts: 'Prepare, review, and track service agreements.',
   commissions: 'Review earned commissions and payment status.',
   agents: 'Oversee agent teams and service specialization.',
@@ -730,6 +773,44 @@ const serviceDescriptions = {
   mfi: 'Open institution-scoped SACCO and MFI pilot operations.',
   insurance: 'Request insurance information and review your request activity.',
 };
+
+const integratedMiniAppLogos = Object.freeze({
+  leads: '/mini-apps/leads/logo.svg',
+  contracts: '/mini-apps/contracts/logo.svg',
+  commissions: '/mini-apps/commissions/logo.svg',
+  rent: '/mini-apps/rent/logo.svg',
+  agents: '/mini-apps/agents/logo.svg',
+  edir: '/mini-apps/edir/logo.svg',
+  mfi: '/mini-apps/mfi/logo.svg',
+  insurance: '/mini-apps/insurance/logo.svg',
+});
+
+function miniAppLogo(panel) {
+  return miniAppByPanel[panel]?.logo ?? integratedMiniAppLogos[panel] ?? null;
+}
+
+function decoratePublicServiceLogos() {
+  const logos = new Map([
+    ['Homes & rentals', miniAppLogo('properties')],
+    ['Marketplace', miniAppLogo('marketplace')],
+    ['Workforce', miniAppLogo('workers')],
+    ['EthioLife Edir', miniAppLogo('edir')],
+    ['SACCO / MFI', miniAppLogo('mfi')],
+    ['Agent services', '/icon.svg'],
+  ]);
+  for (const card of document.querySelectorAll('#public-hub .service-card')) {
+    const src = logos.get(card.querySelector('strong')?.textContent.trim());
+    const current = card.querySelector('.service-icon');
+    if (!src || !current) continue;
+    const logo = node('img', undefined, 'service-icon service-icon-image');
+    logo.src = src;
+    logo.alt = '';
+    logo.setAttribute('aria-hidden', 'true');
+    current.replaceWith(logo);
+  }
+}
+
+decoratePublicServiceLogos();
 
 function renderServiceLauncher(panelNames) {
   const allowed = new Set(panelNames ?? [...document.querySelectorAll('.tab:not([hidden])')]
@@ -746,8 +827,20 @@ function renderServiceLauncher(panelNames) {
   const grid = node('div', undefined, 'service-launcher-grid');
   for (const tab of tabs) {
     const panel = tab.dataset.panel;
+    const miniApp = miniAppByPanel[panel];
+    const logoSource = miniAppLogo(panel);
     const card = node('article', undefined, 'service-launcher-card');
-    card.append(node('h3', tab.textContent.trim()), node('p', serviceDescriptions[panel] ?? 'Open this role-based service workspace.'));
+    if (logoSource) {
+      const logo = node('img', undefined, 'service-launcher-logo');
+      logo.src = logoSource;
+      logo.alt = '';
+      logo.setAttribute('aria-hidden', 'true');
+      card.append(logo);
+    }
+    card.append(
+      node('h3', t(miniApp?.name ?? tab.textContent.trim())),
+      node('p', t(miniApp?.description ?? serviceDescriptions[panel] ?? 'Open this role-based service workspace.')),
+    );
     const open = button('Open mini app', 'open-panel', 'button button-outline', { panel });
     card.append(open);
     grid.append(card);
@@ -761,6 +854,7 @@ const workspaceNavIcons = {
   leads: '＋',
   workers: '◎',
   requests: '↔',
+  learning: '▶',
   properties: '⌂',
   marketplace: '▦',
   contracts: '▤',
@@ -830,7 +924,27 @@ function renderLeads() {
   form.append(button('Save lead', 'submit', 'button button-primary'));
   const list = node('div', undefined, 'list');
   if (!state.leads.length) list.append(empty('Leads you create will appear here.'));
-  for (const lead of state.leads) list.append(card(lead.name, t('{{phone}} · {{type}}', { phone: lead.phone, type: t(lead.lead_type[0].toUpperCase() + lead.lead_type.slice(1)) }), lead.status));
+  for (const lead of state.leads) {
+    const item = card(lead.name, t('{{phone}} · {{type}}', { phone: lead.phone, type: t(lead.lead_type[0].toUpperCase() + lead.lead_type.slice(1)) }), lead.status);
+    if (lead.protected_until) item.append(node('p', `Ownership protected until ${new Date(lead.protected_until).toLocaleString(document.documentElement.lang)}.`));
+    item.append(button('Attribution history', 'lead-attribution-history', 'button button-outline', { id: lead.id }));
+    if (isPlatformAdmin() && lead.status !== 'converted') {
+      const reassign = node('form', undefined, 'inline-form');
+      reassign.dataset.form = 'lead-reassign';
+      reassign.dataset.lead = lead.id;
+      const target = field('Reassign to active agent', 'target_agent_id', 'select');
+      const placeholder = node('option', 'Choose an agent'); placeholder.value = ''; placeholder.disabled = true; placeholder.selected = true;
+      target.input.append(placeholder);
+      for (const agent of state.team.filter((entry) => entry.active && ['master_agent','field_agent'].includes(entry.role))) {
+        const option = node('option', `${agent.legal_name} · ${roleLabel(agent.role)}`); option.value = agent.id; target.input.append(option);
+      }
+      const reason = field('Reassignment reason (at least 10 characters)', 'reason', 'text', true, { minLength: 10, maxLength: 1000 });
+      reassign.append(target.label, reason.label, button('Reassign and record reason', 'submit', 'button button-outline'));
+      item.append(reassign);
+    }
+    list.append(item);
+  }
+  form.hidden = !hasActivity('workforce.workers.register');
   columns.append(form, list);
   wrap.append(columns);
   return wrap;
@@ -868,11 +982,11 @@ function renderWorkers() {
       rate: Number(worker.rate_expected).toLocaleString(document.documentElement.lang),
       territory: state.territories.find((area) => area.id === worker.territory_id)?.name ?? worker.territory_id,
     }), worker.verification);
-    if (['master_agent','field_agent'].includes(state.user.role)) item.append(button('Upload documents', 'worker-upload', 'button button-outline', { id: worker.id }));
-    if (['global_admin','super_admin','compliance'].includes(state.user.role)) {
+    if (hasActivity('workforce.documents.upload')) item.append(button('Upload documents', 'worker-upload', 'button button-outline', { id: worker.id }));
+    if (hasActivity('workforce.documents.view')) {
       item.append(button('Documents', 'worker-documents', 'button button-outline', { id: worker.id }));
-      if (worker.verification !== 'verified' && state.user.role === 'compliance') item.append(button('Verify worker', 'worker-verify', 'button button-primary', { id: worker.id }));
     }
+    if (worker.verification !== 'verified' && hasActivity('workforce.workers.verify')) item.append(button('Verify worker', 'worker-verify', 'button button-primary', { id: worker.id }));
     list.append(item);
   }
   columns.append(form, list);
@@ -900,6 +1014,7 @@ function renderRequests() {
   for (const territory of state.territories) { const option = node('option', territory.name); option.value = territory.id; area.input.append(option); }
   form.append(area.label);
   const submit = button('Create request', 'submit', 'button button-primary span-2'); form.append(submit);
+  form.hidden = !hasActivity('staffing.requests.manage');
   const list = node('div', undefined, 'list');
   if (!state.requests.length) list.append(empty('No service requests yet.'));
   for (const request of state.requests) {
@@ -909,8 +1024,8 @@ function renderRequests() {
       status: t(request.status),
     }), request.status);
     item.dataset.request = request.id;
-    if (isPlatformAdmin() && request.status === 'open') item.append(button('Find candidates', 'candidates', 'button button-outline', { id: request.id }));
-    if (isPlatformAdmin()) item.append(button('Matches', 'matches', 'button button-outline', { id: request.id }));
+    if (hasActivity('staffing.requests.manage') && request.status === 'open') item.append(button('Find candidates', 'candidates', 'button button-outline', { id: request.id }));
+    if (hasActivity('staffing.requests.manage')) item.append(button('Matches', 'matches', 'button button-outline', { id: request.id }));
     list.append(item);
   }
   columns.append(form, list);
@@ -918,15 +1033,102 @@ function renderRequests() {
   return wrap;
 }
 
+function createLearningForm(content = null) {
+  const form = node('form', undefined, 'panel form-card inline-form learning-content-form');
+  form.dataset.form = 'learning-content';
+  if (content) form.dataset.content = content.id;
+  form.append(node('h3', content ? 'Edit training content' : 'Publish training or support content'));
+  const title = field('Title', 'title', 'text', true, { minlength: 3, maxlength: 200 });
+  const summary = field('Summary', 'summary', 'textarea', true, { minlength: 5, maxlength: 1000, rows: 2 });
+  const category = field('Category', 'category', 'select');
+  for (const [value, label] of [
+    ['workforce_onboarding', 'Workforce onboarding'], ['property_management', 'Property management'],
+    ['tenant_support', 'Tenant support'], ['landlord_support', 'Landlord support'],
+    ['buyer_support', 'Buyer support'], ['seller_support', 'Seller support'],
+    ['agent_training', 'Agent training'], ['general_support', 'General support'],
+  ]) {
+    const option = node('option', label); option.value = value; category.input.append(option);
+  }
+  const type = field('Format', 'content_type', 'select');
+  for (const [value, label] of [['video', 'Video'], ['tutorial', 'Tutorial'], ['article', 'Article']]) {
+    const option = node('option', label); option.value = value; type.input.append(option);
+  }
+  const video = field('Video URL (HTTPS)', 'video_url', 'url', false, { placeholder: 'https://example.com/training.mp4' });
+  const body = field('Tutorial or support notes', 'body', 'textarea', false, { maxlength: 20000, rows: 5 });
+  const visibility = field('Publication status', 'status', 'select');
+  for (const [value, label] of [['draft', 'Draft'], ['published', 'Published']]) {
+    const option = node('option', label); option.value = value; visibility.input.append(option);
+  }
+  if (content) {
+    title.input.value = content.title;
+    summary.input.value = content.summary;
+    category.input.value = content.category;
+    type.input.value = content.content_type;
+    video.input.value = content.video_url ?? '';
+    body.input.value = content.body ?? '';
+    visibility.input.value = content.status === 'published' ? 'published' : 'draft';
+  }
+  form.append(title.label, summary.label, category.label, type.label, video.label, body.label, visibility.label);
+  const audiences = node('fieldset', undefined, 'learning-audiences');
+  audiences.append(node('legend', 'Audience roles'));
+  for (const [role, label] of [
+    ['worker', 'Workers'], ['customer', 'Tenants and buyers'], ['property_owner', 'Landlords and sellers'],
+    ['master_agent', 'Master Agents'], ['field_agent', 'Agents'], ['corporate_business_manager', 'Corporate Business Managers'],
+    ['compliance', 'Compliance'], ['finance', 'Finance'], ['finance_manager', 'Finance managers'],
+    ['global_admin', 'Global Admins'], ['super_admin', 'Super Admins'],
+  ]) {
+    const option = document.createElement('input');
+    option.type = 'checkbox';
+    option.name = 'audience_roles';
+    option.value = role;
+    option.checked = content ? content.audience_roles.includes(role) : ['worker', 'customer', 'property_owner', 'master_agent', 'field_agent'].includes(role);
+    const labelElement = node('label', label, 'learning-audience-option');
+    labelElement.prepend(option);
+    audiences.append(labelElement);
+  }
+  form.append(audiences, button(content ? 'Save content changes' : 'Save training content', 'submit', 'button button-primary'));
+  return form;
+}
+
+function renderLearning() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Training & support library', 'Role-targeted tutorials, videos, and practical guidance for workforce and property services.'));
+  const manager = hasActivity('learning.content.manage');
+  if (manager) wrap.append(createLearningForm());
+  const list = node('div', undefined, 'list');
+  if (!state.learningContent.length) list.append(empty('No training content is available for your role yet.'));
+  for (const content of state.learningContent) {
+    const item = card(content.title, content.summary, content.status);
+    item.append(node('p', `${content.category.replaceAll('_', ' ')} · ${content.content_type} · For ${content.audience_roles.map(roleLabel).join(', ')}`));
+    if (content.body) item.append(node('p', content.body, 'learning-content-body'));
+    if (content.video_url) {
+      const link = node('a', content.content_type === 'video' ? 'Open training video' : 'Open related video');
+      link.href = content.video_url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.referrerPolicy = 'no-referrer';
+      item.append(link);
+    }
+    if (manager && content.status !== 'archived') {
+      item.append(button('Edit', 'learning-edit', 'button button-outline', { id: content.id }));
+      item.append(button('Archive', 'learning-archive', 'button button-outline', { id: content.id }));
+    }
+    list.append(item);
+  }
+  wrap.append(list);
+  return wrap;
+}
+
 function renderProperties() {
   const wrap = node('div');
   const buyer = state.user.role === 'customer';
+  const canManage = hasActivity('property.listings.manage');
   wrap.append(sectionHeading(
     buyer ? 'Available property listings' : 'Property listings',
     buyer ? 'Browse available properties and view their pictures.' : 'Create and manage property records, units, rent details, and private listing pictures.',
   ));
   const columns = node('div', undefined, 'columns');
-  if (!buyer) {
+  if (canManage) {
     const form = node('form', undefined, 'panel form-card inline-form');
     form.dataset.form = 'property';
     const title = node('h3', 'Add a property listing');
@@ -989,7 +1191,7 @@ function renderProperties() {
     }
     const actions = node('div', undefined, 'property-actions');
     actions.append(button('Photos & video', 'property-photos', 'button button-outline', { id: property.id }));
-    if (!buyer) actions.append(button('Add media', 'property-upload', 'button button-outline', { id: property.id }));
+    if (canManage) actions.append(button('Add media', 'property-upload', 'button button-outline', { id: property.id }));
     item.append(actions);
     listings.append(item);
   }
@@ -1284,17 +1486,17 @@ function renderCommissions() {
 
 function renderAgents() {
   const wrap = node('div');
-  wrap.append(sectionHeading('Agent management', 'Review agent activity and assign specialist agency services across the Super Agent and Master Agent network.'));
-  wrap.append(renderServiceLauncher(['leads', 'workers', 'requests', 'properties', 'marketplace', 'contracts', 'commissions', 'rent']));
+  wrap.append(sectionHeading('Agent management', "Review agent activity and set optional profile focus across the Super Agent and Master Agent network. Profile focus does not limit an agent's services."));
+  wrap.append(renderServiceLauncher(['leads', 'workers', 'requests', 'properties', 'marketplace', 'contracts', 'commissions', 'rent', 'agents', 'edir', 'mfi', 'insurance']));
   const list = node('div', undefined, 'list');
   const services = {
-    financial_service: 'Financial Service Agent',
-    growth_partnership: 'Growth & Partnership Agent',
-    workforce_property: 'Workforce & Property Management Agent',
+    financial_service: 'Financial services focus',
+    growth_partnership: 'Growth & partnerships focus',
+    workforce_property: 'Workforce & property focus',
   };
   if (!state.team.length) list.append(empty('No agents are available in this management scope.'));
   for (const agent of state.team) {
-    const item = card(agent.legal_name, `${roleLabel(agent.role)} · ${agent.active ? 'active' : 'inactive'} · Leads ${agent.lead_count} · Contracts ${agent.contract_count} · Listings ${agent.property_count}`, services[agent.service_specialization] ?? 'General agent');
+    const item = card(agent.legal_name, `${roleLabel(agent.role)} · ${agent.active ? 'active' : 'inactive'} · Leads ${agent.lead_count} · Contracts ${agent.contract_count} · Listings ${agent.property_count} · Profile focus: ${services[agent.service_specialization] ?? 'General agent'}`);
     if (agent.id !== state.user.id && (isPlatformAdmin() || agent.parent_id === state.user.id)) {
       const select = document.createElement('select');
       select.dataset.agentSpecialization = agent.id;
@@ -1303,7 +1505,7 @@ function renderAgents() {
         option.selected = (agent.service_specialization ?? '') === value;
         select.append(option);
       }
-      item.append(select, button('Save service assignment', 'agent-specialization', 'button button-outline', { id: agent.id }));
+      item.append(select, button('Save profile focus', 'agent-specialization', 'button button-outline', { id: agent.id }));
     }
     list.append(item);
   }
@@ -1322,7 +1524,8 @@ function renderRent() {
     columns.append(tenantForm);
     const leaseForm = node('form', undefined, 'panel form-card inline-form');
     leaseForm.dataset.form = 'lease';
-    leaseForm.append(node('h3', 'Create a lease'));
+    leaseForm.append(node('h3', 'Create a lease draft'));
+    leaseForm.append(node('p', 'A lease stays inactive until independent approval, signature evidence, handover, and move-in inspection are recorded.'));
     const unit = field('Vacant unit', 'unit_id', 'select');
     const unitEmpty = node('option', 'Choose a unit'); unitEmpty.value = ''; unitEmpty.disabled = true; unitEmpty.selected = true; unit.input.append(unitEmpty);
     for (const property of state.properties) for (const entry of property.units ?? []) if (entry.occupancy === 'vacant') {
@@ -1331,7 +1534,7 @@ function renderRent() {
     const tenant = field('Tenant', 'tenant_id', 'select');
     const tenantEmpty = node('option', 'Choose a tenant'); tenantEmpty.value = ''; tenantEmpty.disabled = true; tenantEmpty.selected = true; tenant.input.append(tenantEmpty);
     for (const entry of state.tenants) { const option = node('option', `${entry.name} · ${entry.phone}`); option.value = entry.id; tenant.input.append(option); }
-    leaseForm.append(unit.label, tenant.label, field('Monthly rent (ETB)', 'rent', 'number', true, { min: '0.01', step: '0.01' }).label, field('Deposit (ETB)', 'deposit', 'number', false, { min: '0', step: '0.01', value: '0' }).label, field('Start date', 'start_date', 'date').label, field('Term (months)', 'months', 'number', true, { min: '1', max: '120', value: '12' }).label, button('Create lease', 'submit', 'button button-primary'));
+    leaseForm.append(unit.label, tenant.label, field('Monthly rent (ETB)', 'rent', 'number', true, { min: '0.01', step: '0.01' }).label, field('Deposit (ETB)', 'deposit', 'number', false, { min: '0', step: '0.01', value: '0' }).label, field('Start date', 'start_date', 'date').label, field('Term (months)', 'months', 'number', true, { min: '1', max: '120', value: '12' }).label, button('Create lease draft', 'submit', 'button button-primary'));
     columns.append(leaseForm);
   }
   if (['global_admin', 'super_admin', 'finance_manager'].includes(state.user.role)) {
@@ -1350,9 +1553,71 @@ function renderRent() {
   for (const lease of state.leases) {
     const item = card(`${lease.address} · ${lease.unit_no}`, t('{{tenant}} · ETB {{rent}} monthly · {{status}}', { tenant: lease.tenant_name, rent: Number(lease.rent).toLocaleString(document.documentElement.lang), status: t(lease.status) }), lease.status);
     item.dataset.lease = lease.id;
+    if (lease.notice_type) {
+      item.append(node('p', `Latest operational notice: ${lease.notice_type}, received ${lease.notice_received_on}, proposed effective ${lease.proposed_effective_on}. This is not legal validation or lease termination.`));
+    }
+    if (lease.status !== 'active' && lease.status !== 'ended') {
+      item.append(node('p', `Term ${lease.start_date} to ${lease.end_date}. Signature uploads are evidence only and do not verify signer identity or legal validity.`));
+    }
+    if (lease.status === 'active' && hasActivity('property.tenancy.manage')) {
+      const noticeForm = node('form', undefined, 'inline-form');
+      noticeForm.dataset.form = 'lease-notice';
+      noticeForm.dataset.lease = lease.id;
+      const noticeType = field('Notice direction', 'notice_type', 'select');
+      for (const [value, label] of [
+        ['tenant_to_owner', 'Tenant to owner'],
+        ['owner_to_tenant', 'Owner to tenant'],
+        ['mutual_agreement', 'Mutual agreement'],
+        ['other', 'Other'],
+      ]) {
+        const option = node('option', label);
+        option.value = value;
+        noticeType.input.append(option);
+      }
+      noticeForm.append(
+        node('h4', 'Record a notice (operational record only)'),
+        noticeType.label,
+        field('Received date', 'received_on', 'date', true, { value: new Date().toISOString().slice(0, 10) }).label,
+        field('Proposed effective date', 'proposed_effective_on', 'date', true).label,
+        field('Summary (do not include sensitive personal details)', 'summary', 'textarea', true, { minlength: '10', maxlength: '1000' }).label,
+        button('Record notice', 'submit', 'button button-outline'),
+        node('p', 'Recording does not verify legal service, create a legally valid notice, change lease status, or end the lease.'),
+      );
+      item.append(noticeForm);
+    }
+    if (lease.status === 'draft' && hasActivity('property.tenancy.manage')
+      && (lease.created_by === state.user.id || isPlatformAdmin())) {
+      item.append(button('Submit for approval', 'lease-submit-approval', 'button button-primary', { id: lease.id }));
+    }
+    if (lease.status === 'pending_approval' && hasActivity('property.tenancy.approve')) {
+      item.append(button('Approve lease', 'lease-approve', 'button button-primary', { id: lease.id }));
+    }
+    if (lease.status === 'pending_signature' && hasActivity('property.tenancy.manage')) {
+      for (const party of ['tenant', 'owner']) {
+        const evidenceExists = party === 'tenant' ? lease.tenant_signature_evidence : lease.owner_signature_evidence;
+        if (evidenceExists) {
+          item.append(node('p', `${party === 'tenant' ? 'Tenant' : 'Owner'} signature evidence uploaded.`));
+          continue;
+        }
+        const evidenceForm = node('form', undefined, 'inline-form');
+        evidenceForm.dataset.form = 'lease-signature';
+        evidenceForm.dataset.lease = lease.id;
+        evidenceForm.dataset.party = party;
+        evidenceForm.append(
+          field(`${party === 'tenant' ? 'Tenant' : 'Owner'} signer name`, 'signer_name', 'text', true, { minlength: '2', maxlength: '200' }).label,
+          field(`${party === 'tenant' ? 'Tenant' : 'Owner'} signature evidence (PDF, JPEG, PNG)`, 'signature_document', 'file', true, { accept: 'application/pdf,image/jpeg,image/png' }).label,
+          button(`Upload ${party} evidence`, 'submit', 'button button-outline'),
+        );
+        item.append(evidenceForm);
+      }
+      if (hasActivity('property.tenancy.execute')
+        && lease.tenant_signature_evidence && lease.owner_signature_evidence) {
+        item.append(button('Record handover & activate', 'lease-execute', 'button button-primary', { id: lease.id }));
+      }
+    }
     item.append(button('View charges & payments', 'lease-payments', 'button button-outline', { id: lease.id }));
     if (['global_admin', 'super_admin', 'master_agent', 'field_agent'].includes(state.user.role) && lease.status === 'active') item.append(button('End lease', 'lease-end', 'button button-outline', { id: lease.id }));
-    if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && lease.status === 'active' && Number(lease.deposit) > 0) item.append(button('Record deposit', 'deposit-pay', 'button button-outline', { id: lease.id }));
+    if (['master_agent', 'field_agent', 'finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && lease.status === 'active' && Number(lease.deposit) > 0) item.append(button('Record deposit', 'deposit-pay', 'button button-outline', { id: lease.id }));
     if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && lease.status === 'ended' && Number(lease.deposit) > 0) item.append(button('Return deposit', 'deposit-refund', 'button button-outline', { id: lease.id }));
     leases.append(item);
   }
@@ -1447,12 +1712,45 @@ function renderGlobalAdminPromotions() {
   return section;
 }
 
+function renderRoleAccess() {
+  if (state.user.role !== 'super_admin' || !state.roleAccess) return document.createDocumentFragment();
+  const section = node('section', undefined, 'panel form-card role-access');
+  section.append(
+    node('h3', 'Role and activity access'),
+    node('p', 'Select the activities each role may perform. Sensitive financial actions remain subject to transaction controls and independent-actor checks. Super Admin access is fixed.'),
+  );
+  const form = node('form', undefined, 'role-access-form');
+  form.dataset.form = 'role-access';
+  for (const role of state.roleAccess.roles.filter((entry) => entry.editable)) {
+    const group = node('fieldset', undefined, 'role-access-group');
+    group.append(node('legend', roleLabel(role.key)));
+    const overrides = state.roleAccess.overrides[role.key] ?? {};
+    for (const activity of state.roleAccess.activities) {
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.role = role.key;
+      input.dataset.activity = activity.key;
+      const defaults = activity.defaultRoles.includes(role.key)
+        || (role.key === 'global_admin' && activity.defaultRoles.includes('super_admin'));
+      input.checked = overrides[activity.key] ?? defaults;
+      const label = node('label', `${activity.group} · ${activity.label}${activity.sensitive ? ' · Sensitive' : ''}`, 'role-access-option');
+      label.prepend(input);
+      group.append(label);
+    }
+    form.append(group);
+  }
+  form.append(button('Save role access', 'submit', 'button button-primary'));
+  section.append(form);
+  return section;
+}
+
 function renderAdmin() {
   const wrap = node('div');
   const isAdmin = isPlatformAdmin();
   const isGlobalAdmin = state.user.role === 'global_admin';
   const isBusinessManager=state.user.role==='corporate_business_manager';
   wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global administration' : 'Administration' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Manage system-wide configuration and review cross-module operations.' : 'Provision accounts and review the operational summary.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
+  if (state.user.role === 'super_admin') wrap.append(renderRoleAccess());
   const columns = node('div', undefined, 'columns');
   if (isGlobalAdmin) wrap.append(renderBusinessRules());
   if (isAdmin) wrap.append(renderGlobalAdminPromotions());
@@ -1466,8 +1764,8 @@ function renderAdmin() {
       const option = node('option', label); option.value = value; role.input.append(option);
     }
     form.append(role.label);
-    const specialization = field('Specialist agency service (optional)', 'service_specialization', 'select', false);
-    for (const [value, label] of [['', 'General agent'], ['financial_service', 'Financial Service Agent'], ['growth_partnership', 'Growth & Partnership Agent'], ['workforce_property', 'Workforce & Property Management Agent']]) {
+    const specialization = field('Profile focus (optional; does not limit agent services)', 'service_specialization', 'select', false);
+    for (const [value, label] of [['', 'General agent'], ['financial_service', 'Financial services focus'], ['growth_partnership', 'Growth & partnerships focus'], ['workforce_property', 'Workforce & property focus']]) {
       const option = node('option', label); option.value = value; specialization.input.append(option);
     }
     form.append(specialization.label);
@@ -1570,7 +1868,12 @@ function renderSecurity() {
 }
 
 function renderPanel() {
-  document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.panel === state.panel));
+  document.querySelectorAll('.tab').forEach((tab) => {
+    const isCurrent = tab.dataset.panel === state.panel;
+    tab.classList.toggle('active', isCurrent);
+    if (isCurrent) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  });
   document.querySelectorAll('.workspace-nav-link[data-panel]').forEach((link) => {
     const isCurrent = link.dataset.panel === state.panel;
     link.classList.toggle('active', isCurrent);
@@ -1587,6 +1890,7 @@ function renderPanel() {
     password: 'Account security',
     security: 'Account security',
     admin: 'Admin workspace',
+    learning: 'Training & support',
     mfi: 'SACCO / MFI workspace',
     edir: 'EthioLife Edir workspace',
     insurance: 'Insurance information',
@@ -1600,7 +1904,17 @@ function renderPanel() {
     agents: 'Agent management',
     rent: 'Rent & deposits',
   };
-  $('#page-title').textContent = t(panelTitles[state.panel] ?? 'Your workspace');
+  const pageTitle = $('#page-title');
+  const logoSource = miniAppLogo(state.panel);
+  pageTitle.replaceChildren();
+  if (logoSource) {
+    const logo = node('img', undefined, 'page-mini-app-logo');
+    logo.src = logoSource;
+    logo.alt = '';
+    logo.setAttribute('aria-hidden', 'true');
+    pageTitle.append(logo);
+  }
+  pageTitle.append(document.createTextNode(t(panelTitles[state.panel] ?? 'Your workspace')));
   // Shared shell statistics describe agency activity, so keep them on the overview only.
   $('#stat-grid').hidden = state.panel !== 'overview';
   if (state.panel === 'mfi') {
@@ -1626,6 +1940,7 @@ function renderPanel() {
     leads: renderLeads,
     workers: renderWorkers,
     requests: renderRequests,
+    learning: renderLearning,
     properties: renderProperties,
     marketplace: renderMarketplace,
     admin: renderAdmin,
@@ -1641,6 +1956,40 @@ function renderPanel() {
 
 async function submitForm(form) {
   const values = formData(form);
+  if (form.dataset.form === 'role-access') {
+    const changes = [...form.querySelectorAll('input[data-role][data-activity]')]
+      .filter((input) => {
+        const role = input.dataset.role;
+        const activity = state.roleAccess.activities.find((entry) => entry.key === input.dataset.activity);
+        const configured = state.roleAccess.overrides[role]?.[activity.key];
+        const defaults = activity.defaultRoles.includes(role)
+          || (role === 'global_admin' && activity.defaultRoles.includes('super_admin'));
+        return input.checked !== (configured ?? defaults);
+      })
+      .map((input) => ({ role: input.dataset.role, activity: input.dataset.activity, enabled: input.checked }));
+    if (!changes.length) {
+      showAlert('Role access is already up to date.');
+      return;
+    }
+    await api('/role-access', { method: 'PATCH', body: JSON.stringify({ changes }) });
+    state.roleAccess = await api('/role-access');
+    await refresh();
+    showAlert('Role access saved.');
+    return;
+  }
+  if (form.dataset.form === 'learning-content') {
+    const payload = { ...values };
+    payload.audience_roles = [...form.querySelectorAll('input[name="audience_roles"]:checked')].map((input) => input.value);
+    if (!payload.video_url) delete payload.video_url;
+    const contentId = form.dataset.content;
+    await api(contentId ? `/learning/content/${contentId}` : '/learning/content', {
+      method: contentId ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload),
+    });
+    await refresh();
+    showAlert(contentId ? 'Training content updated.' : 'Training content saved.');
+    return;
+  }
   if (form.dataset.form === 'password') {
     const result = await api('/auth/change-password', { method: 'POST', body: JSON.stringify(values) });
     sessionStorage.setItem(TOKEN_KEY, result.token);
@@ -1686,8 +2035,32 @@ async function submitForm(form) {
   }
   if (form.dataset.form === 'lease') {
     const payload = { ...values, rent: number(values.rent), deposit: number(values.deposit || '0'), months: number(values.months) };
-    await api('/leases', { method: 'POST', body: JSON.stringify(payload) });
-    await refresh(); showAlert('Lease created with calendar-day proration for the first month.'); return;
+    await api('/leases/workflow', { method: 'POST', body: JSON.stringify(payload) });
+    await refresh(); showAlert('Lease draft created. Submit it for independent approval before collecting signatures or activating the unit.'); return;
+  }
+  if (form.dataset.form === 'lease-signature') {
+    const file = form.querySelector('input[name="signature_document"]')?.files?.[0];
+    if (!file) throw new Error('Choose a signature evidence file.');
+    if (file.size > 10 * 1024 * 1024) throw new Error('The signature evidence file must be 10 MB or smaller.');
+    const query = new URLSearchParams({ party: form.dataset.party, signer_name: values.signer_name.trim() });
+    await api(`/leases/${form.dataset.lease}/signature-documents?${query}`, {
+      method: 'POST',
+      headers: { 'content-type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    await refresh();
+    showAlert('Signature evidence uploaded. The file does not verify signer identity or legal validity.');
+    return;
+  }
+  if (form.dataset.form === 'lease-notice') {
+    const payload = {
+      ...values,
+      idempotency_key: form.dataset.idempotencyKey ??= crypto.randomUUID(),
+    };
+    await api(`/leases/${form.dataset.lease}/notices`, { method: 'POST', body: JSON.stringify(payload) });
+    await refresh();
+    showAlert('Operational notice record saved. This does not terminate the lease or establish legal validity.');
+    return;
   }
   if (form.dataset.form === 'contract') {
     await api(`/leads/${values.lead_id}/contracts`, { method: 'POST', body: JSON.stringify({ track: values.track, base_value: number(values.base_value) }) });
@@ -1764,6 +2137,9 @@ async function submitForm(form) {
   }
   if (form.dataset.form === 'lead') {
     await api('/leads', { method: 'POST', body: JSON.stringify(values) });
+  } else if (form.dataset.form === 'lead-reassign') {
+    await api(`/admin/leads/${form.dataset.lead}/reassign`, { method: 'POST', body: JSON.stringify(values) });
+    await refresh(); showAlert('Lead reassigned and new ownership protection started.'); return;
   } else if (form.dataset.form === 'worker') {
     await api('/workers', { method: 'POST', body: JSON.stringify({
       ...values,
@@ -2124,6 +2500,24 @@ document.addEventListener('click', async (event) => {
     return;
   }
   const container = action.closest('.list-card');
+  if (name === 'learning-edit') {
+    const existing = container.querySelector('.learning-content-form');
+    if (existing) { existing.remove(); return; }
+    const content = state.learningContent.find((entry) => entry.id === id);
+    if (content) container.append(createLearningForm(content));
+    return;
+  }
+  if (name === 'learning-archive') {
+    if (!window.confirm(t('Archive this training item? It will no longer appear to audiences.'))) return;
+    try {
+      await api(`/learning/content/${id}`, { method: 'DELETE' });
+      await refresh();
+      showAlert('Training content archived.');
+    } catch (error) {
+      showAlert(error.message, true);
+    }
+    return;
+  }
   if (name === 'commission-approve' || name === 'commission-pay' || name === 'commission-release-held') {
     const endpoint = name === 'commission-approve' ? 'approve' : name === 'commission-pay' ? 'pay' : 'release-held';
     const reference = name === 'commission-approve' ? null : window.prompt(t('Enter the payment reference.'));
@@ -2151,6 +2545,23 @@ document.addEventListener('click', async (event) => {
       showAlert(decision === 'approve' ? 'Global Admin promotion approved.' : 'Global Admin promotion rejected.');
     } catch (error) {
       showAlert(error.message, true);
+    }
+    return;
+  }
+  if (name === 'lead-attribution-history') {
+    const existing = container.querySelector('.lead-attribution-events');
+    if (existing) { existing.remove(); return; }
+    const history = node('div', undefined, 'lead-attribution-events list');
+    container.append(history);
+    try {
+      const events = await api(`/leads/${id}/attribution-history`);
+      if (!events.length) history.append(empty('No attribution history is available.'));
+      for (const item of events) {
+        const label = item.event_type === 'created' ? 'Lead created' : 'Lead reassigned';
+        history.append(card(label, `${item.prior_agent_id ? `${item.prior_agent_id} → ` : ''}${item.new_agent_id} · by ${item.actor_id} · ${new Date(item.created_at).toLocaleString(document.documentElement.lang)}${item.reason ? ` · ${item.reason}` : ''}`, item.event_type));
+      }
+    } catch (error) {
+      history.append(empty(error.message));
     }
     return;
   }
@@ -2257,6 +2668,43 @@ document.addEventListener('click', async (event) => {
       .catch((error) => showAlert(error.message, true));
     return;
   }
+  if (name === 'lease-submit-approval' || name === 'lease-approve') {
+    const reason = window.prompt(t('Enter the reason (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    const path = name === 'lease-submit-approval'
+      ? `/leases/${id}/submit-for-approval`
+      : `/leases/${id}/approve`;
+    api(path, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) })
+      .then(async () => {
+        await refresh();
+        showAlert(name === 'lease-submit-approval' ? 'Lease submitted for independent approval.' : 'Lease approved. Signature evidence is now required.');
+      })
+      .catch((error) => showAlert(error.message, true));
+    return;
+  }
+  if (name === 'lease-execute') {
+    const lease = state.leases.find((item) => item.id === id);
+    if (!lease) return;
+    const reason = window.prompt(t('Enter the execution reason (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    const handoverDate = window.prompt(t('Enter the possession handover date (YYYY-MM-DD).'), lease.start_date);
+    if (!handoverDate || !/^\d{4}-\d{2}-\d{2}$/.test(handoverDate)) return;
+    if (!window.confirm(t('Confirm that the move-in inspection is complete and the handover date is correct.'))) return;
+    api(`/leases/${id}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: reason.trim(),
+        handover_date: handoverDate,
+        move_in_inspection_completed: true,
+      }),
+    })
+      .then(async () => {
+        await refresh();
+        showAlert('Lease activated and rent schedule created. Uploaded signature files are retained as evidence only.');
+      })
+      .catch((error) => showAlert(error.message, true));
+    return;
+  }
   if (name === 'lease-end') {
     if (!window.confirm(t('End this lease? Future rent charges will be waived.'))) return;
     api(`/leases/${id}/end`, { method: 'POST', body: '{}' })
@@ -2300,7 +2748,7 @@ document.addEventListener('click', async (event) => {
       details.append(node('h3', 'Charges and receipts'));
       for (const charge of charges) {
         const row = card(charge.period, t('Due {{due}} · ETB {{amount}}', { due: charge.due_on, amount: Number(charge.amount).toLocaleString(document.documentElement.lang) }), charge.status);
-        if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && ['due', 'overdue'].includes(charge.status)) row.append(button('Record rent payment', 'rent-record', 'button button-outline', { id: charge.id }));
+        if (['master_agent', 'field_agent', 'finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role) && ['due', 'overdue'].includes(charge.status)) row.append(button('Record rent payment', 'rent-record', 'button button-outline', { id: charge.id }));
         details.append(row);
       }
       for (const payment of payments) {

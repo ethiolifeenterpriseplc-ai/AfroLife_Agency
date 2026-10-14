@@ -358,3 +358,128 @@ The controlled local checks were rerun without using production or customer data
 - Android tester APK: the existing debug artifact checksum still matches the 11 October record. It is for controlled installation only; no release signing credentials are configured.
 
 The workbook trace remains 9 PASS, 9 PARTIAL, and 217 OPEN/unexecuted of 235 cases. This rerun adds Edir execution evidence but does not convert the workbook to full acceptance. Public distribution remains blocked by public ingress/TLS, the MFI fixture login, incomplete workbook execution, and unsigned Android release configuration.
+
+### 13 October 2026: Master specification API UAT continuation
+
+The MFI credit-risk report returned HTTP 500 in the authenticated API journey.
+Its score-band query grouped on a SELECT alias and then referenced that alias
+inside an `ORDER BY CASE` expression, which PostgreSQL does not resolve as a
+column in that expression. The query now derives score bands in a CTE before
+aggregation and ordering; a focused regression assertion protects the query
+shape.
+
+Validation on the isolated local `afrolife_test_master_uat` database used the
+restricted API runtime role and synthetic users/data only:
+
+- Main API TypeScript build: PASS.
+- Full unit suite: PASS, 162/162.
+- Core and supply HTTP integration tests: PASS, 45/45.
+- Authenticated SACCO/MFI API E2E: PASS. The journey verified institution and
+  staff setup, independent KYC/document review, savings, loan product and
+  policy maker-checker, affordability scoring, priced disbursement, repayment
+  and reversal, NPL classification, collections, write-off, balanced journals,
+  audit events, tenant isolation, and role authorization. It reported 9
+  balanced journals and 88 audit events for the synthetic run.
+- Migrations 001-058 had been applied to the disposable database before this
+  run; no schema change was needed for the report-query correction.
+- `git diff --check`: PASS (line-ending normalization warnings only).
+
+This supersedes the 12 October SACCO/MFI fixture-login blocker for this local
+API run. The API run does not establish full Master Specification acceptance.
+The Edir API lifecycle was also rerun on the isolated
+`afrolife_edir_uat` database using its restricted runtime role and synthetic
+actors. All 13 scenarios passed: membership enrollment and independent
+activation; KYC gate and document review; product/policy maker-checker;
+application scoring, idempotency, approval and bound consent; per-institution
+disbursement cap enforcement; partial repayment and write-off; complaint
+privacy, resolution and audit. Its report checks showed a balanced trial
+balance (ETB 24,750.00 on each side), zero missing posted journals, and six
+disbursed loans in the accumulated synthetic UAT portfolio. This is principal-
+only servicing; it does not accept interest-, fee- or penalty-bearing Edir
+products.
+
+The trace now refreshes evidence for KYC-004, FIN-015, and DSB-006 from this
+execution. The case status totals remain 9 PASS, 9 PARTIAL, and 217 OPEN out
+of 235; the workbook has not been rerun case-by-case. Full Edir financial
+servicing for interest, fees and penalties,
+external bureau/identity/AML integrations, regulator return submissions,
+mobile-money/bank rails, collateral, offline/disaster recovery, AI
+extraction/explanations, and specialized product workflows remain unaccepted
+or provider/policy-dependent.
+
+### 13 October 2026: Platform-wide Edir disbursement control
+
+Addressed the workbook's DSB-002 platform-limit gap with forward-only Edir
+migrations 019-020. The global daily cap is separate from (and cumulative
+with) existing per-Edir caps. Only Super Admin/Global Admin can view or propose
+it; changes require an independent platform administrator and a recorded
+reason. The credit workspace exposes the proposal and review controls only to
+those administrators. The posting guard serializes cap changes and disbursement
+approvals, then checks the date's posted disbursements across organizations.
+The cross-tenant aggregate runs through a narrowly scoped `SECURITY DEFINER`
+function: its search path is fixed, PUBLIC execution is revoked, and it only
+accepts a pending disbursement for the current Edir and an authorized reviewer.
+
+The restricted-runtime Edir API E2E passed all 13 scenarios after migrations
+019-020 were applied to `afrolife_edir_uat`. Its cap scenario verified that
+tenant credit managers cannot read or approve platform limits, the maker
+cannot self-approve, a low global cap rejects a posting, and an independent
+platform approval of a higher cap permits the balanced posting. Per-Edir cap
+rejection and revised-cap behavior also passed. Trial balance remained
+balanced at ETB 28,750.00 on each side, with zero missing posted journals.
+These are synthetic records only.
+
+DSB-002 was PARTIAL at this execution point because a second synthetic Edir
+with posted activity had not been provisioned.
+
+### 13 October 2026: Two-Edir workbook validation continuation
+
+The cross-tenant UAT identified a provisioning gap: newly onboarded Edirs did
+not receive the ledger accounts required to post financial activity. Added
+forward-only Edir migration v21 to backfill the standard seven-account chart
+for existing non-umbrella Edirs and seed it transactionally for future Edir
+onboarding. Runtime insert permission is constrained by the existing
+umbrella-master RLS policy; PUBLIC execution of the fixed-search-path trigger
+function is revoked.
+
+The next E2E iteration exposed that credit-control routes were using
+`SELECT ... FOR UPDATE` on member rows even for roles that can review risk
+flags but do not have broad membership-update permission. Rather than widen
+membership UPDATE RLS, migrations v22-v23 add a scoped, fixed-search-path
+member credit-control lock. It authorizes only the member, platform admins,
+and specified staff roles, checks the current Edir, and serializes risk
+changes with application, acceptance, and disbursement checks. Migrations
+v21-v23 were applied only to the disposable local `afrolife_edir_uat` database.
+
+The expanded restricted-runtime API E2E passed 18 scenarios. It onboarded a
+second synthetic Edir through the API, verified its chart of accounts, created
+and KYC-verified a member, approved its credit product and policy, and posted
+an independently approved ETB 1,000 disbursement. It then proved the
+cross-Edir cap boundary: the current Edir's own posted total plus the next
+ETB 1,000 was below the proposed platform cap, while the two-Edir aggregate
+plus that operation exceeded it by one cent. Posting was rejected until an
+independent platform reviewer approved the exact aggregate limit; the
+subsequent journal balanced.
+
+The same run asserted the disbursement principal, database posting date, and
+borrower savings-account ID, and verified that an auditor can read application
+and audit records but cannot create a credit policy. It completed the Edir
+scenarios for ADM-004, ADM-005, DSB-002, DSB-008, and FIN-007. It also
+verified that an independently approved suspicious-activity hold blocks
+disbursement until separate release, and that a second loan cannot be approved
+while the member's first loan is active.
+
+The matching SACCO/MFI active-loan case was added to its local API UAT runner,
+but the rerun stopped at Super Admin login with HTTP 401 before executing any
+scenario. The synthetic credential file was left unchanged. DSB-011 therefore
+remains PARTIAL until SACCO/MFI API UAT can execute the new assertion. Trial
+balance in the Edir run was ETB 45,750.00 on each side with zero missing posted
+journals. All generated records were synthetic.
+
+The trace now contains **14 PASS, 7 PARTIAL, and 214 OPEN** out of 235 cases.
+This closes the cross-Edir cap validation gap but does not accept unexecuted
+cases. External identity, bureau and AML providers; regulatory returns;
+bank/mobile-money rails; core-banking reconciliation; interest/fee/penalty
+servicing policy; disaster recovery; and approved AI/data-governance controls
+remain unaccepted pending their specific implementation, environment, or
+institutional prerequisites.

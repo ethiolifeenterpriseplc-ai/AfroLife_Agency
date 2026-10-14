@@ -7,8 +7,10 @@ import assert from 'node:assert/strict';
 const chrome = process.env.AFROLIFE_CHROME_PATH
   ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const appUrl = process.env.AFROLIFE_UI_URL ?? 'http://127.0.0.1:3000/';
-const credentialFile = join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
-const adminLine = readFileSync(credentialFile, 'utf8').split(/\r?\n/)
+const credentialFile = process.env.AFROLIFE_UI_USERS_FILE
+  ?? join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
+const credentialLines = readFileSync(credentialFile, 'utf8').split(/\r?\n/);
+const adminLine = credentialLines
   .find((line) => line.startsWith('super_admin |'));
 assert.ok(adminLine, `A local Super Admin login is required in ${credentialFile}`);
 const [, phone, password] = adminLine.split('|').map((part) => part.trim());
@@ -45,10 +47,28 @@ try {
   let nextId = 0;
   const pending = new Map();
   const pageErrors = [];
+  const expectedPermissionResponses = [];
   socket.addEventListener('message', ({ data }) => {
     const event = JSON.parse(data);
     if (event.method === 'Runtime.exceptionThrown') pageErrors.push(event.params.exceptionDetails.text);
-    if (event.method === 'Log.entryAdded' && event.params.entry.level === 'error') pageErrors.push(event.params.entry.text);
+    if (event.method === 'Log.entryAdded' && event.params.entry.level === 'error') {
+      const entry = event.params.entry;
+      const url = entry.url ?? '';
+      const deniedPath = (() => {
+        try { return new URL(url).pathname.replace(/^\/api\/v1/, ''); }
+        catch { return ''; }
+      })();
+      const roleGuardedPaths = new Set(['/workers', '/requests', '/leases', '/tenants', '/rent-transactions/pending', '/insurance/requests']);
+      const sessionGuardedPaths = new Set(['/marketplace/config', '/marketplace/listings', '/learning/content']);
+      const expectedRoleDenial = entry.text.includes('403 (Forbidden)') && roleGuardedPaths.has(deniedPath);
+      const expectedSessionDenial = entry.text.includes('401 (Unauthorized)')
+        && (sessionGuardedPaths.has(deniedPath) || deniedPath === '/rent-transactions/pending');
+      if (expectedRoleDenial || expectedSessionDenial) {
+        expectedPermissionResponses.push(deniedPath);
+      } else {
+        pageErrors.push(`${entry.text}${url ? ` (${url})` : ''}`);
+      }
+    }
     if (event.id) {
       const callback = pending.get(event.id);
       pending.delete(event.id);
@@ -75,10 +95,36 @@ try {
     throw new Error(`Timed out waiting for ${label}`);
   };
 
+  const accessibilityAudit = async (label) => {
+    const result = await evaluate(`(() => {
+      const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+      const named = (el) => {
+        const labelledBy = el.getAttribute('aria-labelledby');
+        const referenced = labelledBy?.split(/\\s+/).map((id) => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(' ');
+        const label = el.labels ? [...el.labels].map((item) => item.textContent.trim()).filter(Boolean).join(' ') : '';
+        return el.getAttribute('aria-label') || referenced || label || el.getAttribute('title') || el.innerText?.trim() || el.textContent?.trim() || '';
+      };
+      const issues = [];
+      if (!document.documentElement.lang?.trim()) issues.push('html element is missing lang');
+      const headings = [...document.querySelectorAll('main h1')].filter(visible);
+      if (headings.length !== 1) issues.push('visible main must contain exactly one h1');
+      for (const el of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=link]')) {
+        if (visible(el) && !named(el)) issues.push(el.tagName.toLowerCase() + '#' + (el.id || '(no id)') + ' has no accessible name');
+      }
+      for (const el of document.querySelectorAll('img')) {
+        if (visible(el) && !el.hasAttribute('alt')) issues.push('img#' + (el.id || '(no id)') + ' is missing alt text');
+      }
+      return { label: ${JSON.stringify(label)}, issues };
+    })()`);
+    assert.deepEqual(result.issues, [], `Accessibility smoke failed at ${label}: ${result.issues.join('; ')}`);
+    return result;
+  };
+
   await send('Page.enable');
   await send('Runtime.enable');
   await send('Log.enable');
   await waitFor("document.readyState === 'complete' && !!document.querySelector('#login-form')", 'login form');
+  const accessibilityChecks = [await accessibilityAudit('login')];
   await evaluate(`(() => {
     const form = document.querySelector('#login-form');
     form.elements.phone.value = ${JSON.stringify(phone)};
@@ -86,10 +132,15 @@ try {
     form.requestSubmit();
     return true;
   })()`);
-  await waitFor("document.querySelector('#app-view')?.hidden === false", 'successful Super Admin sign in');
+  try {
+    await waitFor("document.querySelector('#app-view')?.hidden === false", 'successful Super Admin sign in');
+  } catch {
+    throw new Error(`Super Admin sign-in did not complete: ${await evaluate("document.querySelector('#login-error')?.textContent || 'no form error shown'")}`);
+  }
   await waitFor("document.querySelector('#mfi-tab')?.hidden === false", 'SACCO tab visibility');
   await waitFor("!!document.querySelector('#mobile-workspace-nav [data-panel=\"overview\"][aria-current=\"page\"]')", 'accessible current-page state in mobile navigation');
   await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]')", 'role-aware mini-app launcher');
+  accessibilityChecks.push(await accessibilityAudit('Super Admin overview'));
   await evaluate("document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]').click()");
   await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace rendering');
   await evaluate("document.querySelector('#agents-tab').click()");
@@ -157,11 +208,12 @@ try {
     'More navigation should identify the current page when it is in the additional sections');
   await evaluate("document.querySelector('#workspace-more-nav [data-panel=\"admin\"]').click()");
   await waitFor("document.querySelector('#workspace-more-dialog')?.open === false && document.querySelector('#page-title')?.textContent === 'Admin workspace'", 'More navigation selection');
+  await waitFor("document.querySelector('#mobile-workspace-more')?.getAttribute('aria-expanded') === 'false'", 'More navigation collapsed state');
   assert.equal(await evaluate("document.querySelector('#mobile-workspace-more').getAttribute('aria-expanded')"), 'false',
     'More navigation should report its collapsed state after selecting a section');
 
   const layouts = [];
-  for (const [width, height, label] of [[390, 844, 'mobile'], [768, 1024, 'tablet'], [1440, 900, 'desktop']]) {
+  for (const [width, height, label] of [[320, 720, 'small-mobile'], [390, 844, 'mobile'], [768, 1024, 'tablet'], [1440, 900, 'desktop']]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 600 });
     layouts.push(await evaluate(`({device:${JSON.stringify(label)},width:innerWidth,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth})`));
   }
@@ -169,8 +221,29 @@ try {
     assert.ok(layout.documentWidth <= layout.width + 1, `${layout.device} page overflows horizontally: ${JSON.stringify(layout)}`);
     assert.ok(layout.bodyWidth <= layout.width + 1, `${layout.device} body overflows horizontally: ${JSON.stringify(layout)}`);
   }
+  const roleChecks = [];
+  for (const role of ['corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner']) {
+    const accountLine = credentialLines.find((line) => line.startsWith(`${role} |`));
+    assert.ok(accountLine, `Missing local ${role} credentials`);
+    const [, rolePhone, rolePassword] = accountLine.split('|').map((part) => part.trim());
+    await evaluate("document.querySelector('#logout').click()");
+    await waitFor("document.querySelector('#app-view')?.hidden === true && document.querySelector('#login-form')?.hidden === false", `${role} sign-in form`);
+    await evaluate(`(() => {
+      const form = document.querySelector('#login-form');
+      form.elements.phone.value = ${JSON.stringify(rolePhone)};
+      form.elements.password.value = ${JSON.stringify(rolePassword)};
+      form.requestSubmit();
+      return true;
+    })()`);
+    await waitFor("document.querySelector('#app-view')?.hidden === false", `${role} workspace`);
+    await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Your workspace'", `${role} overview rendering`);
+    const roleCheck = await evaluate(`({role:${JSON.stringify(role)},title:document.querySelector('#page-title')?.textContent?.trim() || '',adminVisible:document.querySelector('#admin-tab')?.hidden === false})`);
+    assert.equal(roleCheck.title, 'Your workspace', `${role} should start in its own overview after another account signs out`);
+    assert.equal(roleCheck.adminVisible, ['corporate_business_manager', 'compliance'].includes(role), `${role} admin navigation should follow its assigned role`);
+    roleChecks.push(roleCheck);
+  }
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join('; ')}`);
-  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir in the shared workspace title and shell metrics', 'Edir mini-app shortcuts when enabled', 'mobile bottom navigation visibility and touch target sizing', 'More sections sheet navigation', 'mobile/tablet/desktop horizontal overflow', 'browser console/runtime errors'], mobileNavigation, layouts }, null, 2));
+  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir in the shared workspace title and shell metrics', 'Edir mini-app shortcuts when enabled', 'mobile bottom navigation visibility and touch target sizing', 'More sections sheet navigation', '320px/mobile/tablet/desktop horizontal overflow', 'nine additional seeded role sign-ins', 'accessible names, image alternatives, document language and main heading smoke', 'browser exceptions and unexpected console errors'], accessibilityChecks, mobileNavigation, layouts, roleChecks, expectedPermissionResponses: { count: expectedPermissionResponses.length, endpoints: [...new Set(expectedPermissionResponses)] } }, null, 2));
 } finally {
   if (closeBrowser) {
     try { closeBrowser(); }

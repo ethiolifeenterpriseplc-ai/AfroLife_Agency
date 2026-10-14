@@ -12,6 +12,17 @@ const mfiDocuments = readFileSync(new URL('../migrations/047_mfi_loan_documents.
 const mfiWriteoffs = readFileSync(new URL('../migrations/048_mfi_loan_writeoffs.sql', import.meta.url), 'utf8');
 const mfiWriteoffActorControls = readFileSync(new URL('../migrations/049_mfi_writeoff_actor_controls.sql', import.meta.url), 'utf8');
 const mfiRouter = readFileSync(new URL('../src/mfi.ts', import.meta.url), 'utf8');
+const leadProtection = readFileSync(new URL('../migrations/052_lead_protection_and_attribution_history.sql', import.meta.url), 'utf8');
+const server = readFileSync(new URL('../src/server.ts', import.meta.url), 'utf8');
+const mfiSandbox = readFileSync(new URL('../migrations/053_mfi_sandbox_simulations.sql', import.meta.url), 'utf8');
+const agentScopedStaffing = readFileSync(new URL('../migrations/054_agent_scoped_staffing_matches.sql', import.meta.url), 'utf8');
+const agentFinancialFacilitation = readFileSync(new URL('../migrations/055_agent_financial_facilitation.sql', import.meta.url), 'utf8');
+const rentRlsRecursionFix = readFileSync(new URL('../migrations/058_rent_rls_recursion_fix.sql', import.meta.url), 'utf8');
+const userAccessHistory = readFileSync(new URL('../migrations/059_user_access_history.sql', import.meta.url), 'utf8');
+const leaseLifecycle = readFileSync(new URL('../migrations/060_lease_lifecycle.sql', import.meta.url), 'utf8');
+const leaseNoticeRecords = readFileSync(new URL('../migrations/061_lease_notice_records.sql', import.meta.url), 'utf8');
+const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
+const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
 
 test('central Insurance ledger grants match service operations and identity sequences', () => {
   for (const revoke of [
@@ -47,6 +58,23 @@ test('auth session storage is runtime-role scoped and records idle and absolute 
   assert.match(authSessions, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE auth_sessions TO "\{\{role\}\}"/);
 });
 
+test('effective user access history captures role and activation changes and is append-only', () => {
+  assert.match(userAccessHistory, /CREATE TABLE user_access_history/);
+  assert.match(userAccessHistory, /role_after text NOT NULL/);
+  assert.match(userAccessHistory, /INSERT INTO user_access_history[\s\S]*?SELECT id, role, active/);
+  assert.match(userAccessHistory, /CREATE TRIGGER users_capture_initial_access/);
+  assert.match(userAccessHistory, /CREATE TRIGGER users_record_access_history/);
+  assert.match(userAccessHistory, /current_setting\('app\.user_id', true\)/);
+  assert.match(userAccessHistory, /current_setting\('app\.access_change_reason', true\)/);
+  assert.match(userAccessHistory, /SECURITY DEFINER[\s\S]*?SET search_path = pg_catalog, pg_temp/);
+  assert.match(userAccessHistory, /user_access_history_owner_insert/);
+  assert.match(userAccessHistory, /User access history is append-only/);
+  assert.match(userAccessHistory, /GRANT SELECT ON TABLE user_access_history/);
+  assert.match(userAccessHistory, /REVOKE ALL ON TABLE user_access_history FROM "\{\{role\}\}"/);
+  assert.match(admin, /\/users\/:id\/access-history/);
+  assert.match(admin, /\/role-access\/history/);
+});
+
 test('MFI customer complaints are tenant-scoped and require documented resolution to close', () => {
   assert.match(mfiComplaints, /CREATE TABLE mfi_customer_complaints/);
   assert.match(mfiComplaints, /FOREIGN KEY \(institution_id,member_id\)/);
@@ -76,6 +104,102 @@ test('MFI trial balance supports formula-safe CSV exports', () => {
   assert.match(mfiRouter, /reports\/trial-balance/);
   assert.match(mfiRouter, /format.*enum\(\['json','csv'\]\)/);
   assert.match(mfiRouter, /toCsv\(rows, \['account_code','account_name','account_type','debits','credits','balance'\]\)/);
+});
+
+test('lead ownership protection and reassignment are configurable, reasoned, and append-only', () => {
+  assert.match(leadProtection, /lead_protection_days', 90/);
+  assert.match(leadProtection, /protected_until/);
+  assert.match(leadProtection, /lead_attribution_history/);
+  assert.match(leadProtection, /AFTER INSERT OR UPDATE ON leads/);
+  assert.match(leadProtection, /Lead attribution history is append-only/);
+  assert.match(leadProtection, /leads_platform_reassignment/);
+  assert.match(server, /INSERT INTO leads \(lead_type, name, phone, source_agent_id, protected_until\)/);
+  assert.match(server, /\/admin\/leads\/:id\/reassign/);
+  assert.match(server, /target_agent_id: z\.string\(\)\.uuid\(\), reason: z\.string\(\)\.trim\(\)\.min\(10\)/);
+  assert.match(leadProtection, /lead_has_non_cancelled_contract\(uuid\)/);
+  assert.match(leadProtection, /Platform administrator access is required/);
+  assert.match(server, /lead_has_non_cancelled_contract\(\$1\) AS has_contract/);
+  assert.match(server, /contract\.rows\[0\]\.has_contract\) throw new HttpError\(409, 'A lead with a non-cancelled contract cannot be reassigned'/);
+});
+
+test('agent staffing lifecycle access is limited to the agent hierarchy', () => {
+  assert.match(agentScopedStaffing, /workers_agent_reservation_update/);
+  assert.match(agentScopedStaffing, /job_requests_agent_lifecycle_update/);
+  assert.match(agentScopedStaffing, /CREATE POLICY matches_scope ON matches/);
+  assert.match(agentScopedStaffing, /app_role\(\) IN \('master_agent','field_agent'\)/);
+  assert.match(agentScopedStaffing, /app_can_access_agent\(source_agent_id\)/);
+  assert.match(agentScopedStaffing, /app_can_access_agent\(r\.source_agent_id\)/);
+  assert.doesNotMatch(agentScopedStaffing, /GRANT\s+ALL|BYPASSRLS/i);
+});
+
+test('agents can only submit scoped pending rent and deposit transactions', () => {
+  assert.match(agentFinancialFacilitation, /rent_transactions_read_scope/);
+  assert.match(agentFinancialFacilitation, /rent_transactions_staff_write/);
+  assert.match(agentFinancialFacilitation, /rent_transactions_agent_facilitation/);
+  assert.match(agentFinancialFacilitation, /FOR INSERT/);
+  assert.match(agentFinancialFacilitation, /recorded_by = app_user_id\(\)/);
+  assert.match(agentFinancialFacilitation, /status = 'pending'/);
+  assert.match(agentFinancialFacilitation, /kind = 'rent'/);
+  assert.match(agentFinancialFacilitation, /kind = 'deposit'/);
+  assert.match(agentFinancialFacilitation, /app_can_access_agent\(l\.source_agent_id\)/);
+  assert.match(operations, /ops\.post\('\/charges\/:id\/pay', requireActivity\('rent\.payments\.submit'\)/);
+  assert.match(operations, /ops\.post\('\/leases\/:id\/deposit\/pay', requireActivity\('rent\.payments\.submit'\)/);
+  assert.match(operations, /ops\.post\('\/leases\/:id\/deposit\/refund', requireActivity\('rent\.deposit\.refund_request'\)/);
+  assert.match(operations, /ops\.post\('\/rent-transactions\/:id\/reconcile', requireActivity\('rent\.transactions\.reconcile'\)/);
+});
+
+test('lease lifecycle evidence is scoped and append-only while the legacy lease route remains intact', () => {
+  assert.match(leaseLifecycle, /CREATE TABLE lease_documents/);
+  assert.match(leaseLifecycle, /CREATE TABLE lease_versions/);
+  assert.match(leaseLifecycle, /CREATE TABLE lease_lifecycle_events/);
+  assert.match(leaseLifecycle, /Lease lifecycle evidence is append-only/);
+  assert.match(leaseLifecycle, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(leaseLifecycle, /FORCE ROW LEVEL SECURITY/);
+  assert.match(leaseLifecycle, /lease_versions_scope/);
+  assert.match(leaseLifecycle, /lease_lifecycle_events_insert/);
+  assert.match(leaseLifecycle, /property_units_lifecycle_execute/);
+  assert.match(leaseLifecycle, /rent_charges_lifecycle_insert/);
+  assert.match(leaseLifecycle, /property\.tenancy\.approve/);
+  assert.match(leaseLifecycle, /property\.tenancy\.execute/);
+  assert.match(leaseLifecycle, /Existing lease state captured during additive lifecycle migration/);
+  assert.match(leaseLifecycle, /Versioned lease terms are immutable/);
+  assert.match(operations, /ops\.post\('\/leases\/workflow', requireActivity\('property\.tenancy\.manage'\)/);
+  assert.match(operations, /ops\.post\('\/leases\/:id\/approve', requireActivity\('property\.tenancy\.approve'\)/);
+  assert.match(operations, /ops\.post\('\/leases\/:id\/execute', requireActivity\('property\.tenancy\.execute'\)/);
+  assert.match(operations, /ops\.post\('\/leases', requireActivity\('property\.tenancy\.manage'\)/);
+  assert.match(operations, /signature_evidence_only: true/);
+});
+
+test('lease notice records are scoped, append-only, idempotent, and non-terminating', () => {
+  assert.match(leaseNoticeRecords, /CREATE TABLE lease_notices/);
+  assert.match(leaseNoticeRecords, /UNIQUE \(lease_id, idempotency_key\)/);
+  assert.match(leaseNoticeRecords, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(leaseNoticeRecords, /FORCE ROW LEVEL SECURITY/);
+  assert.match(leaseNoticeRecords, /Lease notice records are append-only/);
+  assert.match(leaseNoticeRecords, /GRANT SELECT, INSERT ON TABLE lease_notices/);
+  assert.match(operations, /ops\.post\('\/leases\/:id\/notices', requireActivity\('property\.tenancy\.manage'\)/);
+  assert.match(operations, /legal_effect: 'record_only'/);
+  assert.match(operations, /ON CONFLICT \(lease_id,idempotency_key\) DO NOTHING/);
+  assert.match(operations, /ops\.get\('\/leases\/:id\/notices'/);
+});
+
+test('rent submission RLS relies on unique indexes instead of recursive self-queries', () => {
+  assert.match(rentRlsRecursionFix, /DROP POLICY rent_transactions_agent_facilitation ON rent_transactions/);
+  assert.match(rentRlsRecursionFix, /DROP POLICY rent_transactions_activity_submit ON rent_transactions/);
+  assert.doesNotMatch(rentRlsRecursionFix, /FROM rent_transactions prior/);
+  assert.match(rentRlsRecursionFix, /app_can_access_agent\(l\.source_agent_id\)/);
+});
+
+test('MFI sandbox runs are tenant-scoped, append-only, and cannot carry real provider effects', () => {
+  assert.match(mfiSandbox, /CREATE TABLE mfi_sandbox_runs/);
+  assert.match(mfiSandbox, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(mfiSandbox, /FORCE ROW LEVEL SECURITY/);
+  assert.match(mfiSandbox, /mfi_has_access\(institution_id\)/);
+  assert.match(mfiSandbox, /production_side_effects'='false'/);
+  assert.match(mfiSandbox, /real_customer_data_used'='false'/);
+  assert.match(mfiSandbox, /SELECT,INSERT ON TABLE mfi_sandbox_runs/);
+  assert.match(mfiSandbox, /Sandbox simulation records are append-only/);
+  assert.match(mfiRouter, /mfi_sandbox_simulation_run/);
 });
 
 test('MFI loan application and disbursement require independently reviewed member KYC', () => {

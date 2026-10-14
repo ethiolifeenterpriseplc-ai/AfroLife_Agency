@@ -29,6 +29,8 @@ jobs:
           cache: npm
           cache-dependency-path: afrolife/package-lock.json
       - run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - name: Check browser JavaScript syntax
         run: |
           node --check public/app.js

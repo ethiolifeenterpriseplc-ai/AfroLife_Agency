@@ -20,7 +20,13 @@ const rlsSafeKycMigration = await readFile(new URL('../services/afrolife-edir/01
 const atomicWriteoffMigration = await readFile(new URL('../services/afrolife-edir/016_atomic_writeoff_posting.sql', import.meta.url), 'utf8');
 const staleLoanStatusMigration = await readFile(new URL('../services/afrolife-edir/017_remove_stale_loan_status_check.sql', import.meta.url), 'utf8');
 const staleInstallmentMigration = await readFile(new URL('../services/afrolife-edir/018_remove_stale_installment_check.sql', import.meta.url), 'utf8');
+const platformLimitMigration = await readFile(new URL('../services/afrolife-edir/019_platform_disbursement_limits.sql', import.meta.url), 'utf8');
+const platformCapGuardMigration = await readFile(new URL('../services/afrolife-edir/020_platform_disbursement_cap_guard.sql', import.meta.url), 'utf8');
+const organizationLedgerBootstrapMigration = await readFile(new URL('../services/afrolife-edir/021_organization_ledger_bootstrap.sql', import.meta.url), 'utf8');
+const memberCreditControlLockMigration = await readFile(new URL('../services/afrolife-edir/022_member_credit_control_lock.sql', import.meta.url), 'utf8');
+const memberCreditControlPostingRolesMigration = await readFile(new URL('../services/afrolife-edir/023_member_credit_control_posting_roles.sql', import.meta.url), 'utf8');
 const creditRouter = await readFile(new URL('../services/afrolife-edir/credit-router.ts', import.meta.url), 'utf8');
+const edirUi = await readFile(new URL('../public/edir.js', import.meta.url), 'utf8');
 const complaintIntakeRoute = creditRouter.split("edirCreditRouter.post('/complaints'")[1]?.split("edirCreditRouter.post('/complaints/:complaintId/decision'")[0] ?? '';
 const creditApplicationRoute = creditRouter.split("edirCreditRouter.post('/applications'")[1]?.split("edirCreditRouter.post('/members/:memberId/kyc-review'")[0] ?? '';
 const loanDocumentUploadRoute = creditRouter.split("edirCreditRouter.post('/documents/:documentType'")[1]?.split("edirCreditRouter.get('/documents/me'")[0] ?? '';
@@ -143,6 +149,27 @@ test('Edir daily disbursement cap is versioned, independently approved and enfor
   assert.match(creditRouter,/approved Edir daily disbursement limit would be exceeded/);
 });
 
+test('platform disbursement cap is global-admin-only, maker-checker, and aggregates all Edirs',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v19-platform-disbursement-limits/);
+  assert.match(migrationRunner,/afrolife-edir-v20-platform-disbursement-cap-guard/);
+  assert.match(platformLimitMigration,/CREATE TABLE edir_platform_disbursement_limit_versions/);
+  assert.doesNotMatch(platformLimitMigration,/organization_id/);
+  assert.match(platformLimitMigration,/FOR ALL USING \(edir_is_platform_admin\(\)\) WITH CHECK \(edir_is_platform_admin\(\)\)/);
+  assert.match(platformLimitMigration,/Platform limit decision requires an independent reviewer and reason/);
+  assert.match(platformCapGuardMigration,/SECURITY DEFINER SET search_path=public,pg_temp/);
+  assert.match(platformCapGuardMigration,/REVOKE ALL ON FUNCTION edir_platform_disbursement_cap_allows\(uuid\) FROM PUBLIC/);
+  const platformAggregate=platformCapGuardMigration.split('FROM edir_loan_journals journal')[1]?.split('RETURN posted_today')[0] ?? '';
+  assert.match(platformAggregate,/posted_operation\.operation_type='disbursement'/);
+  assert.doesNotMatch(platformAggregate,/journal\.organization_id\s*=/);
+  assert.match(creditRouter,/platform-disbursement-limits/);
+  assert.match(creditRouter,/requirePlatformAdmin\('Platform disbursement limit administration access is required'\)/);
+  assert.match(creditRouter,/edir_platform_disbursement_cap_allows\(\$1\)/);
+  assert.match(creditRouter,/approved platform-wide daily disbursement limit would be exceeded/);
+  assert.match(edirUi,/platform-disbursement-limits/);
+  assert.match(edirUi,/Platform-wide daily disbursement limits/);
+  assert.match(edirUi,/platform-disbursement-limit-decision/);
+});
+
 test('Edir member consent records a cryptographic hash of exact offer and product snapshot',()=>{
   assert.match(consentMigration,/agreement_hash text/);
   assert.match(consentMigration,/terms_snapshot jsonb/);
@@ -248,4 +275,27 @@ test('Edir identity documents require independent review and a verified national
   assert.match(documentMigration,/edir_membership_national_id_kyc_guard/);
   assert.match(creditRouter,/post\('\/documents\/:documentType'/);
   assert.match(creditRouter,/documents\/\:documentId\/review/);
+});
+
+test('New Edir organizations receive a complete local ledger chart without tenant write access',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v21-organization-ledger-bootstrap/);
+  assert.match(organizationLedgerBootstrapMigration,/GRANT INSERT ON TABLE edir_ledger_accounts/);
+  assert.match(organizationLedgerBootstrapMigration,/SECURITY DEFINER SET search_path=public,pg_temp/);
+  assert.match(organizationLedgerBootstrapMigration,/REVOKE ALL ON FUNCTION edir_seed_organization_ledger_accounts\(\) FROM PUBLIC/);
+  assert.match(organizationLedgerBootstrapMigration,/AFTER INSERT ON edir_organizations/);
+  assert.match(organizationLedgerBootstrapMigration,/WHERE organization\.organization_type <> 'umbrella_master'/);
+  assert.match(organizationLedgerBootstrapMigration,/ON CONFLICT \(organization_id,code\) DO NOTHING/);
+  assert.match(organizationLedgerBootstrapMigration,/'1000'.*'1300'.*'2100'.*'2200'.*'3100'.*'3200'.*'5100'/s);
+});
+
+test('Edir member risk controls serialize with credit actions without widening membership update RLS',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v22-member-credit-control-lock/);
+  assert.match(migrationRunner,/afrolife-edir-v23-member-credit-control-posting-roles/);
+  assert.match(memberCreditControlLockMigration,/SECURITY DEFINER SET search_path=public,pg_temp/);
+  assert.match(memberCreditControlLockMigration,/organization_id=app_edir_id\(\)/);
+  assert.match(memberCreditControlLockMigration,/edir_has_staff_role\(ARRAY\['edir_admin','credit_manager','compliance'\]\)/);
+  assert.match(memberCreditControlLockMigration,/pg_advisory_xact_lock\(779820,hashtext\(target_member::text\)\)/);
+  assert.match(memberCreditControlLockMigration,/REVOKE ALL ON FUNCTION edir_lock_member_credit_controls\(uuid\) FROM PUBLIC/);
+  assert.match(memberCreditControlPostingRolesMigration,/edir_has_staff_role\(ARRAY\['edir_admin','credit_manager','compliance','finance_manager','treasurer'\]\)/);
+  assert.match(creditRouter,/edir_lock_member_credit_controls\(\$1\)/);
 });

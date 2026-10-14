@@ -97,6 +97,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
   let memberDocuments = [];
   let pendingLoanDocuments = [];
   let creditPolicies = [];
+  let platformDisbursementLimits = [];
   let creditApplications = [];
   let memberLoans = [];
   let servicingLoans = [];
@@ -155,6 +156,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         api('/edir/credit/me'),
         api('/edir/credit/policies'),
       ]);
+      platformDisbursementLimits = isAdmin ? await api('/edir/credit/platform-disbursement-limits') : [];
       memberDocuments=await api('/edir/credit/documents/me');
       pendingLoanDocuments=canReadCredit()?await api('/edir/credit/documents/pending-review'):[];
       creditApplications = canReadCredit() ? await api('/edir/credit/applications') : [];
@@ -660,6 +662,32 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
     section.id = 'edir-credit';
     section.append(node('h2', 'Edir credit policy and loan requests'));
     section.append(node('p', 'Each Edir proposes and independently approves its own versioned credit policy. Loan offers are interest-free and fee-free; member acceptance selects an active savings account, followed by separately approved savings-account disbursement and savings-funded principal repayments. Cash, mobile-wallet, and third-party payouts are later stages and are not simulated.'));
+    if (isAdmin) {
+      const platformCaps = node('div', undefined, 'list');
+      platformCaps.append(node('h3', 'Platform-wide daily disbursement limits'));
+      platformCaps.append(node('p', 'This maker-checker control caps total posted Edir loan disbursements across all independent Edirs. Per-Edir limits remain active as additional controls.'));
+      if (!platformDisbursementLimits.length) platformCaps.append(node('p', 'No platform-wide cap is active.'));
+      for (const version of platformDisbursementLimits) {
+        const value = version.daily_limit === null ? 'No cap' : `ETB ${version.daily_limit} per day`;
+        const item = card(`Platform limit v${version.version}`, `${value} · ${version.change_reason}`, version.status);
+        if (version.status === 'pending' && version.created_by !== user.id) {
+          item.append(actionButton('Approve platform limit', 'platform-disbursement-limit-decision', version.id, 'approve'));
+          item.append(actionButton('Reject platform limit', 'platform-disbursement-limit-decision', version.id, 'reject'));
+        }
+        platformCaps.append(item);
+      }
+      const capForm = node('form', undefined, 'inline-form');
+      capForm.dataset.edirForm = 'platform-disbursement-limit';
+      capForm.append(node('h4', 'Propose a platform-wide daily cap'));
+      const capInput = textInput('Maximum total Edir disbursements per day (ETB; leave blank for no cap)', 'daily_limit', '', 'number');
+      const amountInput = capInput.querySelector('input');
+      amountInput.required = false;
+      amountInput.min = '0.01';
+      amountInput.step = '0.01';
+      capForm.append(capInput, textInput('Change reason', 'change_reason'), submitButton('Submit platform cap for independent review'));
+      platformCaps.append(capForm);
+      section.append(platformCaps);
+    }
     const activePolicy = creditPolicies.find((policy) => policy.status === 'active');
     const policyList = node('div', undefined, 'list');
     policyList.append(node('h3', 'Credit policy versions'));
@@ -1119,6 +1147,15 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
           }),
         });
         notice = 'Edir credit policy submitted for independent approval.';
+      } else if (form.dataset.edirForm === 'platform-disbursement-limit') {
+        await api('/edir/credit/platform-disbursement-limits', {
+          method: 'POST',
+          body: JSON.stringify({
+            daily_limit: values.daily_limit ? values.daily_limit : null,
+            change_reason: values.change_reason,
+          }),
+        });
+        notice = 'Platform-wide disbursement limit submitted for independent approval.';
       } else if (form.dataset.edirForm === 'loan-document-upload') {
         await api(`/edir/credit/documents/${encodeURIComponent(values.document_type)}`,{
           method:'POST',body:values.file,
@@ -1334,6 +1371,12 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
           body: JSON.stringify({ decision: action.dataset.decision, reason: reason.trim() }),
         });
         notice = `Edir credit policy ${action.dataset.decision === 'approve' ? 'approved' : 'rejected'}.`;
+      } else if (actionType === 'platform-disbursement-limit-decision') {
+        await api(`/edir/credit/platform-disbursement-limits/${action.dataset.id}/decision`, {
+          method: 'POST',
+          body: JSON.stringify({ decision: action.dataset.decision, reason: reason.trim() }),
+        });
+        notice = `Platform-wide disbursement limit ${action.dataset.decision === 'approve' ? 'approved' : 'rejected'}.`;
       } else if (actionType === 'credit-loan-decision') {
         await api(`/edir/credit/applications/${action.dataset.id}/decision`, {
           method: 'POST',

@@ -5,6 +5,12 @@ import { runInNewContext } from 'node:vm';
 
 const workerSource = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 
+test('changed brand assets advance the public shell cache version', () => {
+  assert.match(workerSource, /const CACHE = 'afrolife-shell-v21'/);
+  assert.match(workerSource, /'\/icon\.svg'/);
+  assert.match(workerSource, /'\/icons\/icon-512\.png'/);
+});
+
 function bootWorker() {
   const listeners = new Map<string, (event: any) => void>();
   const cacheEntries = new Map<string, Response>();
@@ -67,4 +73,21 @@ test('service worker caches only public allow-listed shell assets', async () => 
   await staticResponse;
   assert.deepEqual(worker.writes, ['/mfi.js']);
   assert.equal(worker.cacheEntries.has('/contract-documents/private-id/file'), false);
+});
+
+test('service worker includes each public mini-app logo in the offline shell', async () => {
+  const worker = bootWorker();
+  const listener = worker.listeners.get('fetch')!;
+  const logos = [
+    'marketplace', 'property-management', 'staffing', 'workforce-management', 'leads',
+    'contracts', 'commissions', 'rent', 'agents', 'edir', 'mfi', 'insurance',
+  ].map((module) => `/mini-apps/${module}/logo.svg`);
+  for (const path of logos) {
+    let response: Promise<Response> | undefined;
+    listener({ request: new Request(`https://afrolife.test${path}`), respondWith: (value: Promise<Response>) => { response = value; } });
+    assert.ok(response, `${path} must be eligible for shell caching`);
+    await response;
+    assert.ok(worker.cacheEntries.has(path), `${path} should be present in the public shell cache`);
+  }
+  assert.deepEqual(worker.writes, logos);
 });

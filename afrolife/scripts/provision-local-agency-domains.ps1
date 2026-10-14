@@ -4,7 +4,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $localEnvironment = Join-Path $env:LOCALAPPDATA 'AfroLife\afrolife.env'
 $serviceEnvironmentRoot = Join-Path $env:LOCALAPPDATA 'AfroLife\services'
 $serviceDefinitions = @(
-  @{ Name = 'worker-management'; Database = 'afrolife_worker_management'; Role = 'afrolife_worker'; Secret = 'WORKER_MANAGEMENT_GATEWAY_SECRET'; DatabaseKey = 'WORKER_MANAGEMENT_DATABASE_URL'; Port = 3400 },
+  @{ Name = 'workforce-management'; Database = 'afrolife_worker_management'; Role = 'afrolife_worker'; Secret = 'WORKFORCE_MANAGEMENT_GATEWAY_SECRET'; DatabaseKey = 'WORKFORCE_MANAGEMENT_DATABASE_URL'; Port = 3400 },
   @{ Name = 'staffing'; Database = 'afrolife_staffing'; Role = 'afrolife_staffing'; Secret = 'STAFFING_GATEWAY_SECRET'; DatabaseKey = 'STAFFING_DATABASE_URL'; Port = 3401 },
   @{ Name = 'property-management'; Database = 'afrolife_property_management'; Role = 'afrolife_property'; Secret = 'PROPERTY_MANAGEMENT_GATEWAY_SECRET'; DatabaseKey = 'PROPERTY_MANAGEMENT_DATABASE_URL'; Port = 3402 },
   @{ Name = 'marketplace'; Database = 'afrolife_marketplace'; Role = 'afrolife_marketplace'; Secret = 'MARKETPLACE_GATEWAY_SECRET'; DatabaseKey = 'MARKETPLACE_DATABASE_URL'; Port = 3403 }

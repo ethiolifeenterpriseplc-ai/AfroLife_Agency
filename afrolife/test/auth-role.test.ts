@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { isPlatformAdminRole } from '../src/auth-types.js';
+import { adminRouter } from '../src/admin.js';
+import { learningRouter } from '../src/learning.js';
+import { getRoleActivity, hasRoleActivityAccess, isRoleActivityOverrides, ROLE_ACTIVITIES, ROLE_NAMES } from '../src/role-activities.js';
 
 test('Global Admin and Super Admin share platform-administration classification', () => {
   assert.equal(isPlatformAdminRole('global_admin'), true);
@@ -23,4 +26,77 @@ test('Global Admin promotion table is accessible to the restricted runtime under
   assert.match(migration, /USING \(app_role\(\) = 'super_admin'\)/);
   assert.match(migration, /WITH CHECK \(app_role\(\) = 'super_admin'\)/);
   assert.match(migration, /GRANT SELECT, INSERT, UPDATE ON TABLE global_admin_role_change_requests TO "\{\{role\}\}"/);
+});
+
+test('role activity catalog grants default access and respects explicit overrides', () => {
+  const viewLearning = 'learning.content.view';
+  const manageLearning = 'learning.content.manage';
+  const reconcileRent = 'rent.transactions.reconcile';
+
+  assert.equal(hasRoleActivityAccess('customer', viewLearning), true);
+  assert.equal(hasRoleActivityAccess('customer', manageLearning), false);
+  assert.equal(hasRoleActivityAccess('global_admin', reconcileRent), true);
+  assert.equal(hasRoleActivityAccess('master_agent', 'workforce.workers.register'), true);
+  assert.equal(hasRoleActivityAccess('worker', 'workforce.workers.register'), false);
+
+  assert.equal(hasRoleActivityAccess('master_agent', 'workforce.workers.register', { 'workforce.workers.register': false }), false);
+  assert.equal(hasRoleActivityAccess('worker', 'workforce.documents.view', { 'workforce.documents.view': true }), true);
+  assert.equal(hasRoleActivityAccess('customer', viewLearning, { [viewLearning]: false }), false);
+
+  const definition = getRoleActivity(reconcileRent);
+  assert.ok(definition);
+  assert.equal(definition?.sensitive, true);
+  assert.equal(definition?.label, 'Reconcile transactions to the ledger');
+});
+
+test('role activity overrides are validated before use and the catalog stays complete', () => {
+  assert.equal(isRoleActivityOverrides({ 'learning.content.view': true }), true);
+  assert.equal(isRoleActivityOverrides({ 'learning.content.view': 'yes' }), false);
+  assert.equal(isRoleActivityOverrides({ 'not.a.real.activity': true }), false);
+  assert.ok(ROLE_ACTIVITIES.some((activity) => activity.key === 'learning.content.view'));
+  assert.ok(ROLE_ACTIVITIES.some((activity) => activity.key === 'learning.content.manage'));
+  assert.ok(ROLE_ACTIVITIES.some((activity) => activity.key === 'rent.transactions.void'));
+});
+
+test('admin and learning routers expose the role-access and content-management endpoints', () => {
+  const adminRoutes = adminRouter.stack.flatMap((layer) => (layer.route ? [layer.route.path] : []));
+  const learningRoutes = learningRouter.stack.flatMap((layer) => (layer.route ? [layer.route.path] : []));
+
+  assert.ok(adminRoutes.includes('/role-access'));
+  assert.ok(learningRoutes.includes('/learning/content'));
+  assert.ok(learningRoutes.some((route) => route === '/learning/content/:id'));
+});
+
+test('role activity migration hardens the SQL policy layer for service permissions', async () => {
+  const migration = await readFile(new URL('../migrations/056_role_activity_access.sql', import.meta.url), 'utf8');
+  assert.match(migration, /CREATE TABLE role_activity_permissions/);
+  assert.match(migration, /ALTER TABLE role_activity_permissions ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /CREATE POLICY role_activity_permissions_super_admin/);
+  assert.match(migration, /CREATE POLICY learning_content_audience_read/);
+  assert.match(migration, /CREATE POLICY rent_transactions_activity_reconcile/);
+  assert.match(migration, /CREATE TABLE learning_content/);
+});
+
+test('SQL role activity defaults match the application catalog and preserve override precedence', async () => {
+  const defaultsMigration = await readFile(new URL('../migrations/057_role_activity_defaults.sql', import.meta.url), 'utf8');
+  const lifecycleMigration = await readFile(new URL('../migrations/060_lease_lifecycle.sql', import.meta.url), 'utf8');
+  const migration = `${defaultsMigration}\n${lifecycleMigration}`;
+  const seededDefaults = new Set(
+    [...migration.matchAll(/\('([a-z_]+)','([a-z_.]+)',true\)/g)]
+      .map((match) => `${match[1]}:${match[2]}`),
+  );
+  let expectedDefaults = 0;
+  for (const role of ROLE_NAMES) {
+    for (const activity of ROLE_ACTIVITIES) {
+      if (!hasRoleActivityAccess(role, activity.key)) continue;
+      expectedDefaults += 1;
+      assert.ok(seededDefaults.has(`${role}:${activity.key}`), `missing SQL default for ${role}:${activity.key}`);
+    }
+  }
+  assert.equal(seededDefaults.size, expectedDefaults, 'SQL defaults must not grant activities absent from the application catalog');
+  assert.match(migration, /CREATE TABLE role_activity_defaults/);
+  assert.match(migration, /GRANT SELECT ON TABLE role_activity_defaults TO "\{\{role\}\}"/);
+  assert.match(migration, /app\.role_permissions/);
+  assert.ok(migration.indexOf('app.role_permissions') < migration.indexOf('FROM role_activity_defaults'));
+  assert.match(migration, /CREATE OR REPLACE FUNCTION app_has_permission/);
 });

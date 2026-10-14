@@ -12,6 +12,7 @@ import { getFile, putFile } from './storage.js';
 import { toCsv } from './csv.js';
 import { creditPolicySchema, principalSchedule, scoreLoan } from './mfi-credit.js';
 import { cooldownRemainingDays, evaluateLoanEligibility, lendingProductTermsSchema, quoteLoan, type LendingProductTerms } from './lending-products.js';
+import { MFI_SANDBOX_SIMULATIONS, runMfiSandboxSimulation } from './mfi-sandbox.js';
 
 export type MfiWithUser = <T>(
   user: AuthUser,
@@ -726,6 +727,150 @@ mfiRouter.get('/institutions/:institutionId/reports/portfolio', h(async (req, re
       return { as_of: new Date().toISOString().slice(0,10), ...summary.rows[0], aging: aging.rows };
     });
   res.json(report);
+}));
+
+// Institution-scoped, aggregate-only reporting for the standalone credit risk
+// workspace. Score bands describe the configured policy scorecard, not a
+// probability of default. Borrower-identifying and application-level fields
+// are deliberately excluded from this endpoint.
+mfiRouter.get('/institutions/:institutionId/reports/credit-risk', h(async (req, res) => {
+  const report = await withInstitution(req.user!, req.params.institutionId,
+    ['institution_admin','finance_manager','credit_manager','compliance','auditor'], async (client) => {
+      const [summary, scoreBands, classifications, portfolio] = await Promise.all([
+        client.query(
+          `SELECT count(*)::int AS applications,
+             count(*) FILTER (WHERE credit_score IS NOT NULL)::int AS assessed,
+             count(*) FILTER (WHERE credit_score IS NULL)::int AS unscored,
+             count(*) FILTER (WHERE status IN ('approved','disbursed','repaid','written_off'))::int AS approved_or_later,
+             count(*) FILTER (WHERE status='rejected')::int AS rejected,
+             count(DISTINCT credit_scorecard_version) FILTER (WHERE credit_score IS NOT NULL)::int AS policy_versions_used
+           FROM mfi_loans WHERE institution_id=$1`,
+          [req.params.institutionId],
+        ),
+        client.query(
+          `WITH scored AS (
+             SELECT CASE
+                 WHEN credit_score IS NULL THEN 'unscored'
+                 WHEN credit_score < 40 THEN '0-39'
+                 WHEN credit_score < 60 THEN '40-59'
+                 WHEN credit_score < 80 THEN '60-79'
+                 ELSE '80-100'
+               END AS band,
+               credit_score, status
+             FROM mfi_loans WHERE institution_id=$1
+           )
+           SELECT band,
+             count(*)::int AS application_count,
+             round(avg(credit_score),1) AS average_score,
+             count(*) FILTER (WHERE status IN ('approved','disbursed','repaid','written_off'))::int AS approved_or_later,
+             count(*) FILTER (WHERE status='rejected')::int AS rejected,
+             count(*) FILTER (WHERE status='pending')::int AS pending
+           FROM scored
+           GROUP BY band
+           ORDER BY CASE band WHEN '0-39' THEN 0 WHEN '40-59' THEN 1 WHEN '60-79' THEN 2
+             WHEN '80-100' THEN 3 ELSE 4 END`,
+          [req.params.institutionId],
+        ),
+        client.query(
+          `SELECT loan.npl_status AS classification,count(*)::int AS loan_count,
+             COALESCE(sum(loan.principal_amount-loan.principal_repaid),0)::numeric(16,2) AS outstanding_principal
+           FROM mfi_loans loan
+           WHERE loan.institution_id=$1 AND loan.status IN ('disbursed','repaid','written_off')
+           GROUP BY loan.npl_status
+           ORDER BY CASE loan.npl_status WHEN 'performing' THEN 0 WHEN 'watch' THEN 1
+             WHEN 'substandard' THEN 2 WHEN 'doubtful' THEN 3 WHEN 'loss' THEN 4 ELSE 5 END`,
+          [req.params.institutionId],
+        ),
+        client.query(
+          `WITH loan_balances AS (
+             SELECT l.id,l.principal_amount-l.principal_repaid AS outstanding,
+               COALESCE(max(current_date-i.due_on) FILTER (WHERE i.status NOT IN ('paid','waived') AND i.due_on<current_date),0)::int AS dpd,
+               COALESCE(sum(i.principal_due-i.principal_paid+i.interest_due-i.interest_paid+i.penalty_due-i.penalty_paid)
+                 FILTER (WHERE i.status NOT IN ('paid','waived') AND i.due_on<current_date),0)::numeric(16,2) AS overdue_amount
+             FROM mfi_loans l LEFT JOIN mfi_loan_installments i
+               ON i.institution_id=l.institution_id AND i.loan_id=l.id
+             WHERE l.institution_id=$1 AND l.status='disbursed' GROUP BY l.id
+           ), buckets AS (
+             SELECT CASE WHEN dpd BETWEEN 1 AND 30 THEN '1-30 days' WHEN dpd BETWEEN 31 AND 60 THEN '31-60 days'
+               WHEN dpd BETWEEN 61 AND 90 THEN '61-90 days' WHEN dpd>90 THEN 'over 90 days' ELSE 'current' END AS bucket,
+               count(*)::int AS loan_count, COALESCE(sum(outstanding),0)::numeric(16,2) AS outstanding_principal
+             FROM loan_balances GROUP BY bucket
+           )
+           SELECT (SELECT count(*)::int FROM loan_balances) AS disbursed_loans,
+             (SELECT COALESCE(sum(outstanding),0)::numeric(16,2) FROM loan_balances) AS outstanding_principal,
+             (SELECT count(*)::int FROM loan_balances WHERE overdue_amount>0) AS loans_past_due,
+             (SELECT COALESCE(sum(outstanding),0)::numeric(16,2) FROM loan_balances WHERE overdue_amount>0) AS par_principal,
+             (SELECT COALESCE(sum(overdue_amount),0)::numeric(16,2) FROM loan_balances) AS overdue_installments,
+             CASE WHEN COALESCE((SELECT sum(outstanding) FROM loan_balances),0)=0 THEN 0
+               ELSE round(100*(SELECT COALESCE(sum(outstanding),0) FROM loan_balances WHERE overdue_amount>0)
+                 / (SELECT sum(outstanding) FROM loan_balances),2) END AS par_ratio_pct,
+             (SELECT COALESCE(jsonb_agg(b ORDER BY CASE bucket WHEN 'current' THEN 0 WHEN '1-30 days' THEN 1
+               WHEN '31-60 days' THEN 2 WHEN '61-90 days' THEN 3 ELSE 4 END),'[]'::jsonb) FROM buckets b) AS aging` ,
+          [req.params.institutionId],
+        ),
+      ]);
+      return {
+        as_of: new Date().toISOString().slice(0,10),
+        ...summary.rows[0],
+        score_bands: scoreBands.rows,
+        classifications: classifications.rows,
+        portfolio: portfolio.rows[0],
+        scoring: {
+          method: 'institution_policy_scorecard',
+          output: '0-100 policy score; not a probability of default',
+          decision_control: 'staff review with approved policy eligibility checks',
+          machine_learning: 'not connected; supplied challenger remains shadow-only',
+        },
+        model_registry: [
+          {
+            model_id: 'institution-policy-scorecard', version: 'institution-versioned',
+            status: 'active', connected: true, purpose: 'Explainable application affordability and policy eligibility score',
+            decision_control: 'A score is not approval; independent institution staff review is required',
+          },
+          {
+            model_id: 'archive-collection-risk-challenger', version: 'unvalidated-archive-candidate',
+            status: 'shadow_only', connected: false, purpose: 'Potential portfolio early-warning challenger; not a probability of default',
+            prohibited_uses: ['underwriting decisions', 'pricing', 'adverse action', 'borrower prioritization'],
+            promotion_gates: ['decision-time features without target leakage', 'independent out-of-time validation', 'approved lawful data and consent', 'fairness and stability review', 'risk committee approval'],
+          },
+        ],
+      };
+    });
+  res.json(report);
+}));
+
+// Provider and challenger demos consume synthetic fixture data only. Every run is
+// stored in a separate append-only table; no real provider, member, or ledger is touched.
+const mfiSandboxRoleSet: readonly InstitutionRole[] = ['institution_admin','finance_manager','credit_manager','compliance','auditor'];
+mfiRouter.get('/institutions/:institutionId/sandbox/runs', h(async (req, res) => {
+  const runs = await withInstitution(req.user!, req.params.institutionId, mfiSandboxRoleSet, async (client) =>
+    (await client.query(
+      `SELECT id,simulation,scenario,result,created_at FROM mfi_sandbox_runs
+       WHERE institution_id=$1 ORDER BY created_at DESC,id DESC LIMIT 50`, [req.params.institutionId],
+    )).rows);
+  res.json(runs);
+}));
+
+mfiRouter.post('/institutions/:institutionId/sandbox/:simulation', h(async (req, res) => {
+  const { simulation } = z.object({ simulation: z.enum(MFI_SANDBOX_SIMULATIONS) }).parse(req.params);
+  const body = z.object({ scenario: z.string().trim().min(1).max(100) }).strict().parse(req.body);
+  let outcome: ReturnType<typeof runMfiSandboxSimulation>;
+  try {
+    outcome = runMfiSandboxSimulation(simulation, body.scenario);
+  } catch {
+    throw new HttpError(422, 'Choose a supported synthetic sandbox scenario');
+  }
+  const saved = await withInstitution(req.user!, req.params.institutionId, mfiSandboxRoleSet, async (client) => {
+    const row = (await client.query(
+      `INSERT INTO mfi_sandbox_runs (institution_id,actor_id,simulation,scenario,result)
+       VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING id,created_at`,
+      [req.params.institutionId, req.user!.id, simulation, body.scenario, JSON.stringify(outcome)],
+    )).rows[0];
+    await auditMfi(client, req.params.institutionId, req.user!.id, 'mfi_sandbox_simulation_run',
+      'mfi_sandbox_run', row.id, null, { simulation, scenario: body.scenario, sandbox_only: true });
+    return row;
+  });
+  res.status(201).json({ id: saved.id, created_at: saved.created_at, ...outcome });
 }));
 
 mfiRouter.get('/institutions/:institutionId/reports/trial-balance', h(async (req, res) => {

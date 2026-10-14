@@ -1,10 +1,13 @@
 import '../src/env.js';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
-const lines = readFileSync(`${process.env.LOCALAPPDATA}/AfroLife/local-test-users.txt`, 'utf8').split(/\r?\n/);
+const credentialsFile = process.env.MFI_E2E_USERS_FILE
+  ?? join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
+const lines = readFileSync(credentialsFile, 'utf8').split(/\r?\n/);
 const credentials = new Map<string, { phone: string; password: string }>();
 for (const line of lines) {
   const match = line.match(/^([^|]+?)\s*\|\s*(\+\d+)\s*\|\s*(.+)$/);
@@ -16,8 +19,10 @@ assert.ok(
   'Local SACCO E2E refuses non-local API hosts',
 );
 const fixtureDbUrl = new URL(process.env.MIGRATION_DATABASE_URL ?? '');
+const fixtureDatabase = decodeURIComponent(fixtureDbUrl.pathname.replace(/^\/+/, ''));
 assert.ok(['127.0.0.1','localhost','::1'].includes(fixtureDbUrl.hostname) && fixtureDbUrl.port === '5433'
-  && fixtureDbUrl.pathname === '/afrolife', 'Local SACCO E2E refuses non-local fixture databases');
+  && (fixtureDatabase === 'afrolife' || /^afrolife_test_[a-z0-9_-]+$/i.test(fixtureDatabase)),
+  'Local SACCO E2E requires the local AfroLife database or an explicitly named disposable afrolife_test_* database');
 const api = `${apiBase.origin}/api/v1`;
 async function login(role: string) {
   const account = credentials.get(role);
@@ -174,6 +179,44 @@ const disbursement = await call<{ account: { account_type: string } }>(admin2, '
   idempotency_key: randomUUID(),
 }, 201);
 assert.equal(disbursement.account.account_type, 'loan');
+const riskReport = await call<{
+  applications: number; assessed: number;
+  score_bands: Array<{ band: string; application_count: number }>;
+  classifications: Array<{ classification: string; loan_count: number; outstanding_principal: string }>;
+  scoring: { output: string };
+  portfolio: { disbursed_loans: number; par_ratio_pct: string; aging: Array<{ bucket: string; loan_count: number }> };
+  model_registry: Array<{ model_id: string; status: string; connected: boolean; promotion_gates?: string[] }>;
+}>(creditManager, 'GET', `${base}/reports/credit-risk`);
+assert.ok(riskReport.applications >= 1 && riskReport.assessed >= 1);
+assert.ok(riskReport.score_bands.some((band) => band.band !== 'unscored' && band.application_count >= 1));
+assert.ok(riskReport.classifications.some((row) => row.classification === 'performing' && row.loan_count >= 1));
+assert.match(riskReport.scoring.output, /not a probability of default/);
+assert.ok(riskReport.portfolio.disbursed_loans >= 1);
+assert.ok(riskReport.portfolio.aging.some((row) => row.bucket === 'current' && row.loan_count >= 1));
+assert.equal(riskReport.model_registry.find((model) => model.model_id === 'archive-collection-risk-challenger')?.status, 'shadow_only');
+assert.equal(riskReport.model_registry.find((model) => model.model_id === 'archive-collection-risk-challenger')?.connected, false);
+assert.ok((riskReport.model_registry.find((model) => model.model_id === 'archive-collection-risk-challenger')?.promotion_gates?.length ?? 0) >= 4);
+assert.equal('member_name' in riskReport, false);
+for (const [simulation, scenario] of [
+  ['crb','adverse_history'], ['biometrics','uncertain'], ['payment_rail','pending'],
+  ['regulatory_return','monthly_mfi'], ['ml_shadow','synthetic_portfolio_batch'],
+] as const) {
+  const mock = await call<{ sandbox_only: boolean; real_provider_called: boolean; production_side_effects: boolean; real_customer_data_used: boolean; result: any }>(
+    creditManager, 'POST', `${base}/sandbox/${simulation}`, { scenario }, 201,
+  );
+  assert.equal(mock.sandbox_only, true);
+  assert.equal(mock.real_provider_called, false);
+  assert.equal(mock.production_side_effects, false);
+  assert.equal(mock.real_customer_data_used, false);
+  if (simulation === 'ml_shadow') {
+    assert.equal(mock.result.production_status, 'disconnected_shadow_only');
+    assert.equal(mock.result.rows.length, 4);
+  }
+}
+assert.equal((await call<Array<{ simulation: string }>>(creditManager, 'GET', `${base}/sandbox/runs`)).length >= 5, true);
+await call(teller, 'GET', `${base}/sandbox/runs`, undefined, 403);
+await call(teller, 'GET', `${base}/reports/credit-risk`, undefined, 403);
+await call(creditManager, 'GET', `/mfi/institutions/${otherInstitution.id}/reports/credit-risk`, undefined, 404);
 const installments = await call<Array<{ id: string; status: string; principal_due: string }>>(admin, 'GET', `${base}/loans/${loan.id}/installments`);
 assert.equal(installments.length, 6);
 assert.equal(installments.reduce((sum, row) => sum + Math.round(Number(row.principal_due) * 100), 0), 100000);
@@ -276,6 +319,11 @@ const pricedDisbursement = await call<{ quote: { total_interest: string; origina
 assert.equal(pricedDisbursement.quote.origination_fee, '10.00');
 assert.equal(pricedDisbursement.net_disbursed, '990.00');
 assert.ok(Number(pricedDisbursement.quote.total_interest) > 0);
+await call(admin, 'POST', `${base}/loans`, {
+  member_id: member.id, product_code: productTerms.product_code, principal_amount: '1000.00', term_months: 6,
+  purpose: 'Verify an active loan prevents a concurrent synthetic UAT application',
+  monthly_income: '10000.00', monthly_expenses: '1000.00', monthly_debt: '0.00',
+}, 409);
 const pricedInstallments = await call<Array<{ principal_due: string; interest_due: string }>>(
   admin, 'GET', `${base}/loans/${pricedLoan.id}/installments`,
 );
@@ -333,6 +381,7 @@ console.log(JSON.stringify({
     'withdrawal and four-eyes reversal', 'loan application, independent approval and disbursement',
     'credit policy maker-checker, affordability scoring, and role-based personal/financial-data visibility', 'principal-only origination schedule',
     'loan product maker-checker, immutable application terms, priced origination fee, and reducing-balance schedule',
+    'active-loan concurrent application eligibility gate',
     'partial repayment reversal and principal balance recalculation', 'policy-threshold NPL classification and independent approval',
     'collection promise and resolution lifecycle',
     'principal repayment and overpayment rejection', 'four-eyes loan write-off, loss journal, waived schedule and post-loss credit hold', 'balanced ledger and audit trail',

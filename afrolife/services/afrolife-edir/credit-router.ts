@@ -36,6 +36,10 @@ function requireStaffRole(roles: string[], message: string): RequestHandler {
   );
 }
 
+function requirePlatformAdmin(message: string): RequestHandler {
+  return (req, _res, next) => next(platformAdmin(req.user!) ? undefined : new HttpError(403, message));
+}
+
 async function audit(client: PoolClient, actorId: string, action: string, entityId: string, detail: unknown) {
   await client.query(
     `INSERT INTO edir_audit_logs (actor_id, action, entity, entity_id, new_value)
@@ -101,12 +105,54 @@ edirCreditRouter.post('/disbursement-limits/:versionId/decision',requireStaffRol
   res.json(row);
 }));
 
+edirCreditRouter.get('/platform-disbursement-limits',requirePlatformAdmin('Platform disbursement limit administration access is required'),h(async(req,res)=>{
+  const rows=await withUser(req.user!,async(client)=>(await client.query(
+    `SELECT id,version,daily_limit::text,status,change_reason,created_by,reviewed_by,reviewed_at,review_reason,created_at
+     FROM edir_platform_disbursement_limit_versions ORDER BY version DESC LIMIT 100`,
+  )).rows);
+  res.json(rows);
+}));
+
+edirCreditRouter.post('/platform-disbursement-limits',requirePlatformAdmin('Platform disbursement limit administration access is required'),h(async(req,res)=>{
+  const body=z.object({daily_limit:z.union([positiveMoney,z.null()]),change_reason:reason}).strict().parse(req.body);
+  const row=await withUser(req.user!,async(client)=>{
+    await client.query('SELECT pg_advisory_xact_lock(779819,1)');
+    if((await client.query("SELECT 1 FROM edir_platform_disbursement_limit_versions WHERE status='pending'")).rowCount)
+      throw new HttpError(409,'Review the pending platform disbursement limit proposal first');
+    const version=Number((await client.query('SELECT coalesce(max(version),0)+1 AS version FROM edir_platform_disbursement_limit_versions')).rows[0].version);
+    const created=(await client.query(`INSERT INTO edir_platform_disbursement_limit_versions(version,daily_limit,change_reason,created_by)
+      VALUES($1,$2,$3,$4) RETURNING id,version,daily_limit::text,status,change_reason,created_by,created_at`,
+      [version,body.daily_limit,body.change_reason,req.user!.id])).rows[0];
+    await audit(client,req.user!.id,'edir_platform_disbursement_limit_submitted',created.id,{version,daily_limit:body.daily_limit,change_reason:body.change_reason});
+    return created;
+  });
+  res.status(201).json(row);
+}));
+
+edirCreditRouter.post('/platform-disbursement-limits/:versionId/decision',requirePlatformAdmin('Platform disbursement limit administration access is required'),h(async(req,res)=>{
+  const id=z.string().uuid().parse(req.params.versionId);
+  const body=z.object({decision:z.enum(['approve','reject']),reason}).strict().parse(req.body);
+  const row=await withUser(req.user!,async(client)=>{
+    await client.query('SELECT pg_advisory_xact_lock(779819,1)');
+    const pending=(await client.query("SELECT * FROM edir_platform_disbursement_limit_versions WHERE id=$1 AND status='pending' FOR UPDATE",[id])).rows[0];
+    if(!pending)throw new HttpError(404,'Pending platform disbursement limit proposal not found');
+    if(pending.created_by===req.user!.id)throw new HttpError(403,'The platform limit author cannot approve their own proposal');
+    if(body.decision==='approve')await client.query("UPDATE edir_platform_disbursement_limit_versions SET status='superseded' WHERE status='active'");
+    const updated=(await client.query(`UPDATE edir_platform_disbursement_limit_versions SET status=$2,reviewed_by=$3,reviewed_at=now(),review_reason=$4
+      WHERE id=$1 RETURNING id,version,daily_limit::text,status,reviewed_by,reviewed_at,review_reason`,
+      [id,body.decision==='approve'?'active':'rejected',req.user!.id,body.reason])).rows[0];
+    await audit(client,req.user!.id,`edir_platform_disbursement_limit_${body.decision}d`,id,{version:pending.version,status:updated.status,reason:body.reason});
+    return updated;
+  });
+  res.json(row);
+}));
+
 edirCreditRouter.post('/members/:memberId/risk-flags',requireStaffRole(['edir_admin','credit_manager','compliance'],'Edir member risk control access is required'),h(async(req,res)=>{
   const memberId=z.string().uuid().parse(req.params.memberId);
   const body=z.object({category:z.enum(['identity_mismatch','suspicious_activity','fraud','aml_hold','delinquency_restriction']),reason:z.string().trim().min(10).max(2000)}).strict().parse(req.body);
   const flag=await withUser(req.user!,async(client)=>{
-    const member=(await client.query('SELECT id FROM edir_memberships WHERE id=$1 FOR UPDATE',[memberId])).rows[0];
-    if(!member)throw new HttpError(404,'Edir member not found');
+    const lock=(await client.query('SELECT edir_lock_member_credit_controls($1) AS locked',[memberId])).rows[0].locked;
+    if(!lock)throw new HttpError(404,'Edir member not found');
     const row=(await client.query(`INSERT INTO edir_member_risk_flags(member_id,category,reason,created_by)
       VALUES($1,$2,$3,$4) RETURNING id,member_id,category,reason,status,created_at`,
       [memberId,body.category,body.reason,req.user!.id])).rows[0];
@@ -122,7 +168,7 @@ edirCreditRouter.post('/risk-flags/:flagId/decision',requireStaffRole(['edir_adm
   const flag=await withUser(req.user!,async(client)=>{
     const current=(await client.query('SELECT * FROM edir_member_risk_flags WHERE id=$1 FOR UPDATE',[id])).rows[0];
     if(!current)throw new HttpError(404,'Member risk flag not found');
-    await client.query('SELECT id FROM edir_memberships WHERE id=$1 FOR UPDATE',[current.member_id]);
+    await client.query('SELECT edir_lock_member_credit_controls($1)',[current.member_id]);
     if(current.created_by===req.user!.id)throw new HttpError(403,'The flag author cannot review or release their own risk flag');
     let row;
     if(body.decision==='release'){
@@ -376,6 +422,7 @@ edirCreditRouter.post('/applications', h(async (req, res) => {
       `SELECT id,status,activated_at,kyc_status FROM edir_memberships WHERE user_id=$1`, [req.user!.id],
     )).rows[0];
     if (!member || member.status !== 'active') throw new HttpError(403, 'An active Edir membership is required to request credit');
+    await client.query('SELECT edir_lock_member_credit_controls($1)',[member.id]);
     if(member.kyc_status!=='verified')throw new HttpError(409,'Edir member KYC must be independently verified before applying for credit');
     if ((await client.query('SELECT edir_member_has_active_risk_hold($1) AS held',[member.id])).rows[0].held) {
       throw new HttpError(409,'An active Edir risk hold prevents new credit applications');
@@ -780,6 +827,7 @@ edirCreditRouter.post('/applications/:applicationId/accept', h(async (req, res) 
       [applicationId, req.user!.id],
     )).rows[0];
     if (!row) throw new HttpError(404, 'Edir loan offer was not found for this member');
+    await client.query('SELECT edir_lock_member_credit_controls($1)',[row.member_id]);
     const existing = (await client.query(
       `SELECT loan.id,loan.status,loan.principal_amount::text,loan.term_months,
               loan.member_account_id,loan.principal_repaid::text,loan.disbursed_at,
@@ -1142,7 +1190,12 @@ edirCreditRouter.post('/operations/:operationId/decision',
         throw new HttpError(409, 'The write-off must cover the full current Edir principal balance');
       }
       if (current.operation_type === 'disbursement') {
+        await client.query('SELECT edir_lock_member_credit_controls($1)',[current.member_id]);
         await client.query('SELECT id FROM edir_organizations WHERE id=$1 FOR UPDATE',[req.user!.edir_id??'00000000-0000-4000-8000-000000000002']);
+        const capAllows=(await client.query(
+          'SELECT edir_platform_disbursement_cap_allows($1) AS allowed',[current.id],
+        )).rows[0].allowed;
+        if(!capAllows)throw new HttpError(409,'The approved platform-wide daily disbursement limit would be exceeded');
       }
       if (body.decision === 'approved' && current.operation_type === 'disbursement'
           && (await client.query('SELECT edir_member_has_active_risk_hold($1) AS held',[current.member_id])).rows[0].held) {

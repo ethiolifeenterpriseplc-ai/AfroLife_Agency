@@ -11,6 +11,13 @@ browser JavaScript syntax and application JSON configuration, compiles the
 TypeScript API, and runs the database-independent unit suite. A green workflow
 is necessary for a change; it does not establish production readiness.
 
+Role activity defaults are maintained in the application catalog and mirrored
+in migration `057_role_activity_defaults.sql` for PostgreSQL row-level
+security. The unit suite checks that both grant sets match and that request
+overrides take precedence. Verify role visibility and write restrictions on a
+fresh disposable database using its restricted runtime role before accepting
+role-access changes; never substitute a production or shared development DB.
+
 For local role-based workflow checks, `npm run seed:local-test-users` creates
 synthetic accounts for every AfroLife app role and stores random credentials
 outside the repository under `%LOCALAPPDATA%\AfroLife\local-test-users.txt`.
@@ -39,12 +46,22 @@ mobile/tablet/desktop horizontal overflow. Set
 The SACCO workspace shows service submodules, readiness and accountable roles;
 administrator-only configuration shortcuts are presented only to administrators.
 
-The browser smoke check does not establish accessibility conformance. Use
+The browser smoke now checks the login and Super Admin overview for document
+language, a single visible main heading, accessible names on visible controls,
+and alternative text on visible images. It still does not establish
+accessibility conformance. Use
 `SACCO_STANDARDS_ALIGNMENT.md` as the release checklist for a version-pinned
 OWASP ASVS assessment, WCAG 2.2 AA review, consumer-protection review, AML/CFT
 applicability, accounting validation, and jurisdiction-specific regulatory
 mapping. Record independent reviewer, scope, findings, remediation, and retest
 evidence for the actual deployment.
+
+For a bounded local performance smoke, run `npm run perf:v7:local`. It targets
+only loopback addresses, defaults to 500 requests at 25 concurrent workers
+against `/healthz`, and reports p50/p95/p99, status counts and failures. Use
+the workload and service targets in `V7_RELEASE_BASELINES_AND_POLICY.md` to
+design a representative staging test; do not treat this local health probe as
+a capacity or production SLO report.
 
 Integration tests write to a database. Run them only against an isolated,
 disposable database, never production or a shared user-data database. Provision
@@ -52,21 +69,56 @@ the test database and API runtime separately, then follow the integration test
 setup in the README. Save the migration result and test output with the release
 record.
 
+The agency API UAT covers the in-place lease workflow: draft, independent
+approval, tenant/owner signature-evidence files, and activation only after
+handover and move-in inspection. It also checks the legacy immediate-activation
+route for compatibility in non-production and verifies that an explicit
+`LEGACY_IMMEDIATE_LEASES_ENABLED=0` setting rejects that route. Signature files
+are not identity verification or proof of a legally valid electronic
+signature. Run these checks after migrations through the release migration on
+the same disposable schema as the API.
+
+Lease notice records are operational evidence only. Integration UAT verifies
+that notice creation requires lease-management permission, replays with the
+same idempotency key do not duplicate the record, conflicting replays fail,
+records are append-only, and recording a notice does not alter lease status.
+This does not verify legal service or notice-period compliance.
+
 ## Release evidence
 
 For each release candidate, record the commit or source archive checksum, build
 version, migration set, operator, date, and results below. Do not mark a gate
 complete from a local development check alone.
 
+- [ ] Apply the Ethiopia market defaults and owner-approval gates in
+  [ETHIOPIAN_MARKET_RELEASE_DECISIONS_2026-10-14.md](ETHIOPIAN_MARKET_RELEASE_DECISIONS_2026-10-14.md).
+  The document records conservative platform decisions, not legal advice,
+  provider authorization or production acceptance.
+- [ ] Assign and exercise the incident, service-identity rotation, recovery,
+  financial-integrity and release procedures in
+  [PRODUCTION_OPERATIONS_RUNBOOK.md](PRODUCTION_OPERATIONS_RUNBOOK.md).
+- [ ] Create a service-identity inventory and rotate at least one non-production
+  credential using the documented procedure. Confirm `service_identities` exists
+  in the schema and that the inventory records owner, environment, expiry and
+  rotation evidence.
+- [ ] Produce an owner rent-statement and reconciliation export for at least
+  one property owner using `/owners/:id/rent-statement` and reconcile a pending
+  receipt into the ledger using the existing `rent-transactions` flow. Attach
+  the CSV/JSON outputs to the release record.
 - [ ] CI checks pass for the exact release source.
 - [ ] All migrations apply to a fresh staging database and an upgrade copy of
   the prior schema; schema version and migration logs are recorded.
+- [ ] Role activity SQL defaults match the application catalog, and database
+  checks verify default grants, explicit denials, Super Admin-only updates,
+  learning-content audience isolation, and append-only access audits.
 - [ ] Integration scenarios pass against disposable staging data, including
   sign-up/activation, role boundaries, RLS isolation, four-eyes approval,
-  contract and rent ledger flows, refunds, private upload authorization, and
-  MFI transaction reversal. Also verify authenticated session inactivity
-  expiry, absolute expiry, logout revocation, and session replacement after
-  password or MFA changes.
+  lease draft-to-activation workflow and production-default legacy-route
+  rejection, scoped/idempotent append-only notice capture without implied
+  legal effect, contract and rent ledger flows, refunds, private upload
+  authorization, and MFI transaction reversal. Also verify authenticated
+  session inactivity expiry, absolute expiry, logout revocation, and session
+  replacement after password or MFA changes.
 - [ ] The test API and fixture database use the exact same disposable schema
   migrated through the release's latest migration. Confirm runtime role
   identity and explicit central Insurance table/sequence privileges before

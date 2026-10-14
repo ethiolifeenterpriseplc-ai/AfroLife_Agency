@@ -150,13 +150,17 @@ test('verification: an expired police clearance does not count', async () => {
   assert.match(r.body.error, /police_clearance/);
 });
 
-test('matching: a request is created from a lead; candidates are central-staff only', async () => {
+test('matching: agents can manage candidates only within their own team scope', async () => {
   const lead = await call(fb, 'POST', '/leads', { lead_type: 'household', name: 'Employer ' + run, phone: `+2511${run}8` });
   assert.equal(lead.status, 201);
   const r = await call(fb, 'POST', '/requests', { lead_id: lead.body.id, sector: SECTOR, skills_required: ['cooking', 'cleaning'], languages_required: ['amharic'], min_experience: 2, rate_offered: 10000, territory_id: areaA });
   assert.equal(r.status, 201);
   request = r.body;
-  assert.equal((await call(fb, 'GET', `/requests/${request.id}/candidates`)).status, 403);
+  const fieldCandidates = await call(fb, 'GET', `/requests/${request.id}/candidates`);
+  assert.equal(fieldCandidates.status, 200);
+  assert.deepEqual(fieldCandidates.body, []);
+  assert.equal((await call(fa, 'GET', `/requests/${request.id}/candidates`)).status, 404);
+  assert.equal((await call(fb, 'GET', `/requests/${request.id}/matches`)).status, 200);
 });
 
 test('matching: only verified, available workers are candidates, ranked by score', async () => {
@@ -166,6 +170,9 @@ test('matching: only verified, available workers are candidates, ranked by score
   const ids = c.body.map((x: any) => x.worker_id);
   assert.deepEqual(ids, [w1.id]); // w2 (expired document) and w3 (unverified) are excluded
   assert.equal(c.body[0].score, 100);
+  const masterCandidates = await call(master, 'GET', `/requests/${request.id}/candidates`);
+  assert.equal(masterCandidates.status, 200);
+  assert.deepEqual(masterCandidates.body.map((candidate: any) => candidate.worker_id), [w1.id]);
 });
 
 test('matching: Global Admin can make verified certificates an additional eligibility requirement', async () => {
@@ -185,16 +192,17 @@ test('matching: Global Admin can make verified certificates an additional eligib
   }
 });
 
-test('matching: unverified workers cannot be proposed; a verified one can, once', async () => {
+test('matching: agents can propose eligible workers while the server rejects ineligible workers', async () => {
   assert.equal((await call(admin, 'POST', `/requests/${request.id}/matches`, { worker_id: w3.id })).status, 409);
-  const m = await call(admin, 'POST', `/requests/${request.id}/matches`, { worker_id: w1.id });
+  assert.equal((await call(fb, 'POST', `/requests/${request.id}/matches`, { worker_id: w1.id })).status, 409);
+  const m = await call(master, 'POST', `/requests/${request.id}/matches`, { worker_id: w1.id });
   assert.equal(m.status, 201);
   assert.equal(Number(m.body.score), 100);
   match = m.body;
-  assert.equal((await call(admin, 'POST', `/requests/${request.id}/matches`, { worker_id: w1.id })).status, 409);
+  assert.equal((await call(master, 'POST', `/requests/${request.id}/matches`, { worker_id: w1.id })).status, 409);
 });
 
-test('matching: acceptance rechecks live requirements and proposal notice contains no worker details', async () => {
+test('matching: agent acceptance rechecks live requirements and proposal notice contains no worker details', async () => {
   const notice = await db.query(
     "SELECT channel, payload FROM notifications WHERE user_id=$1 AND template='staffing_match_status' AND payload->>'match_id'=$2 AND payload->>'status'='proposed'",
     [fb.id, match.id],
@@ -208,7 +216,7 @@ test('matching: acceptance rechecks live requirements and proposal notice contai
     assert.equal((await call(globalAdmin, 'PATCH', '/business-rules', {
       values: { worker_requires_certificate: 1 },
     })).status, 200);
-    const stale = await call(admin, 'POST', `/matches/${match.id}/respond`, { decision: 'accepted' });
+    const stale = await call(master, 'POST', `/matches/${match.id}/respond`, { decision: 'accepted' });
     assert.equal(stale.status, 409);
     assert.match(stale.body.error, /current verification|document requirements/i);
   } finally {
@@ -226,7 +234,7 @@ test('database trigger: even a direct insert cannot match an unverified worker',
 });
 
 test('matching: accepting a match marks the request matched; it cannot be answered twice', async () => {
-  assert.equal((await call(admin, 'POST', `/matches/${match.id}/respond`, { decision: 'accepted' })).status, 200);
+  assert.equal((await call(master, 'POST', `/matches/${match.id}/respond`, { decision: 'accepted' })).status, 200);
   const reqs = await call(fb, 'GET', '/requests');
   assert.equal(reqs.body.find((x: any) => x.id === request.id).status, 'matched');
   const workers = await call(fa, 'GET', '/workers');
@@ -235,17 +243,80 @@ test('matching: accepting a match marks the request matched; it cannot be answer
     lead_id: request.lead_id, sector: SECTOR, skills_required: ['cooking'], rate_offered: 10000, territory_id: areaA,
   });
   assert.equal(nextRequest.status, 201);
-  const candidates = await call(admin, 'GET', `/requests/${nextRequest.body.id}/candidates`);
+  const candidates = await call(master, 'GET', `/requests/${nextRequest.body.id}/candidates`);
   assert.ok(!candidates.body.some((x: any) => x.worker_id === w1.id));
-  const released = await call(admin, 'POST', `/matches/${match.id}/release`, { availability: 'within_2_weeks' });
+  const released = await call(master, 'POST', `/matches/${match.id}/release`, { availability: 'within_2_weeks' });
   assert.equal(released.status, 200);
   assert.equal(released.body.availability, 'within_2_weeks');
-  const restored = await call(admin, 'GET', `/requests/${nextRequest.body.id}/candidates`);
+  const restored = await call(master, 'GET', `/requests/${nextRequest.body.id}/candidates`);
   assert.ok(restored.body.some((x: any) => x.worker_id === w1.id));
   const reopened = await call(fb, 'GET', '/requests');
   assert.equal(reopened.body.find((x: any) => x.id === request.id).status, 'open');
-  assert.equal((await call(admin, 'POST', `/matches/${match.id}/release`, { availability: 'immediate' })).status, 409);
-  assert.equal((await call(admin, 'POST', `/matches/${match.id}/respond`, { decision: 'declined' })).status, 409);
+  assert.equal((await call(master, 'POST', `/matches/${match.id}/release`, { availability: 'immediate' })).status, 409);
+  assert.equal((await call(master, 'POST', `/matches/${match.id}/respond`, { decision: 'declined' })).status, 409);
+});
+
+test('agents can submit scoped rent/deposit payments for reconciliation but cannot reconcile or refund them', async () => {
+  const property = (await db.query(
+    `INSERT INTO properties (address, ptype, territory_id, source_agent_id, created_by)
+     VALUES ($1,'house',$2,$3,$3) RETURNING id`,
+    [`Agent rent flow ${run}`, areaA, fa.id],
+  )).rows[0];
+  const unit = (await db.query(
+    "INSERT INTO property_units (property_id, unit_no, ptype) VALUES ($1,$2,'house') RETURNING id",
+    [property.id, `Rent-${run}`],
+  )).rows[0];
+  const tenant = (await db.query(
+    'INSERT INTO tenants (name, phone, source_agent_id) VALUES ($1,$2,$3) RETURNING id',
+    [`Rent tenant ${run}`, `+2515${run}1`, fa.id],
+  )).rows[0];
+  const lease = (await db.query(
+    `INSERT INTO leases (unit_id, tenant_id, rent, deposit, start_date, end_date, source_agent_id, status)
+     VALUES ($1,$2,10000,1000,current_date,(current_date + interval '1 year')::date,$3,'active') RETURNING id`,
+    [unit.id, tenant.id, fa.id],
+  )).rows[0];
+  const charge = (await db.query(
+    `INSERT INTO rent_charges (lease_id, period, due_on, amount)
+     VALUES ($1,date_trunc('month',current_date)::date,current_date,10000) RETURNING id`,
+    [lease.id],
+  )).rows[0];
+
+  const rent = await call(fa, 'POST', `/charges/${charge.id}/pay`, {
+    reference: `agent-rent-${run}`, channel: 'manual',
+  });
+  assert.equal(rent.status, 200);
+  assert.equal(rent.body.status, 'pending');
+  assert.equal(rent.body.kind, 'rent');
+  assert.equal((await call(fb, 'POST', `/charges/${charge.id}/pay`, {
+    reference: `sibling-rent-${run}`, channel: 'manual',
+  })).status, 409);
+  assert.equal((await call(fa, 'POST', `/rent-transactions/${rent.body.id}/reconcile`, {})).status, 403);
+  assert.equal((await call(fa, 'POST', `/rent-transactions/${rent.body.id}/void`, {
+    reason: 'Agent cannot void recorded payments.',
+  })).status, 403);
+  const stillDue = await db.query('SELECT status FROM rent_charges WHERE id=$1', [charge.id]);
+  assert.equal(stillDue.rows[0].status, 'due');
+
+  const deposit = await call(fa, 'POST', `/leases/${lease.id}/deposit/pay`, {
+    reference: `agent-deposit-${run}`, channel: 'manual',
+  });
+  assert.equal(deposit.status, 201);
+  assert.equal(deposit.body.status, 'pending');
+  assert.equal(deposit.body.kind, 'deposit');
+  assert.equal((await call(fa, 'POST', `/leases/${lease.id}/deposit/refund`, {
+    amount: 100, reference: `agent-refund-${run}`, channel: 'manual', reason: 'Agent cannot issue deposit refunds.',
+  })).status, 403);
+
+  const contractId = randomUUID();
+  const commissionId = randomUUID();
+  assert.equal((await call(fb, 'POST', `/contracts/${contractId}/transition`, {
+    action: 'record_payment', channel: 'cash', reference: `agent-${run}`, amount: 100,
+  })).status, 403);
+  assert.equal((await call(fb, 'POST', `/contracts/${contractId}/transition`, {
+    action: 'reconcile',
+  })).status, 403);
+  assert.equal((await call(fb, 'POST', `/commissions/${commissionId}/approve`, {})).status, 403);
+  assert.equal((await call(fb, 'POST', `/commissions/${commissionId}/pay`, {})).status, 403);
 });
 
 test('documents: wrong file types are refused; downloads are access-controlled', async () => {

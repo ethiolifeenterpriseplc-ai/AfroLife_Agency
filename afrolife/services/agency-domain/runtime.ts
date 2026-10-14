@@ -1,49 +1,53 @@
 import '../../src/env.js';
 import express from 'express';
 import { z } from 'zod';
+import type { Router } from 'express';
 import { assertAgencyDomainDatabaseReady, type AgencyDomain } from '../../src/domain-database-readiness.js';
 import { getCorrelationId, correlationIdMiddleware } from '../../src/request-context.js';
 import { verifyServiceAssertion } from '../../src/insurance-service-gateway.js';
 
 type SupplyDomain = AgencyDomain;
 
-const serviceConfig: Record<SupplyDomain, { name: string; secret: string; database: string }> = {
-  'worker-management': {
-    name: 'Worker Management',
-    secret: 'WORKER_MANAGEMENT_GATEWAY_SECRET',
-    database: 'WORKER_MANAGEMENT_DATABASE_URL',
+const serviceConfig: Record<SupplyDomain, { name: string; secrets: string[]; databases: string[] }> = {
+  'workforce-management': {
+    name: 'Workforce Management',
+    secrets: ['WORKFORCE_MANAGEMENT_GATEWAY_SECRET', 'WORKER_MANAGEMENT_GATEWAY_SECRET'],
+    databases: ['WORKFORCE_MANAGEMENT_DATABASE_URL', 'WORKER_MANAGEMENT_DATABASE_URL'],
   },
   staffing: {
     name: 'Staffing',
-    secret: 'STAFFING_GATEWAY_SECRET',
-    database: 'STAFFING_DATABASE_URL',
+    secrets: ['STAFFING_GATEWAY_SECRET'],
+    databases: ['STAFFING_DATABASE_URL'],
   },
   'property-management': {
     name: 'Property Management',
-    secret: 'PROPERTY_MANAGEMENT_GATEWAY_SECRET',
-    database: 'PROPERTY_MANAGEMENT_DATABASE_URL',
+    secrets: ['PROPERTY_MANAGEMENT_GATEWAY_SECRET'],
+    databases: ['PROPERTY_MANAGEMENT_DATABASE_URL'],
   },
   marketplace: {
     name: 'Marketplace',
-    secret: 'MARKETPLACE_GATEWAY_SECRET',
-    database: 'MARKETPLACE_DATABASE_URL',
+    secrets: ['MARKETPLACE_GATEWAY_SECRET'],
+    databases: ['MARKETPLACE_DATABASE_URL'],
   },
 };
 
-export async function startAgencyDomainService(domain: SupplyDomain, defaultPort: number): Promise<void> {
+export async function startAgencyDomainService(
+  domain: SupplyDomain,
+  defaultPort: number,
+  loadRouter: () => Promise<Router>,
+): Promise<void> {
   const config = serviceConfig[domain];
-  const secret = process.env[config.secret] ?? '';
+  const secret = config.secrets.map((key) => process.env[key]).find(Boolean) ?? '';
   if (secret.length < 32) {
-    throw new Error(`${config.secret} must contain at least 32 characters for the ${config.name} service`);
+    throw new Error(`${config.secrets.join(' or ')} must contain at least 32 characters for the ${config.name} service`);
   }
-  const databaseUrl = process.env[config.database];
+  const databaseUrl = config.databases.map((key) => process.env[key]).find(Boolean);
   if (!databaseUrl) {
-    throw new Error(`${config.database} must be configured for the ${config.name} service`);
+    throw new Error(`${config.databases.join(' or ')} must be configured for the ${config.name} service`);
   }
   process.env.DATABASE_URL = databaseUrl;
   const { assertRuntimeDatabaseSafety, HttpError, pool } = await import('../../src/core.js');
-  const serviceRouter = await loadDomainRouter(domain);
-
+  const serviceRouter = await loadRouter();
   const app = express();
   app.use(correlationIdMiddleware);
   app.use(express.json({ limit: '100kb' }));
@@ -74,6 +78,7 @@ export async function startAgencyDomainService(domain: SupplyDomain, defaultPort
       phone: user.phone,
       email: user.email,
       kyc_status: user.kycStatus,
+      rolePermissions: user.rolePermissions,
       edir_id: user.organizationId,
     };
     next();
@@ -105,18 +110,5 @@ export async function startAgencyDomainService(domain: SupplyDomain, defaultPort
   });
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => server.close(() => pool.end().finally(() => process.exit(0))));
-  }
-}
-
-async function loadDomainRouter(domain: SupplyDomain) {
-  switch (domain) {
-    case 'worker-management':
-      return (await import('../../src/worker-management.js')).router;
-    case 'staffing':
-      return (await import('../../src/staffing.js')).router;
-    case 'property-management':
-      return (await import('../../src/property-management.js')).router;
-    case 'marketplace':
-      return (await import('../../src/marketplace.js')).router;
   }
 }

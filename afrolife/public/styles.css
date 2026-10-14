@@ -26,7 +26,10 @@ button { cursor: pointer; }
 .brand { grid-area: brand; min-width: 0; line-height: 1.2; }
 .brand img { flex: 0 0 auto; }
 .brand > span { min-width: 0; }
-.brand small { display: block; margin-top: 2px; color: #87918d; font: 700 9px "DM Sans", sans-serif; letter-spacing: 1.6px; }
+.brand-copy { display: flex; flex-direction: column; gap: 3px; }
+.brand-name { color: var(--green-dark); font: 800 20px/1 Manrope, sans-serif; letter-spacing: -.65px; }
+.brand-agency { margin-left: 3px; color: var(--muted); font: 800 .48em/1 "DM Sans", sans-serif; letter-spacing: 1.1px; text-transform: uppercase; }
+.brand small { display: block; margin-top: 0; color: #66756f; font: 700 8px/1.2 "DM Sans", sans-serif; letter-spacing: 1.35px; }
 .account-tools { grid-area: account; display: flex; align-items: center; gap: 12px; }
 .account-name { color: #51635d; font-size: 13px; }
 .language-picker { grid-area: language; width: auto; margin: 0; }
@@ -49,6 +52,7 @@ main { width: min(1180px, calc(100% - 40px)); min-height: calc(100vh - 134px); m
 .service-card { min-height: 205px; display: flex; flex-direction: column; align-items: flex-start; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: white; color: inherit; text-decoration: none; transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
 .service-card:hover, .news-card:hover { transform: translateY(-2px); border-color: #b7cbb9; box-shadow: 0 12px 30px #172b270d; }
 .service-icon { display: grid; width: 38px; height: 38px; margin-bottom: 15px; place-items: center; border-radius: 11px; background: #edf4eb; color: var(--green); font-size: 22px; }
+.service-icon-image { display: block; object-fit: cover; box-shadow: 0 3px 10px rgba(16, 43, 39, .12); }
 .service-card strong { margin-bottom: 7px; color: var(--green-dark); font-size: 15px; }
 .service-card > span:not(.service-icon) { color: var(--muted); font-size: 12px; line-height: 1.65; }
 .service-card small { margin-top: auto; padding-top: 15px; color: #8a6928; font-size: 10px; font-weight: 700; }
@@ -128,6 +132,7 @@ textarea { min-height: 84px; resize: vertical; }
 .service-launcher-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
 .service-launcher-card { display: grid; align-content: start; gap: 9px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .service-launcher-card h3 { margin: 0; color: var(--green-dark); font-size: 13px; }
+.service-launcher-logo { width: 42px; height: 42px; border-radius: 11px; box-shadow: 0 4px 12px rgba(16, 43, 39, .12); }
 .service-launcher-card p { flex: 1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .service-launcher-card .button { justify-self: start; width: auto; min-height: 38px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
@@ -193,6 +198,7 @@ textarea { min-height: 84px; resize: vertical; }
 .mfi-module-status.status-pilot { background: #e6eee4; color: var(--green); }
 .mfi-module-status.status-partial { background: #fbf2df; color: #805e20; }
 .mfi-module-status.status-configurable { background: #e8f0fb; color: #315d89; }
+.mfi-module-status.status-sandbox { background: #e9eefc; color: #425a9a; }
 .mfi-submodule-area { display: grid; gap: 12px; margin-top: 18px; padding: 16px; box-shadow: none; }
 .mfi-submodule-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .mfi-submodule-copy h2 { margin: 0; font-size: 16px; }
@@ -216,6 +222,7 @@ textarea { min-height: 84px; resize: vertical; }
 .mfi-record { display: grid; gap: 10px; padding: 15px; box-shadow: none; }
 .mfi-record h3 { margin: 0; font-size: 13px; }
 .mfi-record p { margin: 4px 0 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.mfi-sandbox-result { max-height: 320px; overflow: auto; margin: 0; padding: 12px; border-radius: 8px; background: #f5f7f8; color: var(--ink); font-size: 10px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mfi-record-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .mfi-record-title { min-width: 0; }
 .mfi-status { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; background: #eef3ef; color: #436b59; font-size: 10px; text-transform: capitalize; }
@@ -281,6 +288,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
 @media (max-width: 650px) {
   .topbar { min-height: 68px; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand language" "install account"; gap: 8px 12px; padding: 10px 14px; }
   .brand { gap: 8px; font-size: clamp(12px, 3.5vw, 15px); letter-spacing: -.25px; }
+  .brand-name { font-size: 17px; }
   .brand img { width: 34px; height: 34px; }
   .brand small { font-size: 8px; letter-spacing: 1.15px; }
   .install-app { min-height: 34px; padding-inline: 10px; font-size: 11px; }
@@ -319,6 +327,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
 @media (max-width: 380px) {
   .topbar { padding-inline: 10px; column-gap: 7px; }
   .brand { font-size: 11px; }
+  .brand-name { font-size: 15px; }
   .brand img { width: 30px; height: 30px; }
   .language-picker select { min-width: 86px; }
 }
@@ -428,7 +437,8 @@ input:focus, select:focus, textarea:focus { border-color: #4e8b70; background: w
 .benefit-check strong { font-size: 12px; }
 .benefit-check small { font-size: 11px; }
 .page-heading { padding-block: clamp(28px, 4vw, 48px) 24px; }
-.page-heading h1 { color: var(--green-dark); font-size: clamp(25px, 3vw, 34px); letter-spacing: -.045em; }
+.page-heading h1 { display: flex; align-items: center; gap: 12px; color: var(--green-dark); font-size: clamp(25px, 3vw, 34px); letter-spacing: -.045em; }
+.page-mini-app-logo { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 12px; box-shadow: 0 5px 16px rgba(16, 43, 39, .12); }
 .stat-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
 .stat-card { min-height: 124px; padding: 20px; background: linear-gradient(150deg, #fff, #fbfcfa); }
 .stat-card span { font-size: 12px; }
@@ -559,4 +569,75 @@ footer { padding: 20px max(22px, calc((100vw - 1360px) / 2)); padding-block-end:
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Shared quality layer: calmer surfaces, legible data, and predictable controls. */
+:root {
+  --ink: #172b27;
+  --muted: #5d7068;
+  --green: #174b3d;
+  --green-dark: #102b27;
+  --gold: #d7ad59;
+  --paper: #f4f6f2;
+  --line: #dce4dd;
+  --surface-raised: #fff;
+  --focus-ring: #875c08;
+  --surface-shadow: 0 10px 30px rgba(16, 43, 39, .07);
+}
+
+html { scroll-padding-top: 1rem; }
+body { color: var(--ink); line-height: 1.55; }
+::selection { background: #dcebdd; color: var(--green-dark); }
+
+:focus-visible {
+  outline: 3px solid var(--focus-ring) !important;
+  outline-offset: 3px !important;
+  scroll-margin-block: 1rem;
+}
+
+.topbar { box-shadow: 0 2px 12px rgba(16, 43, 39, .035); }
+.panel, .list-card, .stat-card, .mfi-record, .mfi-metric {
+  border-color: var(--line);
+  box-shadow: var(--surface-shadow);
+}
+.page-heading h1, .section-heading h2 { letter-spacing: -.035em; }
+.page-heading p, .section-heading p { max-width: 68ch; line-height: 1.65; }
+.stat-card strong, .mfi-metric strong, .enterprise-metric strong {
+  font-variant-numeric: tabular-nums lining-nums;
+  overflow-wrap: anywhere;
+}
+input, select, textarea {
+  border-color: #b9c8bd;
+  border-radius: 10px;
+}
+input::placeholder, textarea::placeholder { color: #61746b; opacity: 1; }
+.button { min-height: 44px; }
+.card-actions .button, .property-actions .button { min-height: 44px; }
+.text-button { min-height: 44px; }
+.brand small, .fine-print, footer { color: var(--muted); }
+.eyebrow, .member-benefits .eyebrow, .service-card small, .news-card > span, .pill.warning {
+  color: var(--focus-ring);
+}
+.welcome-panel .eyebrow { color: #f0d48e; }
+a:not(.button):not(.brand):not(.service-card):not(.news-card) {
+  text-underline-offset: .18em;
+  text-decoration-thickness: .08em;
+}
+table { border-collapse: collapse; }
+th { color: #344a41; font-size: 12px; font-weight: 750; }
+td, th { line-height: 1.5; }
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .panel, .list-card, .stat-card, .mfi-record, .mfi-metric {
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+  .service-card:hover, .news-card:hover, .list-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 34px rgba(16, 43, 39, .1);
+  }
+}
+
+@media (forced-colors: active) {
+  :focus-visible { outline: 3px solid Highlight !important; }
+  .button, .panel, .list-card, .stat-card, .mfi-record, .mfi-metric { border: 1px solid CanvasText; }
 }

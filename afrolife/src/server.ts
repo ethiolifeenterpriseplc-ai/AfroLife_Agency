@@ -17,6 +17,7 @@ import { createInsuranceRequestsRouter } from './insurance-requests.js';
 import { createInsuranceRequestsServiceGateway, createInsuranceServiceGateway, createMfiServiceGateway, createPublicServiceGateway, createServiceGateway } from './insurance-service-gateway.js';
 import { loginRouter, adminRouter } from './admin.js';
 import { ops } from './ops.js';
+import { learningRouter } from './learning.js';
 import { privacy } from './privacy.js';
 import { notify } from './notify.js';
 import { paymentWebhook } from './webhooks.js';
@@ -116,12 +117,19 @@ api.get('/features', (_req, res) => res.json({
 api.use(adminRouter);
 api.use(privacy);
 api.use(ops);
-const agencyDomainGateway = (serviceName: string, urlKey: string, secretKey: string): RequestHandler => {
-  const baseUrl = process.env[urlKey];
+api.use(learningRouter);
+const agencyDomainGateway = (
+  serviceName: string,
+  urlKey: string,
+  secretKey: string,
+  legacyUrlKey?: string,
+  legacySecretKey?: string,
+): RequestHandler => {
+  const baseUrl = process.env[urlKey] ?? (legacyUrlKey ? process.env[legacyUrlKey] : undefined);
   if (baseUrl) {
     return createServiceGateway({
       baseUrl,
-      secret: process.env[secretKey] ?? '',
+      secret: process.env[secretKey] ?? (legacySecretKey ? process.env[legacySecretKey] : undefined) ?? '',
       servicePath: '/api/v1',
       serviceName,
       includeBaseUrl: true,
@@ -133,7 +141,11 @@ const agencyDomainGateway = (serviceName: string, urlKey: string, secretKey: str
 };
 
 const workerManagementGateway = agencyDomainGateway(
-  'Worker Management service', 'WORKER_MANAGEMENT_SERVICE_URL', 'WORKER_MANAGEMENT_GATEWAY_SECRET',
+  'Workforce Management service',
+  'WORKFORCE_MANAGEMENT_SERVICE_URL',
+  'WORKFORCE_MANAGEMENT_GATEWAY_SECRET',
+  'WORKER_MANAGEMENT_SERVICE_URL',
+  'WORKER_MANAGEMENT_GATEWAY_SECRET',
 );
 const staffingGateway = agencyDomainGateway(
   'Staffing service', 'STAFFING_SERVICE_URL', 'STAFFING_GATEWAY_SECRET',
@@ -196,8 +208,14 @@ if (runtimeConfig.mfiPilotEnabled) {
 api.post('/leads', requireRole(...AGENT), h(async (req, res) => {
   const b = z.object({ lead_type: z.enum(['household', 'business', 'worker', 'property']), name: z.string().min(2), phone: Phone }).parse(req.body);
   const row = await withUser(req.user!, async (c) => {
-    const r = await c.query('INSERT INTO leads (lead_type, name, phone, source_agent_id) VALUES ($1,$2,$3,$4) RETURNING *', [b.lead_type, b.name, b.phone, req.user!.id]);
-    await audit(c, req.user!.id, 'lead_created', 'lead', r.rows[0].id, null, b);
+    const protection = await c.query("SELECT value FROM config_rules WHERE key='lead_protection_days'");
+    const days = Number(protection.rows[0]?.value ?? 90);
+    if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('Lead protection rule is invalid');
+    const r = await c.query(
+      'INSERT INTO leads (lead_type, name, phone, source_agent_id, protected_until) VALUES ($1,$2,$3,$4,now()+make_interval(days => $5)) RETURNING *',
+      [b.lead_type, b.name, b.phone, req.user!.id, days],
+    );
+    await audit(c, req.user!.id, 'lead_created', 'lead', r.rows[0].id, null, { ...b, protected_until: r.rows[0].protected_until });
     return r.rows[0];
   });
   res.status(201).json(row);
@@ -205,6 +223,48 @@ api.post('/leads', requireRole(...AGENT), h(async (req, res) => {
 
 api.get('/leads', h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query('SELECT * FROM leads ORDER BY created_at DESC LIMIT 200')).rows));
+}));
+
+api.get('/leads/:id/attribution-history', h(async (req, res) => {
+  const events = await withUser(req.user!, async (c) => {
+    const lead = await c.query('SELECT id FROM leads WHERE id=$1', [req.params.id]);
+    if (!lead.rowCount) throw new HttpError(404, 'Lead not found');
+    return (await c.query(
+      `SELECT prior_agent_id,new_agent_id,actor_id,event_type,reason,created_at
+       FROM lead_attribution_history WHERE lead_id=$1 ORDER BY created_at,id`, [req.params.id],
+    )).rows;
+  });
+  res.json(events);
+}));
+
+api.post('/admin/leads/:id/reassign', requireRole('global_admin','super_admin'), h(async (req, res) => {
+  const body = z.object({ target_agent_id: z.string().uuid(), reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const lead = await withUser(req.user!, async (c) => {
+    const current = (await c.query('SELECT * FROM leads WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!current) throw new HttpError(404, 'Lead not found');
+    if (!['new','qualified','lost'].includes(current.status)) throw new HttpError(409, 'Converted leads cannot be reassigned');
+    const contract = await c.query('SELECT lead_has_non_cancelled_contract($1) AS has_contract', [current.id]);
+    if (contract.rows[0].has_contract) throw new HttpError(409, 'A lead with a non-cancelled contract cannot be reassigned');
+    const target = await c.query(
+      `SELECT a.id FROM agents a JOIN users u ON u.id=a.id
+       WHERE a.id=$1 AND u.active AND u.role IN ('master_agent','field_agent')`, [body.target_agent_id],
+    );
+    if (!target.rowCount) throw new HttpError(422, 'Choose an active master or field agent');
+    if (current.source_agent_id === body.target_agent_id) throw new HttpError(409, 'Lead already belongs to this agent');
+    const protection = await c.query("SELECT value FROM config_rules WHERE key='lead_protection_days'");
+    const days = Number(protection.rows[0]?.value ?? 90);
+    if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('Lead protection rule is invalid');
+    await c.query("SELECT set_config('app.lead_reassignment_reason',$1,true)", [body.reason]);
+    const updated = (await c.query(
+      'UPDATE leads SET source_agent_id=$2,protected_until=now()+make_interval(days => $3) WHERE id=$1 RETURNING *',
+      [current.id, body.target_agent_id, days],
+    )).rows[0];
+    await audit(c, req.user!.id, 'lead_reassigned', 'lead', current.id,
+      { source_agent_id: current.source_agent_id, protected_until: current.protected_until },
+      { source_agent_id: updated.source_agent_id, protected_until: updated.protected_until, reason: body.reason });
+    return updated;
+  });
+  res.json(lead);
 }));
 
 // ---- Contracts ----

@@ -11,7 +11,7 @@ WorkingDirectory=/opt/afrolife/app
 EnvironmentFile=/etc/afrolife/worker-management.env
 Environment=HOST=127.0.0.1
 Environment=PORT=3400
-ExecStart=/usr/bin/node /opt/afrolife/app/dist/services/worker-management/server.js
+ExecStart=/usr/bin/node /opt/afrolife/app/dist/services/workforce-management/server.js
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true

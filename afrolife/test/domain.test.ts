@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 // core.ts checks for a JWT secret at import time; the pool does not connect until used.
 process.env.JWT_SECRET = 'x'.repeat(32);
 const { feeSnapshot, commissionFor, initialAmount } = await import('../src/domain.js');
+const { validateBusinessRuleUpdates } = await import('../src/business-rules.js');
 
 const rules = {
   A_onboarding_pct: 20, A_guarantee_pct: 2, A_monthly_pct: 5,
@@ -47,4 +48,10 @@ test('rounds to cents', () => {
   const f = feeSnapshot('A', 33333, rules);
   assert.equal(f.onboarding_amt, 6666.6);
   assert.equal(f.guarantee_amt, 666.66);
+});
+
+test('lead ownership protection accepts configured bounds and rejects invalid periods', () => {
+  assert.deepEqual(validateBusinessRuleUpdates({ lead_protection_days: 90 }, {}), []);
+  assert.ok(validateBusinessRuleUpdates({ lead_protection_days: 0 }, {}).some((error) => error.includes('between 1 and 365')));
+  assert.ok(validateBusinessRuleUpdates({ lead_protection_days: 90.5 }, {}).some((error) => error.includes('too many decimal places')));
 });

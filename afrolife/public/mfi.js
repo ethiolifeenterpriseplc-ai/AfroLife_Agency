@@ -116,6 +116,8 @@ const mfiModules = [
   { id: 'reconciliation', label: 'Settlement & reconciliation', group: 'Financial control', status: 'planned', roles: ['institution_admin', 'finance_manager', 'compliance', 'auditor'], summary: 'Provider settlement and bank-statement reconciliation queues are not implemented.', requirements: ['Import or capture external statements and confirmations', 'Matching, exception ownership, investigation, and closure', 'Settlement state machine and aged exception reporting'] },
   { id: 'compliance', label: 'AML / CFT & compliance', group: 'Risk & assurance', status: 'partial', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'loan_officer', 'compliance', 'auditor'], summary: 'A limited member approval and audit view exists. AML/CFT screening, monitoring, case investigation, and filings are not implemented.', requirements: ['Watchlist, PEP, sanctions, and ongoing screening', 'Transaction monitoring, alerts, and investigations', 'CTR/STR preparation, approval, and filing evidence', 'Compliance decisions and regulatory-rule versioning'] },
   { id: 'risk-fraud', label: 'Credit policy & NPL', group: 'Risk & assurance', status: 'partial', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'compliance', 'auditor'], summary: 'Versioned credit and delinquency rules, maker-checker activation, risk classification events, and days-past-due visibility.', requirements: ['Provision calculation/posting and non-accrual accounting', 'Restructuring, write-off approval, and recoveries', 'CRB, fraud, concentration, and model governance'] },
+  { id: 'risk-analytics', label: 'Credit scoring & risk', group: 'Risk & assurance', status: 'partial', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'compliance', 'auditor'], summary: 'Institution-scoped scorecard coverage, score bands, and classified outstanding exposure, with clear model-use limitations.', requirements: ['Aggregate score monitoring', 'Approved policy and scorecard version coverage', 'Human-reviewed classifications and model governance'] },
+  { id: 'sandbox-lab', label: 'Sandbox integrations', group: 'Risk & assurance', status: 'sandbox', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'compliance', 'auditor'], summary: 'Synthetic simulations for bureau, identity, payment, regulatory, and challenger workflows. No real providers, members, decisions, submissions, or ledger postings.', requirements: ['Mock CRB and biometric outcomes', 'Simulated payment rail lifecycle', 'Illustrative regulatory return drafts', 'Synthetic shadow challenger pipeline'] },
   { id: 'regulatory', label: 'Regulatory reporting', group: 'Risk & assurance', status: 'planned', roles: ['institution_admin', 'finance_manager', 'compliance', 'auditor'], summary: 'No NBE regulatory returns or CTR/STR filing workflow is currently available.', requirements: ['Validated NBE regulatory returns', 'CTR/STR work queues and filing records', 'CRB enquiries/submissions and executive dashboards'] },
   { id: 'crm', label: 'CRM & member service', group: 'Member experience', status: 'planned', roles: ['institution_admin', 'finance_manager', 'credit_manager', 'loan_officer', 'teller', 'compliance', 'auditor'], summary: 'Member complaints, assignment, service-level tracking, and communication history are not implemented.', requirements: ['Complaint/case capture, ownership, escalation, and closure', 'Member interaction history and consent preferences', 'Complaint analytics and controlled notifications'] },
   { id: 'digital', label: 'Digital channels', group: 'Member experience', status: 'planned', roles: institutionRoles, summary: 'The staff workspace is not a member self-service channel; no USSD, member login, or mobile transaction channel is enabled.', requirements: ['Member authentication, balance, and mini-statement', 'Own-account transfers and loan tracking', 'USSD session and transaction-rule parity', 'Continuous session and device risk checks'] },
@@ -181,6 +183,17 @@ const mfiSubmodules = {
     { name: 'Operational overview', state: 'pilot', owner: 'Institution administrator / finance', description: 'Basic counts and balances for the institution.' },
     { name: 'Portfolio, liquidity and impact analytics', state: 'planned', owner: 'Finance / risk / leadership', description: 'Governed reports, forecasting, alerts and validated indicators are not implemented.' },
   ],
+  'risk-analytics': [
+    { name: 'Explainable policy scorecard', state: 'pilot', owner: 'Credit / institution leadership', description: 'Server-calculated affordability, savings, tenure and repayment-history factors under the active institution policy.' },
+    { name: 'Portfolio quality, score and aging analytics', state: 'pilot', owner: 'Credit / finance / compliance / auditor', description: 'Institution-scoped score outcomes, arrears aging, portfolio at risk and classified exposure without borrower-identifying fields.' },
+    { name: 'Model inventory and promotion gates', state: 'pilot', owner: 'Independent model-risk owner', description: 'Operational registry distinguishes the institution policy scorecard from the disconnected shadow challenger and displays prohibited uses and approval gates.' },
+  ],
+  'sandbox-lab': [
+    { name: 'CRB and biometric provider simulators', state: 'sandbox', owner: 'Compliance / institution administrator', description: 'Synthetic responses exercise clear, thin-file, adverse, match, uncertain, and no-match flows without querying a provider or creating KYC decisions.' },
+    { name: 'Payment rail lifecycle simulator', state: 'sandbox', owner: 'Finance / institution administrator', description: 'Synthetic success, pending, and failed responses exercise integration states without moving funds or posting ledger entries.' },
+    { name: 'Regulatory return draft simulator', state: 'sandbox', owner: 'Compliance / finance', description: 'Illustrative synthetic return totals exercise a draft workflow; no NBE/CTR/STR filing is generated or submitted.' },
+    { name: 'Synthetic challenger pipeline', state: 'sandbox', owner: 'Independent model-risk owner', description: 'Fixed-coefficient illustrative scoring runs only on named synthetic profiles. It is not trained, validated, or connected to underwriting.' },
+  ],
   accounting: [
     { name: 'Balanced journals and transaction reversals', state: 'pilot', owner: 'Finance manager / auditor', description: 'Append-only postings, idempotency and authorized reversal workflows.' },
     { name: 'General ledger close and reconciliation', state: 'planned', owner: 'Finance / auditor', description: 'Period close, suspense, subledger reconciliation, statements and controlled reopening are not implemented.' },
@@ -195,7 +208,7 @@ const mfiSubmodules = {
   ],
 };
 
-const submoduleStateLabels = { pilot: 'Pilot workflow', configurable: 'Configurable', planned: 'Backlog' };
+const submoduleStateLabels = { pilot: 'Pilot workflow', configurable: 'Configurable', planned: 'Backlog', sandbox: 'Synthetic sandbox' };
 
 function renderSubmodulePanel(module, state, root) {
   let entries = mfiSubmodules[module.id] ?? module.requirements.map((name) => ({
@@ -240,7 +253,7 @@ function renderSubmodulePanel(module, state, root) {
 
 export function createMfiWorkspace(api, user) {
   const root = $('div', undefined, 'mfi-workspace');
-  const state = { institutions: [], catalog: [], memberPortal: { applications: [], memberships: [] }, pendingApplications: [], institutionId: '', membership: null, overview: null, members: [], documents: [], accounts: [], products: [], loans: [], staff: [], audit: [], transactions: [], creditPolicy: null, collections: [], nplEvents: [], writeoffs: [], module: 'overview', moduleSearch: '', error: '', busy: false };
+  const state = { institutions: [], catalog: [], memberPortal: { applications: [], memberships: [] }, pendingApplications: [], institutionId: '', membership: null, overview: null, members: [], documents: [], accounts: [], products: [], loans: [], staff: [], audit: [], transactions: [], creditPolicy: null, creditRiskReport: null, sandboxRuns: [], collections: [], nplEvents: [], writeoffs: [], module: 'overview', moduleSearch: '', error: '', busy: false };
   const savedInstitution = localStorage.getItem('afrolife.mfi-institution');
 
   function hasRole(...roles) {
@@ -703,6 +716,135 @@ export function createMfiWorkspace(api, user) {
     area.append(list); root.append(area);
   }
 
+  function renderCreditRisk() {
+    const report = state.creditRiskReport;
+    const area = section('Credit scoring & risk management',
+      'A dedicated institution risk portal inside the EthioLife Super App. Reports are calculated from this institution’s records and approved policy; they do not replace staff review.');
+    if (!report) {
+      area.append($('p', 'Risk summary is unavailable. Confirm your institution access and try reloading.', 'alert error'));
+      root.append(area);
+      return;
+    }
+    const metrics = $('div', undefined, 'mfi-metrics');
+    for (const [label, value] of [
+      ['Loan applications', report.applications],
+      ['Scorecard assessments', report.assessed],
+      ['Unscored applications', report.unscored],
+      ['Applications approved or later', report.approved_or_later],
+      ['Rejected applications', report.rejected],
+      ['Scorecard versions used', report.policy_versions_used],
+    ]) {
+      const metric = $('div', undefined, 'mfi-metric panel');
+      metric.append($('span', label), $('strong', String(value ?? 0)));
+      metrics.append(metric);
+    }
+    area.append(metrics);
+
+    const governance = $('article', undefined, 'panel mfi-record');
+    governance.append($('h3', 'Scoring method and model governance'));
+    const policy = state.creditPolicy?.active;
+    governance.append($('p', policy
+      ? 'Active institution policy v' + policy.version + '. Minimum score ' + policy.policy.scorecard.minimum_score + '; maximum debt service ' + policy.policy.scorecard.maximum_debt_service_pct + '%.'
+      : 'No active credit policy is configured. New loan scoring and approval must remain unavailable until an institution-owned policy is approved.'));
+    governance.append($('p', report.scoring.output));
+    governance.append($('p', 'The supplied machine-learning challenger is not connected and remains shadow-only. It is not used to approve, decline, price, or prioritize borrowers.'));
+    for (const model of report.model_registry ?? []) {
+      const item = $('article', undefined, 'mfi-record');
+      item.append($('h4', `${model.model_id} · ${model.status.replaceAll('_', ' ')}`),
+        $('p', `${model.purpose} · ${model.connected ? 'Connected' : 'Not connected'} · ${model.version}`),
+        $('p', model.decision_control ?? `Prohibited uses: ${(model.prohibited_uses ?? []).join(', ')}.`));
+      if (model.promotion_gates?.length) item.append($('p', `Promotion gates: ${model.promotion_gates.join('; ')}.`));
+      governance.append(item);
+    }
+    area.append(governance);
+
+    const bands = $('section', undefined, 'panel mfi-record');
+    bands.append($('h3', 'Policy score distribution'));
+    bands.append($('p', 'Application records as of ' + report.as_of + '. A score band is a policy-score range, not a default-risk grade.'));
+    const bandList = $('div', undefined, 'mfi-record-list');
+    for (const row of report.score_bands ?? []) {
+      const item = $('article', undefined, 'mfi-record');
+      item.append($('h4', row.band === 'unscored' ? 'Not assessed' : 'Score ' + row.band),
+        $('p', row.application_count + ' applications' + (row.average_score === null ? '' : ' · average score ' + row.average_score)));
+      bandList.append(item);
+    }
+    if (!bandList.childElementCount) bandList.append($('p', 'No loan applications are available for this institution.', 'empty-state'));
+    bands.append(bandList);
+    area.append(bands);
+
+    const classifications = $('section', undefined, 'panel mfi-record');
+    classifications.append($('h3', 'Classified loan exposure'));
+    classifications.append($('p', 'Outstanding principal is grouped by the institution’s approved classification. The aging and PAR report remains available in Credit policy & NPL.'));
+    const classificationList = $('div', undefined, 'mfi-record-list');
+    for (const row of report.classifications ?? []) {
+      const item = $('article', undefined, 'mfi-record');
+      item.append($('h4', row.classification.replaceAll('_', ' ')),
+        $('p', row.loan_count + ' loans · ' + money(row.outstanding_principal) + ' principal outstanding'));
+      classificationList.append(item);
+    }
+    if (!classificationList.childElementCount) classificationList.append($('p', 'No disbursed loan exposure is available.', 'empty-state'));
+    classifications.append(classificationList);
+    area.append(classifications);
+
+    const portfolio = report.portfolio;
+    if (portfolio) {
+      const quality = $('section', undefined, 'panel mfi-record');
+      quality.append($('h3', 'Portfolio quality and arrears aging'),
+        $('p', `As of ${report.as_of}: ${portfolio.loans_past_due} of ${portfolio.disbursed_loans} disbursed loans are past due; PAR principal is ${money(portfolio.par_principal)} (${portfolio.par_ratio_pct}%). Overdue scheduled amounts: ${money(portfolio.overdue_installments)}.`));
+      const aging = $('div', undefined, 'mfi-record-list');
+      for (const bucket of portfolio.aging ?? []) {
+        const item = $('article', undefined, 'mfi-record');
+        item.append($('h4', bucket.bucket), $('p', `${bucket.loan_count} loans · ${money(bucket.outstanding_principal)} outstanding principal`));
+        aging.append(item);
+      }
+      quality.append(aging);
+      area.append(quality);
+    }
+    root.append(area);
+  }
+
+  function renderSandboxLab() {
+    const area = section('Provider and model sandbox', 'Exercise integration states with generated examples. Every record is synthetic and isolated from member profiles, credit decisions, regulatory submissions, providers, money movement, and the general ledger.');
+    const warning = $('p', 'SANDBOX ONLY · This page cannot contact external systems or trigger production actions. Results are demonstration fixtures, not verified provider responses or regulatory advice.', 'mfi-notice');
+    warning.setAttribute('role', 'note');
+    area.append(warning);
+    const definitions = [
+      { id: 'crb', title: 'Mock credit bureau', description: 'Synthetic clear-file, thin-file, and adverse-history responses.', scenarios: [['clear_file','Clear file'],['thin_file','Thin file'],['adverse_history','Adverse history']] },
+      { id: 'biometrics', title: 'Mock biometric verification', description: 'Synthetic match, manual-review, and no-match outcomes; no biometric template is collected.', scenarios: [['match','Match'],['uncertain','Needs manual review'],['no_match','No match']] },
+      { id: 'payment_rail', title: 'Mock payment rail', description: 'Simulated success, pending, and failed provider states; no funds or journal entries.', scenarios: [['success','Success'],['pending','Pending'],['failed','Failed']] },
+      { id: 'regulatory_return', title: 'Mock regulatory reporting', description: 'Synthetic monthly totals and suspicious-activity workflow summary; no filing is created.', scenarios: [['monthly_mfi','Monthly MFI return'],['suspicious_activity_summary','Suspicious-activity summary']] },
+      { id: 'ml_shadow', title: 'Synthetic model pipeline', description: 'Runs a fixed illustrative scoring transform on four synthetic decision-time profiles. This is not a trained or validated model and cannot access borrower data.', scenarios: [['synthetic_portfolio_batch','Run synthetic batch']] },
+    ];
+    const cards = $('div', undefined, 'mfi-record-list');
+    for (const definition of definitions) {
+      const card = $('article', undefined, 'panel mfi-record');
+      card.append($('h3', definition.title), $('p', definition.description));
+      const scenario = select('Scenario', 'scenario', definition.scenarios.map(([value,label]) => ({ value, label })));
+      const run = form('mfi-inline-form', scenario.label, submitButton('Run sandbox simulation'));
+      run.dataset.mfiForm = 'sandbox-simulation';
+      run.dataset.simulation = definition.id;
+      card.append(run);
+      cards.append(card);
+    }
+    area.append(cards);
+
+    const history = $('section', undefined, 'panel mfi-record');
+    history.append($('h3', 'Recent synthetic runs'));
+    if (!state.sandboxRuns.length) history.append($('p', 'No sandbox simulations have been run for this institution.', 'empty-state'));
+    for (const entry of state.sandboxRuns) {
+      const record = $('article', undefined, 'mfi-record');
+      const outcome = entry.result?.result ?? entry.result ?? {};
+      record.append($('h4', `${String(entry.simulation ?? outcome.simulation ?? 'simulation').replaceAll('_',' ')} · ${String(entry.scenario ?? outcome.scenario ?? '')}`),
+        $('p', `Synthetic fixture · ${new Date(entry.created_at).toLocaleString(document.documentElement.lang)} · No production side effects`));
+      const detail = $('pre', undefined, 'mfi-sandbox-result');
+      detail.textContent = JSON.stringify(outcome, null, 2);
+      record.append(detail);
+      history.append(record);
+    }
+    area.append(history);
+    root.append(area);
+  }
+
   function renderRisk() {
     const area = section('Credit risk and NPL classification', 'Aging comes from unpaid principal installments. Classification thresholds come from the approved institution policy; accounting provisions and write-offs require a separate controlled GL workflow.');
     area.id = 'mfi-credit-policy-settings';
@@ -931,6 +1073,8 @@ export function createMfiWorkspace(api, user) {
       credit: renderLoans,
       collections: renderCollections,
       'risk-fraud': renderRisk,
+      'risk-analytics': renderCreditRisk,
+      'sandbox-lab': renderSandboxLab,
       accounting: renderActivity,
       compliance: () => { renderMembers(); renderAudit(); },
       staff: renderStaff,
@@ -1017,7 +1161,7 @@ export function createMfiWorkspace(api, user) {
         link.dataset.moduleSearch = `${group} ${module.label}`.toLocaleLowerCase();
         link.setAttribute('aria-current', state.module === module.id ? 'page' : 'false');
         link.append($('span', module.label, 'mfi-module-name'),
-          $('span', module.status === 'pilot' ? 'Pilot' : module.status === 'partial' ? 'Partial' : 'Not live', `mfi-module-status status-${module.status}`));
+          $('span', module.status === 'pilot' ? 'Pilot' : module.status === 'partial' ? 'Partial' : module.status === 'sandbox' ? 'Sandbox' : 'Not live', `mfi-module-status status-${module.status}`));
         navigation.append(link);
       }
     }
@@ -1052,9 +1196,11 @@ export function createMfiWorkspace(api, user) {
       const canReadAudit = isPlatformAdmin(user.role) || ['institution_admin', 'finance_manager', 'compliance', 'auditor'].includes(membership?.role);
       const canReadCollections = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','loan_officer','compliance','auditor'].includes(membership?.role);
       const canReadNpl = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','compliance','auditor'].includes(membership?.role);
+      const canReadRisk = isPlatformAdmin(user.role) || ['institution_admin','finance_manager','credit_manager','compliance','auditor'].includes(membership?.role);
+      const canRunSandbox = canReadRisk;
       const canReviewDocs = isPlatformAdmin(user.role) || ['institution_admin','compliance','auditor'].includes(membership?.role);
       const canReviewApplications = isPlatformAdmin(user.role) || ['institution_admin','compliance'].includes(membership?.role);
-      const [overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs, pendingApplications] = await Promise.all([
+      const [overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, creditRiskReport, sandboxRuns, collections, nplEvents, documents, writeoffs, pendingApplications] = await Promise.all([
         api(`/mfi/institutions/${id}/overview`),
         api(`/mfi/institutions/${id}/members`),
         api(`/mfi/institutions/${id}/products`),
@@ -1064,13 +1210,15 @@ export function createMfiWorkspace(api, user) {
         api(`/mfi/institutions/${id}/transactions`),
         canReadAudit ? api(`/mfi/institutions/${id}/audit`) : Promise.resolve([]),
         api(`/mfi/institutions/${id}/credit-policy`),
+        canReadRisk ? api(`/mfi/institutions/${id}/reports/credit-risk`) : Promise.resolve(null),
+        canRunSandbox ? api(`/mfi/institutions/${id}/sandbox/runs`) : Promise.resolve([]),
         canReadCollections ? api(`/mfi/institutions/${id}/collections`) : Promise.resolve([]),
         canReadNpl ? api(`/mfi/institutions/${id}/npl-events`) : Promise.resolve([]),
         canReviewDocs ? api(`/mfi/institutions/${id}/documents?status=uploaded`) : Promise.resolve([]),
         canReadNpl ? api(`/mfi/institutions/${id}/writeoffs`) : Promise.resolve([]),
         canReviewApplications ? api(`/mfi/institutions/${id}/member-applications`) : Promise.resolve([]),
       ]);
-      Object.assign(state, { overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, collections, nplEvents, documents, writeoffs, pendingApplications });
+      Object.assign(state, { overview, members, products, accounts, loans, staff, transactions, audit, creditPolicy, creditRiskReport, sandboxRuns, collections, nplEvents, documents, writeoffs, pendingApplications });
     } catch (error) {
       state.error = error.message;
     }
@@ -1163,6 +1311,8 @@ export function createMfiWorkspace(api, user) {
         if (values.promised_amount) values.promised_amount = values.promised_amount.trim();
       } else if (target.dataset.mfiForm === 'close-collection') {
         path = `/mfi/institutions/${id}/collections/${encodeURIComponent(target.dataset.caseId)}/close`;
+      } else if (target.dataset.mfiForm === 'sandbox-simulation') {
+        path = `/mfi/institutions/${id}/sandbox/${encodeURIComponent(target.dataset.simulation)}`;
       } else if (target.dataset.mfiForm === 'disburse-loan') {
         path = `/mfi/institutions/${id}/loans/${encodeURIComponent(target.dataset.loanId)}/disburse`;
         values.idempotency_key = target.elements.idempotency_key.value;

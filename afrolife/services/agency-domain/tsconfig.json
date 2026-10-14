@@ -14,6 +14,7 @@
   },
   "include": [
     "*.ts",
+    "../workforce-management/*.ts",
     "../worker-management/*.ts",
     "../staffing/*.ts",
     "../property-management/*.ts",

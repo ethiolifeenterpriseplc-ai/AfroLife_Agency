@@ -248,7 +248,7 @@ test('domain gateway signs the original path under a mounted service prefix', as
     baseUrl: `http://127.0.0.1:${port}`,
     secret,
     servicePath: '/api/v1',
-    serviceName: 'Worker Management service',
+    serviceName: 'Workforce Management service',
     includeBaseUrl: true,
   }));
   const apiServer = api.listen(0, '127.0.0.1');

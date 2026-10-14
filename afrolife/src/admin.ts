@@ -4,7 +4,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { pool, withUser, requireRole, HttpError, JWT_SECRET, invalidateUser } from './core.js';
+import { pool, withUser, requireRole, HttpError, JWT_SECRET, invalidateUser, invalidateRolePermissions } from './core.js';
 import { normalizePhone } from './phone.js';
 import { Phone } from './validators.js';
 import { audit, feeSnapshot } from './domain.js';
@@ -15,6 +15,7 @@ import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
 import { sessionIdleTimeoutMinutes } from './runtime-config.js';
+import { ROLE_ACTIVITIES, ROLE_NAMES, getRoleActivity, hasRoleActivityAccess, type RoleName } from './role-activities.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
@@ -365,6 +366,126 @@ loginRouter.get('/auth/signup/documents', h(async (req, res) => {
 // ================= Signed-in: own account =================
 export const adminRouter = Router();
 
+const requireExactSuperAdmin: RequestHandler = (req, _res, next) =>
+  req.user?.role === 'super_admin'
+    ? next()
+    : next(new HttpError(403, 'Only a Super Admin can configure role activities.'));
+
+adminRouter.get('/role-access', requireExactSuperAdmin, h(async (req, res) => {
+  const configured = await withUser(req.user!, async (c) => (await c.query(
+    'SELECT role_name, activity_key, enabled FROM role_activity_permissions ORDER BY role_name, activity_key',
+  )).rows);
+  const overrides = Object.fromEntries(ROLE_NAMES.map((role) => [role, {} as Record<string, boolean>]));
+  for (const row of configured) overrides[row.role_name][row.activity_key] = row.enabled;
+  res.json({
+    roles: ROLE_NAMES.map((role) => ({ key: role, editable: role !== 'super_admin' })),
+    activities: ROLE_ACTIVITIES,
+    overrides,
+  });
+}));
+
+adminRouter.get('/role-access/history', requireExactSuperAdmin, h(async (req, res) => {
+  const query = z.object({
+    role: z.string().min(1).max(80).optional(),
+    activity: z.string().min(1).max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  }).strict().parse(req.query);
+  if (query.role && !ROLE_NAMES.includes(query.role as RoleName)) {
+    throw new HttpError(422, 'Unknown role.');
+  }
+  if (query.activity && !getRoleActivity(query.activity)) {
+    throw new HttpError(422, 'Unknown role activity.');
+  }
+  const history = await withUser(req.user!, async (c) => (await c.query(
+    `SELECT id, actor_id, role_name, activity_key, previous_enabled, new_enabled, changed_at
+     FROM role_activity_permission_audit
+     WHERE ($1::text IS NULL OR role_name=$1)
+       AND ($2::text IS NULL OR activity_key=$2)
+     ORDER BY changed_at DESC, id DESC LIMIT $3`,
+    [query.role ?? null, query.activity ?? null, query.limit],
+  )).rows);
+  res.json({ history });
+}));
+
+adminRouter.get('/users/:id/access-history', requireRole('super_admin', 'global_admin', 'compliance'), h(async (req, res) => {
+  const userId = z.string().uuid().parse(req.params.id);
+  const query = z.object({
+    at: z.string().datetime({ offset: true }).optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  }).strict().parse(req.query);
+  const result = await withUser(req.user!, async (c) => {
+    if (!(await c.query('SELECT 1 FROM users WHERE id=$1', [userId])).rowCount) {
+      throw new HttpError(404, 'User not found');
+    }
+    const history = (await c.query(
+      `SELECT id, previous_role, role_after AS current_role, previous_active, current_active,
+              actor_id, reason, baseline, changed_at
+       FROM user_access_history
+       WHERE user_id=$1 AND ($2::timestamptz IS NULL OR changed_at <= $2::timestamptz)
+       ORDER BY changed_at DESC, id DESC LIMIT $3`,
+      [userId, query.at ?? null, query.limit],
+    )).rows;
+    if (query.at && !history.length) {
+      throw new HttpError(422, 'Access history is unavailable for the requested time.');
+    }
+    return {
+      history,
+      state_at_time: query.at && history.length
+        ? { role: history[0].current_role, active: history[0].current_active, as_of: query.at }
+        : null,
+    };
+  });
+  res.json(result);
+}));
+
+adminRouter.patch('/role-access', requireExactSuperAdmin, h(async (req, res) => {
+  const body = z.object({
+    changes: z.array(z.object({
+      role: z.string().min(1).max(80),
+      activity: z.string().min(1).max(100),
+      enabled: z.boolean(),
+    }).strict()).min(1).max(300),
+  }).strict().parse(req.body);
+  const seen = new Set<string>();
+  for (const change of body.changes) {
+    if (!ROLE_NAMES.includes(change.role as RoleName) || change.role === 'super_admin') {
+      throw new HttpError(422, 'Super Admin access is fixed and cannot be edited here.');
+    }
+    if (!getRoleActivity(change.activity)) throw new HttpError(422, 'Unknown role activity.');
+    const pair = `${change.role}:${change.activity}`;
+    if (seen.has(pair)) throw new HttpError(422, 'A role activity may only be changed once per submission.');
+    seen.add(pair);
+  }
+
+  const changed = await withUser(req.user!, async (c) => {
+    let count = 0;
+    for (const change of body.changes) {
+      const previous = (await c.query(
+        'SELECT enabled FROM role_activity_permissions WHERE role_name=$1 AND activity_key=$2 FOR UPDATE',
+        [change.role, change.activity],
+      )).rows[0]?.enabled as boolean | undefined;
+      if (previous === change.enabled) continue;
+      await c.query(
+        `INSERT INTO role_activity_permissions (role_name, activity_key, enabled, updated_by)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (role_name, activity_key)
+         DO UPDATE SET enabled=EXCLUDED.enabled, updated_by=EXCLUDED.updated_by, updated_at=now()`,
+        [change.role, change.activity, change.enabled, req.user!.id],
+      );
+      await c.query(
+        `INSERT INTO role_activity_permission_audit
+           (actor_id, role_name, activity_key, previous_enabled, new_enabled)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [req.user!.id, change.role, change.activity, previous ?? null, change.enabled],
+      );
+      count += 1;
+    }
+    return count;
+  });
+  invalidateRolePermissions();
+  res.json({ changed });
+}));
+
 adminRouter.get('/auth/me', h(async (req, res) => {
   const r = await pool.query(`
     SELECT u.legal_name, u.role, u.kyc_status, u.mfa_enabled, u.whatsapp_opt_in, u.must_change_password,
@@ -376,7 +497,15 @@ adminRouter.get('/auth/me', h(async (req, res) => {
     FROM users u LEFT JOIN user_signups s ON s.user_id = u.id
     WHERE u.id = $1
   `, [req.user!.id]);
-  res.json({ ...r.rows[0], edir_id: req.user!.edir_id, session_idle_timeout_minutes: sessionIdleTimeoutMinutes(process.env) });
+  res.json({
+    ...r.rows[0],
+    edir_id: req.user!.edir_id,
+    session_idle_timeout_minutes: sessionIdleTimeoutMinutes(process.env),
+    role_activities: Object.fromEntries(ROLE_ACTIVITIES.map(({ key }) => [
+      key,
+      hasRoleActivityAccess(req.user!.role, key, req.user!.rolePermissions),
+    ])),
+  });
 }));
 
 adminRouter.get('/auth/session', (_req, res) => res.sendStatus(204));
@@ -551,6 +680,7 @@ async function decideGlobalAdminPromotion(req: Request, decision: 'approved' | '
       throw new HttpError(409, 'The target no longer meets Global Admin eligibility requirements');
     }
     if (decision === 'approved') {
+      await c.query("SELECT set_config('app.access_change_reason',$1,true)", [reason]);
       await c.query("UPDATE users SET role = 'global_admin' WHERE id = $1", [target.id]);
     }
     const updated = (await c.query(
@@ -789,6 +919,7 @@ adminRouter.post('/users/:id/documents/:documentId/review', requireRole('complia
 }));
 
 adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req, res) => {
+  const { reason } = z.object({ reason: z.string().trim().min(10).max(1000).optional() }).strict().parse(req.body ?? {});
   res.json(await withUser(req.user!, async (c) => {
     const target = (await c.query('SELECT id, role, active, created_by FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!target) throw new HttpError(404, 'User not found');
@@ -811,6 +942,7 @@ adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req
         [req.params.id, signup.agent_type, signup.parent_agent_id, signup.territory_id],
       );
     }
+    await c.query("SELECT set_config('app.access_change_reason',$1,true)", [reason ?? 'Account activated after authorized identity and account review']);
     const r = await c.query('UPDATE users SET active = true WHERE id = $1 RETURNING id, active', [req.params.id]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
     if (signup) {
@@ -828,6 +960,7 @@ adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req
 }));
 
 adminRouter.post('/users/:id/deactivate', requireRole('super_admin'), h(async (req, res) => {
+  const { reason } = z.object({ reason: z.string().trim().min(10).max(1000).optional() }).strict().parse(req.body ?? {});
   if (req.params.id === req.user!.id) throw new HttpError(409, 'You cannot deactivate yourself');
   res.json(await withUser(req.user!, async (c) => {
     const target = (await c.query('SELECT role FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
@@ -835,6 +968,7 @@ adminRouter.post('/users/:id/deactivate', requireRole('super_admin'), h(async (r
     if (target.role === 'global_admin' && req.user!.role !== 'global_admin') {
       throw new HttpError(403, 'Only a Global Admin can deactivate a Global Admin account');
     }
+    await c.query("SELECT set_config('app.access_change_reason',$1,true)", [reason ?? 'Account deactivated through the authorized Super Admin workflow']);
     const r = await c.query('UPDATE users SET active = false WHERE id = $1 RETURNING id, active', [req.params.id]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
     await audit(c, req.user!.id, 'user_deactivated', 'user', String(req.params.id));

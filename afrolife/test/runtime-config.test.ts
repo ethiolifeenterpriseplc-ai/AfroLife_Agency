@@ -17,26 +17,57 @@ const safeProductionEnvironment = {
   INSURANCE_SERVICE_URL: 'http://127.0.0.1:3100',
   INSURANCE_GATEWAY_SECRET: 'i'.repeat(48),
   INSURANCE_SERVICE_CUTOVER_READY: '1',
+  WORKER_MANAGEMENT_SERVICE_URL: 'http://127.0.0.1:3400',
+  WORKER_MANAGEMENT_GATEWAY_SECRET: 'w'.repeat(48),
+  WORKER_MANAGEMENT_SERVICE_CUTOVER_READY: '1',
+  STAFFING_SERVICE_URL: 'http://127.0.0.1:3401',
+  STAFFING_GATEWAY_SECRET: 's'.repeat(48),
+  STAFFING_SERVICE_CUTOVER_READY: '1',
+  PROPERTY_MANAGEMENT_SERVICE_URL: 'http://127.0.0.1:3402',
+  PROPERTY_MANAGEMENT_GATEWAY_SECRET: 'p'.repeat(48),
+  PROPERTY_MANAGEMENT_SERVICE_CUTOVER_READY: '1',
+  MARKETPLACE_SERVICE_URL: 'http://127.0.0.1:3403',
+  MARKETPLACE_GATEWAY_SECRET: 'a'.repeat(48),
+  MARKETPLACE_SERVICE_CUTOVER_READY: '1',
 };
 
-test('production configuration enables the role-gated MFI workspace by default', () => {
+test('production configuration disables the MFI pilot unless explicitly enabled', () => {
   const config = loadRuntimeConfig(safeProductionEnvironment);
   assert.equal(config.isProduction, true);
-  assert.equal(config.mfiPilotEnabled, true);
+  assert.equal(config.mfiPilotEnabled, false);
+  assert.equal(config.legacyImmediateLeasesEnabled, false);
   assert.throws(
     () => loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: 'yes' }),
     /MFI_PILOT_ENABLED must be 0 or 1/,
   );
   assert.equal(loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: '0' }).mfiPilotEnabled, false);
+  assert.equal(loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: '1' }).mfiPilotEnabled, true);
+});
+
+test('production blocks legacy immediate lease activation unless explicitly enabled', () => {
+  assert.equal(loadRuntimeConfig(safeProductionEnvironment).legacyImmediateLeasesEnabled, false);
+  assert.equal(loadRuntimeConfig({
+    ...safeProductionEnvironment,
+    LEGACY_IMMEDIATE_LEASES_ENABLED: '1',
+  }).legacyImmediateLeasesEnabled, true);
+  assert.equal(loadRuntimeConfig({
+    ...safeProductionEnvironment,
+    LEGACY_IMMEDIATE_LEASES_ENABLED: '0',
+  }).legacyImmediateLeasesEnabled, false);
+  assert.throws(
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, LEGACY_IMMEDIATE_LEASES_ENABLED: 'yes' }),
+    /LEGACY_IMMEDIATE_LEASES_ENABLED must be 0 or 1/,
+  );
+  assert.equal(loadRuntimeConfig({ NODE_ENV: 'test' }).legacyImmediateLeasesEnabled, true);
 });
 
 test('production requires separate financial service gateways and blocks in-process fallbacks', () => {
   assert.throws(
-    () => loadRuntimeConfig({ ...safeProductionEnvironment, MFI_SERVICE_URL: undefined }),
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: '1', MFI_SERVICE_URL: undefined }),
     /MFI_SERVICE_URL must be configured/,
   );
   assert.throws(
-    () => loadRuntimeConfig({ ...safeProductionEnvironment, MFI_GATEWAY_SECRET: 'short' }),
+    () => loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: '1', MFI_GATEWAY_SECRET: 'short' }),
     /MFI_GATEWAY_SECRET must be a unique/,
   );
   assert.throws(
@@ -105,6 +136,60 @@ test('Insurance service routing requires an explicit cutover-readiness attestati
     INSURANCE_SERVICE_URL: serviceUrl,
     INSURANCE_SERVICE_CUTOVER_READY: '1',
   }));
+});
+
+test('Agency service gateways require explicit cutover readiness and service credentials', () => {
+  const agencyServices = [
+    ['WORKER_MANAGEMENT_SERVICE_URL', 'WORKER_MANAGEMENT_GATEWAY_SECRET', 'WORKER_MANAGEMENT_SERVICE_CUTOVER_READY'],
+    ['STAFFING_SERVICE_URL', 'STAFFING_GATEWAY_SECRET', 'STAFFING_SERVICE_CUTOVER_READY'],
+    ['PROPERTY_MANAGEMENT_SERVICE_URL', 'PROPERTY_MANAGEMENT_GATEWAY_SECRET', 'PROPERTY_MANAGEMENT_SERVICE_CUTOVER_READY'],
+    ['MARKETPLACE_SERVICE_URL', 'MARKETPLACE_GATEWAY_SECRET', 'MARKETPLACE_SERVICE_CUTOVER_READY'],
+  ] as const;
+
+  for (const [url, secret, readiness] of agencyServices) {
+    assert.throws(
+      () => loadRuntimeConfig({ ...safeProductionEnvironment, [readiness]: undefined }),
+      new RegExp(`${readiness}=1 is required`),
+    );
+    assert.throws(
+      () => loadRuntimeConfig({ ...safeProductionEnvironment, [url]: undefined }),
+      new RegExp(`${url} is required when ${readiness} is enabled`),
+    );
+    assert.throws(
+      () => loadRuntimeConfig({ ...safeProductionEnvironment, [readiness]: 'yes' }),
+      new RegExp(`${readiness} must be 0 or 1`),
+    );
+    assert.throws(
+      () => loadRuntimeConfig({ ...safeProductionEnvironment, [secret]: 'short' }),
+      new RegExp(`${secret} must be a unique`),
+    );
+    const collidingSecret = agencyServices.find((candidate) => candidate[1] !== secret)?.[1];
+    assert.ok(collidingSecret);
+    assert.throws(
+      () => loadRuntimeConfig({ ...safeProductionEnvironment, [secret]: safeProductionEnvironment[collidingSecret] }),
+      /must be unique across enabled service gateways/,
+    );
+    assert.throws(
+      () => loadRuntimeConfig({ ...safeProductionEnvironment, [url]: 'http://agency-service.internal:3400' }),
+      new RegExp(`${url} must be an HTTPS origin`),
+    );
+  }
+
+  for (const [url, secret, readiness] of agencyServices) {
+    const legacyEnvironment = { ...safeProductionEnvironment };
+    delete legacyEnvironment[url];
+    delete legacyEnvironment[secret];
+    delete legacyEnvironment[readiness];
+    assert.doesNotThrow(() => loadRuntimeConfig(legacyEnvironment));
+  }
+
+  const legacyProductionEnvironment = { ...safeProductionEnvironment };
+  for (const [url, secret, readiness] of agencyServices) {
+    legacyProductionEnvironment[url] = '';
+    legacyProductionEnvironment[secret] = '';
+    legacyProductionEnvironment[readiness] = '0';
+  }
+  assert.doesNotThrow(() => loadRuntimeConfig(legacyProductionEnvironment));
 });
 
 test('development retains existing pilot behavior unless explicitly disabled', () => {

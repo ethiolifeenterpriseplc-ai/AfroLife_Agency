@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
@@ -10,9 +10,11 @@ const localEnv = join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'afrolife.env'
 if (!process.env.LOCALAPPDATA || !existsSync(localEnv)) {
   throw new Error('The isolated local AfroLife environment file is required. Run npm run db:local:setup first.');
 }
-dotenv.config({ path: localEnv, override: true });
-const connectionString = process.env.MIGRATION_DATABASE_URL;
-const credentialPath = join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
+dotenv.config({ path: localEnv });
+const disposableDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
+const connectionString = disposableDatabaseUrl ?? process.env.MIGRATION_DATABASE_URL;
+const credentialPath = process.env.AFROLIFE_TEST_USERS_FILE
+  ?? join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
 if (!connectionString) {
   throw new Error('Run this only on Windows with the local AfroLife environment configured.');
 }
@@ -20,10 +22,13 @@ if (existsSync(credentialPath)) {
   throw new Error(`Credential file already exists at ${credentialPath}. Move it safely before re-running.`);
 }
 const localUrl = new URL(connectionString);
+const databaseName = decodeURIComponent(localUrl.pathname.replace(/^\/+/, ''));
 if (!['127.0.0.1', 'localhost', '::1'].includes(localUrl.hostname)
   || localUrl.port !== '5433'
-  || localUrl.pathname !== '/afrolife') {
-  throw new Error('Refusing to seed users: the migration database URL is not the isolated local AfroLife database on port 5433.');
+  || (disposableDatabaseUrl
+    ? !/^afrolife_test_[a-z0-9_-]+$/i.test(databaseName)
+    : databaseName !== 'afrolife')) {
+  throw new Error('Refusing to seed users: target must be the local afrolife database or an explicitly named afrolife_test_* database on port 5433.');
 }
 
 const pool = new pg.Pool({ connectionString });
@@ -35,7 +40,7 @@ try {
            host(inet_server_addr()) AS address, inet_server_port() AS port,
            (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS is_superuser
   `)).rows[0];
-  if (identity.database !== 'afrolife' || identity.database_user !== 'postgres'
+  if (identity.database !== databaseName || identity.database_user !== 'postgres'
     || !['127.0.0.1', '::1'].includes(identity.address) || Number(identity.port) !== 5433
     || !identity.is_superuser) {
     throw new Error(`Refusing to seed users: unexpected local database identity ${JSON.stringify(identity)}.`);
@@ -114,7 +119,7 @@ try {
     );
   }
 
-  mkdirSync(join(process.env.LOCALAPPDATA, 'AfroLife'), { recursive: true });
+  mkdirSync(dirname(credentialPath), { recursive: true });
   const contents = [
     'AfroLife local test accounts',
     'Local development only. These accounts are synthetic, active, and KYC-marked for workflow testing.',
@@ -130,7 +135,7 @@ try {
   credentialFileCreated = true;
   if (process.platform === 'win32') {
     const account = `${process.env.USERDOMAIN ?? ''}\\${process.env.USERNAME ?? ''}`;
-    execFileSync('icacls.exe', [credentialPath, '/inheritance:r', '/grant:r', `${account}:(R)`], { stdio: 'ignore' });
+    execFileSync('icacls.exe', [credentialPath, '/inheritance:r', '/grant:r', `${account}:(M)`], { stdio: 'ignore' });
   }
   await client.query('COMMIT');
   console.log(`Created ${definitions.length} local test accounts, including two Super Admins.`);

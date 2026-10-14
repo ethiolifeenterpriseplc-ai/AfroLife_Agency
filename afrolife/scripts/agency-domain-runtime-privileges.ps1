@@ -1,6 +1,6 @@
 function Set-AgencyDomainRuntimePrivileges([string]$Database, [string]$Role, [string]$Domain) {
   $tableGrants = @{
-    'worker-management' = @(
+    'workforce-management' = @(
       'GRANT SELECT ON TABLE public.workers TO {0};'
       'GRANT INSERT (name, phone, national_id, sector, skills, languages, experience_years, rate_expected, availability, territory_id, source_agent_id) ON TABLE public.workers TO {0};'
       'GRANT UPDATE (verification) ON TABLE public.workers TO {0};'
@@ -48,12 +48,13 @@ function Set-AgencyDomainRuntimePrivileges([string]$Database, [string]$Role, [st
     )
   }
   $sequenceTables = @{
-    'worker-management' = @('audit_logs', 'notifications')
+    'workforce-management' = @('audit_logs', 'notifications')
     staffing = @('audit_logs', 'notifications')
     'property-management' = @('audit_logs', 'property_units')
     marketplace = @('audit_logs')
   }
 
+  if ($Domain -eq 'worker-management') { $Domain = 'workforce-management' }
   if (-not $tableGrants.ContainsKey($Domain)) { throw "Unknown agency domain: $Domain." }
   if ($Role -notmatch '^[a-z][a-z0-9_]*$') { throw 'Runtime role is not a valid expected PostgreSQL identifier.' }
 

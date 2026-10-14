@@ -3,14 +3,15 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#102b27">
+    <meta name="theme-color" content="#174b3d">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="description" content="EthioLife agency, marketplace, workforce, and SACCO/MFI operations">
+    <meta name="description" content="EthioLife connects people with services for work, homes, business, and community.">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/icon.svg?v=2" type="image/svg+xml">
+    <link rel="icon" href="/icons/ethio-life-icon-192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="/icons/ethio-life-icon-192.png">
     <link rel="stylesheet" href="/styles.css">
     <title>EthioLife Agency | ኢትዮ-ላይፍ ኤጀንሲ</title>
   </head>
@@ -18,8 +19,8 @@
     <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="topbar">
       <a class="brand" href="/" aria-label="ኢትዮ-ላይፍ ኤጀንሲ / EthioLife Agency">
-        <img src="/icon.svg" alt="" width="38" height="38">
-        <span>ኢትዮ-ላይፍ ኤጀንሲ / EthioLife Agency<small>AGENCY · FINANCIAL SERVICES</small></span>
+        <img src="/icon.svg?v=2" alt="" width="38" height="38">
+        <span class="brand-copy"><span class="brand-name">EthioLife <span class="brand-agency">Agency</span></span><small>PEOPLE · SERVICES · OPPORTUNITY</small></span>
       </a>
       <label class="language-picker">
         <span class="visually-hidden">Language</span>
@@ -166,7 +167,7 @@
         <section id="server-setup" class="panel form-card server-setup" hidden>
           <h2>Connect to EthioLife</h2>
           <p class="muted">Enter the HTTPS address of your organization’s EthioLife server.</p>
-          <label>API server address<input id="api-server-url" type="url" inputmode="url" placeholder="https://afrolife.example.com" autocomplete="url" required></label>
+          <label>API server address<input id="api-server-url" type="url" inputmode="url" placeholder="https://afrolife-agency.duckdns.org" autocomplete="url" required></label>
           <p id="server-error" class="form-error" role="alert"></p>
           <button id="save-server" class="button button-primary button-wide" type="button">Save server address</button>
         </section>
@@ -233,6 +234,7 @@
           <button class="tab" data-panel="leads" type="button">Leads</button>
           <button class="tab" data-panel="workers" type="button">Workers</button>
           <button class="tab" data-panel="requests" type="button">Requests & matching</button>
+          <button id="learning-tab" class="tab" data-panel="learning" type="button" hidden>Training & support</button>
           <button id="properties-tab" class="tab" data-panel="properties" type="button" hidden>Properties</button>
           <button id="marketplace-tab" class="tab" data-panel="marketplace" type="button" hidden>Marketplace</button>
           <button id="contracts-tab" class="tab" data-panel="contracts" type="button" hidden>Contracts</button>
@@ -246,7 +248,7 @@
           <button class="tab" data-panel="security" type="button">Security</button>
           <button id="admin-tab" class="tab" data-panel="admin" type="button" hidden>Admin & review</button>
         </nav>
-        <section id="workspace" class="workspace" aria-live="polite"></section>
+        <section id="workspace" class="workspace" aria-labelledby="page-title"></section>
         <nav id="mobile-workspace-nav" class="mobile-workspace-nav" aria-label="Quick workspace navigation" hidden></nav>
       </section>
     </main>
@@ -257,9 +259,9 @@
       </div>
       <nav id="workspace-more-nav" class="workspace-more-nav" aria-label="All workspace sections"></nav>
     </dialog>
-    <dialog id="availability-dialog" class="panel form-card">
+    <dialog id="availability-dialog" class="panel form-card" aria-labelledby="availability-dialog-title">
       <form id="availability-form">
-        <h2>Choose a restored availability</h2>
+        <h2 id="availability-dialog-title">Choose a restored availability</h2>
         <label>Worker availability
           <select id="availability-select" name="availability" required>
             <option value="immediate">immediate</option>

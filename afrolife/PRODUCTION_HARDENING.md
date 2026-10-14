@@ -8,6 +8,14 @@ database runtime role to avoid superuser/BYPASSRLS/table-owner privileges, and
 stores production authentication rate limits in PostgreSQL. Apply all schema
 migrations before starting a production release.
 
+The legacy `POST /leases` endpoint immediately activates a lease without the
+V7 independent approval and handover checks. Production configuration therefore
+defaults `LEGACY_IMMEDIATE_LEASES_ENABLED=0`; use `/leases/workflow` and its
+approval/signature-evidence/execution steps instead. Set the legacy flag to `1`
+only for a time-bounded compatibility exception approved by the product and
+risk owners, and record its expiry and affected clients. Both Linux and Windows
+production environment templates keep this unsafe legacy path disabled.
+
 ## Self-hosting on Windows Server or Windows 11
 
 Use a supported Windows Server release or Windows 11 Pro for the self-hosted
@@ -75,11 +83,11 @@ the user is active. Apply migration `040_auth_sessions.sql` before deploying
 this version; all previously issued tokens lack a server session ID and require
 users to sign in again.
 
-`MFI_PILOT_ENABLED` defaults to `1` in production so authorized AfroLife staff
-can access the institution-scoped workspace. Set it to `0` to disable the MFI
-API and workspace. The default only exposes the controlled pilot; it does not
-certify compliance or make MFI operations suitable for public deposits or
-regulated lending. Institution roles remain enforced; platform Super Admins
+`MFI_PILOT_ENABLED` defaults to `0` in production. Set it to `1` only for an
+explicitly approved controlled pilot; production then requires a separate MFI
+service URL and unique gateway secret. Enabling the workspace does not certify
+compliance or make MFI operations suitable for public deposits or regulated
+lending. Institution roles remain enforced; platform Super Admins
 have an audited cross-institution override for all available pilot operations.
 Do not use it for public deposits or regulated lending until the regulatory,
 accounting, member-KYC, AML/CFT, security, and independent financial-review
@@ -324,8 +332,8 @@ evidence.
   promotion requires two different active, MFA-enabled Super Admins and that
   neither Global Admin access nor the promotion workflow bypasses financial
   maker-checker controls.
-- [ ] Keep the role-gated MFI workspace enabled with `MFI_PILOT_ENABLED=1` only
-  for authorized staff and controlled pilot use. Any controlled MFI pilot must
+- [ ] Keep the role-gated MFI workspace disabled by default; enable it with
+  `MFI_PILOT_ENABLED=1` only for authorized staff and controlled pilot use. Any controlled MFI pilot must
   have a named institution, invited users, approved accounting and safeguarding
   procedures, and its own regulatory/security sign-off. The flag is not a
   substitute for those approvals; set it to `0` to disable the module.

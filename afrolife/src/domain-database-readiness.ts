@@ -1,7 +1,9 @@
-export type AgencyDomain = 'worker-management' | 'staffing' | 'property-management' | 'marketplace';
+export type AgencyDomain = 'workforce-management' | 'staffing' | 'property-management' | 'marketplace';
+type LegacyAgencyDomain = 'worker-management';
 
 type DatabaseMetadata = {
   table_name: string;
+  column_key?: string;
   missing: boolean;
   rls_enabled: boolean;
   can_read_auth_secrets?: boolean;
@@ -13,10 +15,25 @@ type Queryable = {
   query(sql: string, values: unknown[]): Promise<{ rows: DatabaseMetadata[] }>;
 };
 
-const domainTables: Record<AgencyDomain, { required: string[]; rowLevelSecurity: string[] }> = {
-  'worker-management': {
+export const agencyDomainSchemaRequirements: Record<AgencyDomain, {
+  required: string[];
+  rowLevelSecurity: string[];
+  requiredColumns: string[];
+}> = {
+  'workforce-management': {
     required: ['agents', 'audit_logs', 'documents', 'notifications', 'territories', 'users', 'workers'],
     rowLevelSecurity: ['agents', 'documents', 'workers'],
+    requiredColumns: [
+      'users.id', 'users.active', 'users.role', 'users.legal_name', 'users.phone',
+      'agents.id', 'agents.parent_id', 'agents.territory_id',
+      'workers.id', 'workers.name', 'workers.phone', 'workers.national_id', 'workers.sector',
+      'workers.skills', 'workers.languages', 'workers.experience_years', 'workers.rate_expected',
+      'workers.availability', 'workers.verification', 'workers.territory_id', 'workers.source_agent_id',
+      'documents.id', 'documents.worker_id', 'documents.doc_type', 'documents.storage_key',
+      'documents.sha256', 'documents.expires_on', 'documents.mime', 'documents.size_bytes',
+      'documents.status', 'documents.uploaded_by', 'documents.reviewer_id', 'documents.reviewed_at',
+      'documents.review_note',
+    ],
   },
   staffing: {
     required: [
@@ -24,6 +41,21 @@ const domainTables: Record<AgencyDomain, { required: string[]; rowLevelSecurity:
       'matches', 'notifications', 'territories', 'users', 'workers',
     ],
     rowLevelSecurity: ['agents', 'documents', 'job_requests', 'leads', 'matches', 'workers'],
+    requiredColumns: [
+      'users.id', 'users.active', 'users.role', 'users.legal_name', 'users.phone',
+      'agents.id', 'agents.parent_id', 'agents.territory_id',
+      'leads.id', 'leads.source_agent_id',
+      'workers.id', 'workers.name', 'workers.sector', 'workers.skills', 'workers.languages',
+      'workers.experience_years', 'workers.rate_expected', 'workers.availability',
+      'workers.verification', 'workers.territory_id', 'workers.source_agent_id',
+      'documents.worker_id', 'documents.doc_type', 'documents.status', 'documents.expires_on',
+      'job_requests.id', 'job_requests.lead_id', 'job_requests.sector', 'job_requests.skills_required',
+      'job_requests.languages_required', 'job_requests.min_experience', 'job_requests.rate_offered',
+      'job_requests.territory_id', 'job_requests.source_agent_id', 'job_requests.status',
+      'job_requests.idempotency_user_id', 'job_requests.idempotency_key', 'job_requests.payload_hash',
+      'matches.id', 'matches.request_id', 'matches.worker_id', 'matches.score',
+      'matches.score_breakdown', 'matches.status', 'matches.created_by',
+    ],
   },
   'property-management': {
     required: [
@@ -32,6 +64,30 @@ const domainTables: Record<AgencyDomain, { required: string[]; rowLevelSecurity:
       'tenants', 'territories', 'users', 'user_signups', 'leases',
     ],
     rowLevelSecurity: ['agents', 'marketplace_configuration', 'maintenance_requests', 'properties', 'property_photos', 'property_units', 'rent_charges', 'leases'],
+    requiredColumns: [
+      'users.id', 'users.role', 'users.active', 'agents.id', 'agents.territory_id',
+      'leads.id', 'leads.source_agent_id',
+      'properties.id', 'properties.address', 'properties.description', 'properties.ptype',
+      'properties.listing_mode', 'properties.sale_price', 'properties.rent_period',
+      'properties.territory_id', 'properties.owner_lead_id', 'properties.source_agent_id',
+      'properties.owner_user_id', 'properties.created_by', 'properties.status',
+      'property_units.id', 'property_units.property_id', 'property_units.unit_no',
+      'property_units.floor', 'property_units.ptype', 'property_units.rent', 'property_units.occupancy',
+      'property_photos.id', 'property_photos.property_id', 'property_photos.storage_key',
+      'property_photos.sha256', 'property_photos.mime', 'property_photos.size_bytes',
+      'property_photos.caption', 'property_photos.uploaded_by',
+      'marketplace_configuration.scope', 'marketplace_configuration.config_key',
+      'marketplace_configuration.config_value',
+      'user_signups.user_id', 'user_signups.account_type', 'user_signups.requested_plan',
+      'user_signups.status', 'tenants.id', 'tenants.name', 'tenants.phone',
+      'tenants.source_agent_id', 'leases.id', 'leases.unit_id', 'leases.tenant_id',
+      'leases.rent', 'leases.deposit', 'leases.start_date', 'leases.end_date',
+      'leases.source_agent_id', 'leases.status', 'rent_charges.id', 'rent_charges.lease_id',
+      'rent_charges.period', 'rent_charges.due_on', 'rent_charges.amount', 'rent_charges.status',
+      'maintenance_requests.id', 'maintenance_requests.property_id', 'maintenance_requests.unit_id',
+      'maintenance_requests.description', 'maintenance_requests.priority',
+      'maintenance_requests.status', 'maintenance_requests.source_agent_id',
+    ],
   },
   marketplace: {
     required: [
@@ -39,11 +95,31 @@ const domainTables: Record<AgencyDomain, { required: string[]; rowLevelSecurity:
       'marketplace_media', 'notifications', 'territories', 'users', 'user_signups',
     ],
     rowLevelSecurity: ['agents', 'marketplace_configuration', 'marketplace_listings', 'marketplace_media'],
+    requiredColumns: [
+      'users.id', 'users.active', 'users.role', 'users.legal_name', 'users.phone',
+      'agents.id', 'agents.territory_id',
+      'marketplace_configuration.scope', 'marketplace_configuration.config_key',
+      'marketplace_configuration.config_value',
+      'marketplace_listings.id', 'marketplace_listings.seller_user_id',
+      'marketplace_listings.source_agent_id', 'marketplace_listings.created_by',
+      'marketplace_listings.domain', 'marketplace_listings.category_key',
+      'marketplace_listings.title', 'marketplace_listings.description',
+      'marketplace_listings.transaction_mode', 'marketplace_listings.price',
+      'marketplace_listings.rent_period', 'marketplace_listings.condition',
+      'marketplace_listings.territory_id', 'marketplace_listings.status',
+      'marketplace_listings.review_note', 'marketplace_listings.reviewed_by',
+      'marketplace_listings.reviewed_at', 'marketplace_listings.updated_at',
+      'marketplace_media.id', 'marketplace_media.listing_id', 'marketplace_media.storage_key',
+      'marketplace_media.sha256', 'marketplace_media.mime', 'marketplace_media.size_bytes',
+      'marketplace_media.caption', 'marketplace_media.uploaded_by',
+      'user_signups.user_id', 'user_signups.account_type', 'user_signups.status',
+    ],
   },
 };
 
-export async function assertAgencyDomainDatabaseReady(domain: AgencyDomain, database: Queryable): Promise<void> {
-  const requirements = domainTables[domain];
+export async function assertAgencyDomainDatabaseReady(domain: AgencyDomain | LegacyAgencyDomain, database: Queryable): Promise<void> {
+  const canonicalDomain = domain === 'worker-management' ? 'workforce-management' : domain;
+  const requirements = agencyDomainSchemaRequirements[canonicalDomain];
   const result = await database.query(
     `SELECT requested.table_name,
             to_regclass(format('%I.%I', 'public', requested.table_name)) IS NULL AS missing,
@@ -61,7 +137,24 @@ export async function assertAgencyDomainDatabaseReady(domain: AgencyDomain, data
       ...(missing.length ? [`missing tables: ${missing.join(', ')}`] : []),
       ...(unprotected.length ? [`RLS is disabled: ${unprotected.join(', ')}`] : []),
     ];
-    throw new Error(`${domain} database schema is not ready (${problems.join('; ')})`);
+    throw new Error(`${canonicalDomain} database schema is not ready (${problems.join('; ')})`);
+  }
+
+  const columns = await database.query(
+    `SELECT requested.column_key,
+            NOT EXISTS (
+              SELECT 1 FROM information_schema.columns actual
+              WHERE actual.table_schema='public'
+                AND actual.table_name=split_part(requested.column_key,'.',1)
+                AND actual.column_name=split_part(requested.column_key,'.',2)
+            ) AS missing
+     FROM unnest($1::text[]) AS requested(column_key)`,
+    [requirements.requiredColumns],
+  );
+  const missingColumns = requirements.requiredColumns.filter((column) =>
+    columns.rows.find((row) => row.column_key === column)?.missing !== false);
+  if (missingColumns.length) {
+    throw new Error(`${canonicalDomain} database schema is not ready (missing columns: ${missingColumns.join(', ')})`);
   }
 
   const privileges = await database.query(
@@ -83,6 +176,6 @@ export async function assertAgencyDomainDatabaseReady(domain: AgencyDomain, data
   );
   const unsafe = privileges.rows[0];
   if (!unsafe || unsafe.can_read_auth_secrets || unsafe.can_create_schema || unsafe.can_access_financial_data) {
-    throw new Error(`${domain} database role has privileges outside its service boundary`);
+    throw new Error(`${canonicalDomain} database role has privileges outside its service boundary`);
   }
 }

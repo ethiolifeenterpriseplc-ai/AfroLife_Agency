@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertAgencyDomainDatabaseReady, type AgencyDomain } from '../src/domain-database-readiness.js';
+import { agencyDomainSchemaRequirements, assertAgencyDomainDatabaseReady, type AgencyDomain } from '../src/domain-database-readiness.js';
 
 function databaseFor(
+  domain: AgencyDomain,
   tables: string[],
   rlsTables: string[],
   privileges = {
@@ -10,13 +11,19 @@ function databaseFor(
     can_create_schema: false,
     can_access_financial_data: false,
   },
+  columns = agencyDomainSchemaRequirements[domain].requiredColumns,
 ) {
   return {
-    async query(_sql: string, values: unknown[]) {
+    async query(sql: string, values: unknown[]) {
       if (values.length === 0) {
         return { rows: [privileges] };
       }
       const required = values[0] as string[];
+      if (sql.includes('information_schema.columns')) {
+        return {
+          rows: required.map((column_key) => ({ column_key, missing: !columns.includes(column_key) })),
+        };
+      }
       return {
         rows: required.map((table_name) => ({
           table_name,
@@ -29,7 +36,7 @@ function databaseFor(
 }
 
 const completeSchemas: Record<AgencyDomain, { tables: string[]; rls: string[] }> = {
-  'worker-management': {
+  'workforce-management': {
     tables: ['agents', 'audit_logs', 'documents', 'notifications', 'territories', 'users', 'workers'],
     rls: ['agents', 'documents', 'workers'],
   },
@@ -49,21 +56,36 @@ const completeSchemas: Record<AgencyDomain, { tables: string[]; rls: string[] }>
 
 for (const [domain, schema] of Object.entries(completeSchemas) as [AgencyDomain, typeof completeSchemas[AgencyDomain]][]) {
   test(`${domain} database readiness accepts its required tables and RLS policies`, async () => {
-    await assertAgencyDomainDatabaseReady(domain, databaseFor(schema.tables, schema.rls));
+    await assertAgencyDomainDatabaseReady(domain, databaseFor(domain, schema.tables, schema.rls));
   });
 }
 
 test('database readiness rejects missing service tables', async () => {
   await assert.rejects(
-    assertAgencyDomainDatabaseReady('worker-management', databaseFor(['users'], [])),
+    assertAgencyDomainDatabaseReady('workforce-management', databaseFor('workforce-management', ['users'], [])),
     /missing tables:.*workers/,
+  );
+  await assert.rejects(
+    assertAgencyDomainDatabaseReady('worker-management', databaseFor('workforce-management', ['users'], [])),
+    /workforce-management database schema is not ready/,
   );
 });
 
 test('database readiness rejects missing row-level security', async () => {
   await assert.rejects(
-    assertAgencyDomainDatabaseReady('marketplace', databaseFor(completeSchemas.marketplace.tables, ['agents'])),
+    assertAgencyDomainDatabaseReady('marketplace', databaseFor('marketplace', completeSchemas.marketplace.tables, ['agents'])),
     /RLS is disabled:.*marketplace_listings/,
+  );
+});
+
+test('database readiness rejects an incomplete service schema column set', async () => {
+  const requiredColumns = agencyDomainSchemaRequirements.staffing.requiredColumns;
+  await assert.rejects(
+    assertAgencyDomainDatabaseReady('staffing', databaseFor(
+      'staffing', completeSchemas.staffing.tables, completeSchemas.staffing.rls,
+      undefined, requiredColumns.slice(1),
+    )),
+    /missing columns:.*users\.id/,
   );
 });
 
@@ -74,6 +96,7 @@ for (const [description, privileges] of [
 ] as const) {
   test(`database readiness rejects service roles with access to ${description}`, async () => {
     const database = databaseFor(
+      'marketplace',
       completeSchemas.marketplace.tables,
       completeSchemas.marketplace.rls,
       { can_read_auth_secrets: false, can_create_schema: false, can_access_financial_data: false, ...privileges },

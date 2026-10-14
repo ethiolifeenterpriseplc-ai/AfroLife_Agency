@@ -4,6 +4,7 @@ export interface RuntimeConfig {
   isProduction: boolean;
   mfiPilotEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
+  legacyImmediateLeasesEnabled: boolean;
 }
 
 type Environment = Record<string, string | undefined>;
@@ -16,6 +17,14 @@ export function sessionIdleTimeoutMinutes(env: Environment): number {
     throw new Error('SESSION_IDLE_TIMEOUT_MINUTES must be an integer between 5 and 480');
   }
   return timeout;
+}
+
+export function legacyImmediateLeasesEnabled(env: Environment): boolean {
+  const setting = env.LEGACY_IMMEDIATE_LEASES_ENABLED;
+  if (setting !== undefined && !['0', '1'].includes(setting)) {
+    throw new Error('LEGACY_IMMEDIATE_LEASES_ENABLED must be 0 or 1');
+  }
+  return setting === undefined ? env.NODE_ENV !== 'production' : setting === '1';
 }
 
 function validateInsuranceServiceCutover(env: Environment) {
@@ -31,6 +40,33 @@ function validateInsuranceServiceCutover(env: Environment) {
     throw new Error('INSURANCE_SERVICE_URL is required when Insurance service cutover readiness is enabled');
   }
 }
+
+const agencyServiceCutovers = [
+  {
+    label: 'Workforce Management',
+    url: 'WORKER_MANAGEMENT_SERVICE_URL',
+    secret: 'WORKER_MANAGEMENT_GATEWAY_SECRET',
+    readiness: 'WORKER_MANAGEMENT_SERVICE_CUTOVER_READY',
+  },
+  {
+    label: 'Staffing',
+    url: 'STAFFING_SERVICE_URL',
+    secret: 'STAFFING_GATEWAY_SECRET',
+    readiness: 'STAFFING_SERVICE_CUTOVER_READY',
+  },
+  {
+    label: 'Property Management',
+    url: 'PROPERTY_MANAGEMENT_SERVICE_URL',
+    secret: 'PROPERTY_MANAGEMENT_GATEWAY_SECRET',
+    readiness: 'PROPERTY_MANAGEMENT_SERVICE_CUTOVER_READY',
+  },
+  {
+    label: 'Marketplace',
+    url: 'MARKETPLACE_SERVICE_URL',
+    secret: 'MARKETPLACE_GATEWAY_SECRET',
+    readiness: 'MARKETPLACE_SERVICE_CUTOVER_READY',
+  },
+] as const;
 
 function validateServiceOrigin(env: Environment, key: string, label: string): string {
   const value = env[key]?.trim();
@@ -48,7 +84,42 @@ function validateServiceOrigin(env: Environment, key: string, label: string): st
   return value;
 }
 
+function validateAgencyServiceCutovers(env: Environment) {
+  for (const service of agencyServiceCutovers) {
+    const serviceUrl = env[service.url]?.trim();
+    const readiness = env[service.readiness];
+    if (readiness !== undefined && !['0', '1'].includes(readiness)) {
+      throw new Error(`${service.readiness} must be 0 or 1`);
+    }
+    if (serviceUrl && readiness !== '1') {
+      throw new Error(`${service.readiness}=1 is required before enabling the ${service.label} service gateway`);
+    }
+    if (readiness === '1' && !serviceUrl) {
+      throw new Error(`${service.url} is required when ${service.readiness} is enabled`);
+    }
+    if (!serviceUrl) continue;
+
+    validateServiceOrigin(env, service.url, service.label);
+    const secret = env[service.secret]?.trim();
+    if (!secret || secret.length < 32 || isPlaceholder(secret)) {
+      throw new Error(`${service.secret} must be a unique, non-placeholder secret of at least 32 characters when the ${service.label} service gateway is enabled`);
+    }
+    const otherGatewaySecrets = [
+      { url: 'EDIR_SERVICE_URL', secret: 'EDIR_GATEWAY_SECRET' },
+      { url: 'INSURANCE_SERVICE_URL', secret: 'INSURANCE_GATEWAY_SECRET' },
+      { url: 'MFI_SERVICE_URL', secret: 'MFI_GATEWAY_SECRET' },
+      ...agencyServiceCutovers
+        .filter((other) => other.url !== service.url)
+        .map((other) => ({ url: other.url, secret: other.secret })),
+    ].filter((other) => env[other.url]?.trim()).map((other) => other.secret);
+    if (otherGatewaySecrets.some((key) => env[key]?.trim() === secret)) {
+      throw new Error(`${service.secret} must be unique across enabled service gateways`);
+    }
+  }
+}
+
 function productionConfig(env: Environment, idleTimeout: number): RuntimeConfig {
+  const allowLegacyImmediateLeases = legacyImmediateLeasesEnabled(env);
   const requiredSecret = (key: 'JWT_SECRET' | 'MFA_ENC_KEY') => {
     const value = env[key]?.trim();
     if (!value || value.length < 32 || isPlaceholder(value)) {
@@ -115,7 +186,7 @@ function productionConfig(env: Environment, idleTimeout: number): RuntimeConfig 
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
     throw new Error('LOGIN_RATE_LIMIT must be an integer between 1 and 1000');
   }
-  const pilotSetting = env.MFI_PILOT_ENABLED ?? '1';
+  const pilotSetting = env.MFI_PILOT_ENABLED ?? '0';
   if (!['0', '1'].includes(pilotSetting)) throw new Error('MFI_PILOT_ENABLED must be 0 or 1');
   const mfiPilotEnabled = pilotSetting === '1';
   if (mfiPilotEnabled) {
@@ -133,16 +204,23 @@ function productionConfig(env: Environment, idleTimeout: number): RuntimeConfig 
   if (!insuranceSecret || insuranceSecret.length < 32 || isPlaceholder(insuranceSecret)) {
     throw new Error('INSURANCE_GATEWAY_SECRET must be a unique, non-placeholder secret of at least 32 characters in production');
   }
-  return { isProduction: true, mfiPilotEnabled, sessionIdleTimeoutMinutes: idleTimeout };
+  return {
+    isProduction: true,
+    mfiPilotEnabled,
+    sessionIdleTimeoutMinutes: idleTimeout,
+    legacyImmediateLeasesEnabled: allowLegacyImmediateLeases,
+  };
 }
 
 export function loadRuntimeConfig(env: Environment): RuntimeConfig {
   validateInsuranceServiceCutover(env);
+  validateAgencyServiceCutovers(env);
   const idleTimeout = sessionIdleTimeoutMinutes(env);
   if (env.NODE_ENV === 'production') return productionConfig(env, idleTimeout);
   return {
     isProduction: false,
     mfiPilotEnabled: env.MFI_PILOT_ENABLED === undefined ? true : env.MFI_PILOT_ENABLED === '1',
     sessionIdleTimeoutMinutes: idleTimeout,
+    legacyImmediateLeasesEnabled: legacyImmediateLeasesEnabled(env),
   };
 }
