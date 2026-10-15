@@ -1,0 +1,4228 @@
+{
+  "source_workbook": "EthioLife_Enterprise_v12_5_ZERO_INVENTION_EVIDENCE_LOCKED_MASTER_WBS(1).xlsx",
+  "sheets": {
+    "DOMAIN_CAPABILITIES": {
+      "headers": [
+        "Capability_ID",
+        "Domain",
+        "Capability",
+        "Primary_Object",
+        "UseCase_Coverage",
+        "Implementation_Coverage",
+        "Owner"
+      ],
+      "records": [
+        {
+          "Capability_ID": "CAP-CARE-001",
+          "Domain": "EthioCare",
+          "Capability": "Referral & Intake",
+          "Primary_Object": "Referral",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-002",
+          "Domain": "EthioCare",
+          "Capability": "Eligibility & Authorization",
+          "Primary_Object": "Beneficiary",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-003",
+          "Domain": "EthioCare",
+          "Capability": "Assessment & Care Planning",
+          "Primary_Object": "Assessment",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-004",
+          "Domain": "EthioCare",
+          "Capability": "Caregiver Workforce",
+          "Primary_Object": "CarePlan",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-005",
+          "Domain": "EthioCare",
+          "Capability": "Matching & Scheduling",
+          "Primary_Object": "Caregiver",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-006",
+          "Domain": "EthioCare",
+          "Capability": "EVV & Visit Execution",
+          "Primary_Object": "Credential",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-007",
+          "Domain": "EthioCare",
+          "Capability": "Point-of-Care Documentation",
+          "Primary_Object": "Match",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-008",
+          "Domain": "EthioCare",
+          "Capability": "Family/Sponsor Portal",
+          "Primary_Object": "Visit",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-009",
+          "Domain": "EthioCare",
+          "Capability": "Safeguarding & Incident Management",
+          "Primary_Object": "EVV",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-010",
+          "Domain": "EthioCare",
+          "Capability": "Quality & Reassessment",
+          "Primary_Object": "Observation",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-011",
+          "Domain": "EthioCare",
+          "Capability": "Billing/RCM & Claims",
+          "Primary_Object": "Incident",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-012",
+          "Domain": "EthioCare",
+          "Capability": "Payroll & Earnings",
+          "Primary_Object": "Claim",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-013",
+          "Domain": "EthioCare",
+          "Capability": "Remote Monitoring",
+          "Primary_Object": "PayrollRun",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-014",
+          "Domain": "EthioCare",
+          "Capability": "Clinical Interoperability",
+          "Primary_Object": "CareSubscription",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-CARE-015",
+          "Domain": "EthioCare",
+          "Capability": "Subscription & Renewal",
+          "Primary_Object": "RemoteMonitoring",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-001",
+          "Domain": "Bright Spaces",
+          "Capability": "Lead & Call-Center Intake",
+          "Primary_Object": "Lead",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-002",
+          "Domain": "Bright Spaces",
+          "Capability": "Customer/Site 360",
+          "Primary_Object": "SiteSurvey",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-003",
+          "Domain": "Bright Spaces",
+          "Capability": "Site Survey & Scope",
+          "Primary_Object": "ServiceScope",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-004",
+          "Domain": "Bright Spaces",
+          "Capability": "Pricebook & Estimating",
+          "Primary_Object": "PriceQuote",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-005",
+          "Domain": "Bright Spaces",
+          "Capability": "Contracts & Memberships",
+          "Primary_Object": "Contract",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-006",
+          "Domain": "Bright Spaces",
+          "Capability": "Scheduling & Recurring Jobs",
+          "Primary_Object": "Job",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-007",
+          "Domain": "Bright Spaces",
+          "Capability": "Dispatch & Route Optimization",
+          "Primary_Object": "Crew",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-008",
+          "Domain": "Bright Spaces",
+          "Capability": "Crew Execution",
+          "Primary_Object": "Checklist",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-009",
+          "Domain": "Bright Spaces",
+          "Capability": "Checklist & Evidence",
+          "Primary_Object": "Inspection",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-010",
+          "Domain": "Bright Spaces",
+          "Capability": "Inspection & Acceptance",
+          "Primary_Object": "PhotoEvidence",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-011",
+          "Domain": "Bright Spaces",
+          "Capability": "Equipment & Consumables",
+          "Primary_Object": "Asset",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-012",
+          "Domain": "Bright Spaces",
+          "Capability": "Quality Recovery",
+          "Primary_Object": "Consumable",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-013",
+          "Domain": "Bright Spaces",
+          "Capability": "Billing & Collections",
+          "Primary_Object": "Membership",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-014",
+          "Domain": "Bright Spaces",
+          "Capability": "Subscription & Renewal",
+          "Primary_Object": "Invoice",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-BRIGHT-015",
+          "Domain": "Bright Spaces",
+          "Capability": "Customer Portal",
+          "Primary_Object": "Lead",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-001",
+          "Domain": "DLS",
+          "Capability": "Marketplace Discovery",
+          "Primary_Object": "WorkerProfile",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-002",
+          "Domain": "DLS",
+          "Capability": "Worker Profiles & Reputation",
+          "Primary_Object": "ScreeningCase",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-003",
+          "Domain": "DLS",
+          "Capability": "Identity & Screening",
+          "Primary_Object": "InsuranceEvidence",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-004",
+          "Domain": "DLS",
+          "Capability": "Trust & Safety",
+          "Primary_Object": "TaskRequest",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-005",
+          "Domain": "DLS",
+          "Capability": "Availability & Matching",
+          "Primary_Object": "Offer",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-006",
+          "Domain": "DLS",
+          "Capability": "Offer/Counter-offer",
+          "Primary_Object": "Assignment",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-007",
+          "Domain": "DLS",
+          "Capability": "Booking & Assignment",
+          "Primary_Object": "Task",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-008",
+          "Domain": "DLS",
+          "Capability": "Task Execution",
+          "Primary_Object": "TimeEntry",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-009",
+          "Domain": "DLS",
+          "Capability": "Proof of Work",
+          "Primary_Object": "Proof",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-010",
+          "Domain": "DLS",
+          "Capability": "Customer Acceptance",
+          "Primary_Object": "Review",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-011",
+          "Domain": "DLS",
+          "Capability": "Payments & Wallet",
+          "Primary_Object": "SafetyCase",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-012",
+          "Domain": "DLS",
+          "Capability": "Reviews & Reputation",
+          "Primary_Object": "WorkerWallet",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-013",
+          "Domain": "DLS",
+          "Capability": "Direct Hire",
+          "Primary_Object": "DirectHire",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-014",
+          "Domain": "DLS",
+          "Capability": "Managed Service",
+          "Primary_Object": "ManagedService",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-DLS-015",
+          "Domain": "DLS",
+          "Capability": "Subscription & Renewal",
+          "Primary_Object": "WorkerProfile",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-001",
+          "Domain": "RPM",
+          "Capability": "Property & Unit Registry",
+          "Primary_Object": "Property",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-002",
+          "Domain": "RPM",
+          "Capability": "Resident Lifecycle",
+          "Primary_Object": "Unit",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-003",
+          "Domain": "RPM",
+          "Capability": "Lead-to-Lease",
+          "Primary_Object": "Resident",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-004",
+          "Domain": "RPM",
+          "Capability": "Screening & Application",
+          "Primary_Object": "Owner",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-005",
+          "Domain": "RPM",
+          "Capability": "Lease & E-Signature",
+          "Primary_Object": "Lead",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-006",
+          "Domain": "RPM",
+          "Capability": "Rent & Receivables",
+          "Primary_Object": "Application",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-007",
+          "Domain": "RPM",
+          "Capability": "Maintenance",
+          "Primary_Object": "Lease",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-008",
+          "Domain": "RPM",
+          "Capability": "Vendor Management",
+          "Primary_Object": "Charge",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-009",
+          "Domain": "RPM",
+          "Capability": "Inspections",
+          "Primary_Object": "Payment",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-010",
+          "Domain": "RPM",
+          "Capability": "Utilities & Recoveries",
+          "Primary_Object": "MaintenanceRequest",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-011",
+          "Domain": "RPM",
+          "Capability": "Owner Accounting",
+          "Primary_Object": "WorkOrder",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-012",
+          "Domain": "RPM",
+          "Capability": "Community/Board Documents",
+          "Primary_Object": "Vendor",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-013",
+          "Domain": "RPM",
+          "Capability": "Listing Syndication",
+          "Primary_Object": "Inspection",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-014",
+          "Domain": "RPM",
+          "Capability": "Dynamic Rent Optimization",
+          "Primary_Object": "UtilityBill",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-RPM-015",
+          "Domain": "RPM",
+          "Capability": "Resident Services",
+          "Primary_Object": "OwnerStatement",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-001",
+          "Domain": "SKS",
+          "Capability": "Kitchen & Resource Registry",
+          "Primary_Object": "Kitchen",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-002",
+          "Domain": "SKS",
+          "Capability": "Lead & Conversion",
+          "Primary_Object": "Member",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-003",
+          "Domain": "SKS",
+          "Capability": "Membership & Subscription",
+          "Primary_Object": "Membership",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-004",
+          "Domain": "SKS",
+          "Capability": "Booking & Availability",
+          "Primary_Object": "Booking",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-005",
+          "Domain": "SKS",
+          "Capability": "Equipment & Storage",
+          "Primary_Object": "Equipment",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-006",
+          "Domain": "SKS",
+          "Capability": "Compliance & Insurance",
+          "Primary_Object": "StorageUnit",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-007",
+          "Domain": "SKS",
+          "Capability": "Digital Access",
+          "Primary_Object": "ComplianceDocument",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-008",
+          "Domain": "SKS",
+          "Capability": "Production Sessions",
+          "Primary_Object": "InsuranceCertificate",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-009",
+          "Domain": "SKS",
+          "Capability": "Food Safety/HACCP",
+          "Primary_Object": "AccessCredential",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-010",
+          "Domain": "SKS",
+          "Capability": "Temperature Monitoring",
+          "Primary_Object": "ProductionSession",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-011",
+          "Domain": "SKS",
+          "Capability": "Maintenance & Wear Recovery",
+          "Primary_Object": "TemperatureReading",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-012",
+          "Domain": "SKS",
+          "Capability": "Billing & AutoPay",
+          "Primary_Object": "MaintenanceCase",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-013",
+          "Domain": "SKS",
+          "Capability": "Member Portal",
+          "Primary_Object": "Invoice",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-014",
+          "Domain": "SKS",
+          "Capability": "Vendor Ecosystem",
+          "Primary_Object": "Lead",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-SKS-015",
+          "Domain": "SKS",
+          "Capability": "Analytics",
+          "Primary_Object": "Kitchen",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-001",
+          "Domain": "Training Center",
+          "Capability": "Course Catalog",
+          "Primary_Object": "Course",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-002",
+          "Domain": "Training Center",
+          "Capability": "Enrollment & Checkout",
+          "Primary_Object": "LearningPath",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-003",
+          "Domain": "Training Center",
+          "Capability": "Learning Paths",
+          "Primary_Object": "Enrollment",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-004",
+          "Domain": "Training Center",
+          "Capability": "Skills & Competencies",
+          "Primary_Object": "Learner",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-005",
+          "Domain": "Training Center",
+          "Capability": "Content Authoring",
+          "Primary_Object": "Instructor",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-006",
+          "Domain": "Training Center",
+          "Capability": "Cohorts & Scheduling",
+          "Primary_Object": "ContentItem",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-007",
+          "Domain": "Training Center",
+          "Capability": "Assessments",
+          "Primary_Object": "Assessment",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-008",
+          "Domain": "Training Center",
+          "Capability": "Certificates",
+          "Primary_Object": "Skill",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-009",
+          "Domain": "Training Center",
+          "Capability": "Instructor Operations",
+          "Primary_Object": "Competency",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-010",
+          "Domain": "Training Center",
+          "Capability": "Learner Portal",
+          "Primary_Object": "Certificate",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-011",
+          "Domain": "Training Center",
+          "Capability": "AI Learning Companion",
+          "Primary_Object": "Cohort",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-012",
+          "Domain": "Training Center",
+          "Capability": "Knowledge/RAG",
+          "Primary_Object": "Assignment",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-013",
+          "Domain": "Training Center",
+          "Capability": "Gamification & Community",
+          "Primary_Object": "KnowledgeArticle",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-014",
+          "Domain": "Training Center",
+          "Capability": "Content Marketplace",
+          "Primary_Object": "LearningSubscription",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        },
+        {
+          "Capability_ID": "CAP-TRAIN-015",
+          "Domain": "Training Center",
+          "Capability": "Enterprise Multi-Tenancy",
+          "Primary_Object": "MarketplaceItem",
+          "UseCase_Coverage": "V12 DOMAIN_USE_CASES",
+          "Implementation_Coverage": "All final registries",
+          "Owner": "Domain + product owner"
+        }
+      ]
+    },
+    "DOMAIN_STATE_MACHINES": {
+      "headers": [
+        "State_ID",
+        "Domain",
+        "Object",
+        "Current_State",
+        "Command_Class",
+        "Next_State",
+        "Guard_Contract",
+        "Event_Type",
+        "Side_Effects",
+        "Recovery_Requirement"
+      ],
+      "records": [
+        {
+          "State_ID": "DSM-CARE-0001",
+          "Domain": "EthioCare",
+          "Object": "Referral",
+          "Current_State": "NEW",
+          "Command_Class": "ADVANCE",
+          "Next_State": "INTAKE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.referral.intake",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0002",
+          "Domain": "EthioCare",
+          "Object": "Referral",
+          "Current_State": "INTAKE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ELIGIBILITY_REVIEW",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.referral.eligibility_review",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0003",
+          "Domain": "EthioCare",
+          "Object": "Referral",
+          "Current_State": "ELIGIBILITY_REVIEW",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACCEPTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.referral.accepted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0004",
+          "Domain": "EthioCare",
+          "Object": "Referral",
+          "Current_State": "ACCEPTED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "REJECTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.referral.rejected",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0005",
+          "Domain": "EthioCare",
+          "Object": "Referral",
+          "Current_State": "REJECTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.referral.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0006",
+          "Domain": "EthioCare",
+          "Object": "CarePlan",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "PENDING_APPROVAL",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.careplan.pending_approval",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0007",
+          "Domain": "EthioCare",
+          "Object": "CarePlan",
+          "Current_State": "PENDING_APPROVAL",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACTIVE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.careplan.active",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0008",
+          "Domain": "EthioCare",
+          "Object": "CarePlan",
+          "Current_State": "ACTIVE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUSPENDED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.careplan.suspended",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0009",
+          "Domain": "EthioCare",
+          "Object": "CarePlan",
+          "Current_State": "SUSPENDED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "REVISED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.careplan.revised",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0010",
+          "Domain": "EthioCare",
+          "Object": "CarePlan",
+          "Current_State": "REVISED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.careplan.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0011",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "SCHEDULED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CONFIRMED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.confirmed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0012",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "CONFIRMED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "EN_ROUTE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.en_route",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0013",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "EN_ROUTE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ARRIVED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.arrived",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0014",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "ARRIVED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "IN_PROGRESS",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.in_progress",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0015",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "IN_PROGRESS",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COMPLETED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.completed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0016",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "COMPLETED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "NO_SHOW",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.no_show",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0017",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "NO_SHOW",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "CANCELLED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.cancelled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0018",
+          "Domain": "EthioCare",
+          "Object": "Visit",
+          "Current_State": "CANCELLED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "EVV_EXCEPTION",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.visit.evv_exception",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0019",
+          "Domain": "EthioCare",
+          "Object": "Claim",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "READY",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.claim.ready",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0020",
+          "Domain": "EthioCare",
+          "Object": "Claim",
+          "Current_State": "READY",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUBMITTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.claim.submitted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0021",
+          "Domain": "EthioCare",
+          "Object": "Claim",
+          "Current_State": "SUBMITTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACCEPTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.claim.accepted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0022",
+          "Domain": "EthioCare",
+          "Object": "Claim",
+          "Current_State": "ACCEPTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "DENIED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.claim.denied",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0023",
+          "Domain": "EthioCare",
+          "Object": "Claim",
+          "Current_State": "DENIED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "RESUBMITTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.claim.resubmitted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0024",
+          "Domain": "EthioCare",
+          "Object": "Claim",
+          "Current_State": "RESUBMITTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "PAID",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.claim.paid",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0025",
+          "Domain": "EthioCare",
+          "Object": "Claim",
+          "Current_State": "PAID",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.claim.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0026",
+          "Domain": "EthioCare",
+          "Object": "Incident",
+          "Current_State": "OPEN",
+          "Command_Class": "ADVANCE",
+          "Next_State": "TRIAGED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.incident.triaged",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0027",
+          "Domain": "EthioCare",
+          "Object": "Incident",
+          "Current_State": "TRIAGED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "INVESTIGATING",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.incident.investigating",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0028",
+          "Domain": "EthioCare",
+          "Object": "Incident",
+          "Current_State": "INVESTIGATING",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACTION_REQUIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.incident.action_required",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0029",
+          "Domain": "EthioCare",
+          "Object": "Incident",
+          "Current_State": "ACTION_REQUIRED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "RESOLVED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.incident.resolved",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-CARE-0030",
+          "Domain": "EthioCare",
+          "Object": "Incident",
+          "Current_State": "RESOLVED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "care.incident.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0031",
+          "Domain": "Bright Spaces",
+          "Object": "Lead",
+          "Current_State": "NEW",
+          "Command_Class": "ADVANCE",
+          "Next_State": "QUALIFIED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.lead.qualified",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0032",
+          "Domain": "Bright Spaces",
+          "Object": "Lead",
+          "Current_State": "QUALIFIED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SURVEY_REQUIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.lead.survey_required",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0033",
+          "Domain": "Bright Spaces",
+          "Object": "Lead",
+          "Current_State": "SURVEY_REQUIRED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "QUOTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.lead.quoted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0034",
+          "Domain": "Bright Spaces",
+          "Object": "Lead",
+          "Current_State": "QUOTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "WON",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.lead.won",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0035",
+          "Domain": "Bright Spaces",
+          "Object": "Lead",
+          "Current_State": "WON",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "LOST",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.lead.lost",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0036",
+          "Domain": "Bright Spaces",
+          "Object": "Lead",
+          "Current_State": "LOST",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.lead.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0037",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "PLANNED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SCHEDULED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.scheduled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0038",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "SCHEDULED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "DISPATCHED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.dispatched",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0039",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "DISPATCHED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "IN_PROGRESS",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.in_progress",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0040",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "IN_PROGRESS",
+          "Command_Class": "ADVANCE",
+          "Next_State": "INSPECTION_REQUIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.inspection_required",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0041",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "INSPECTION_REQUIRED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACCEPTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.accepted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0042",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "ACCEPTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "REWORK",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.rework",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0043",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "REWORK",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COMPLETED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.completed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0044",
+          "Domain": "Bright Spaces",
+          "Object": "Job",
+          "Current_State": "COMPLETED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "CANCELLED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.job.cancelled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0045",
+          "Domain": "Bright Spaces",
+          "Object": "Contract",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "PROPOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.contract.proposed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0046",
+          "Domain": "Bright Spaces",
+          "Object": "Contract",
+          "Current_State": "PROPOSED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACCEPTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.contract.accepted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0047",
+          "Domain": "Bright Spaces",
+          "Object": "Contract",
+          "Current_State": "ACCEPTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACTIVE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.contract.active",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0048",
+          "Domain": "Bright Spaces",
+          "Object": "Contract",
+          "Current_State": "ACTIVE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUSPENDED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.contract.suspended",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0049",
+          "Domain": "Bright Spaces",
+          "Object": "Contract",
+          "Current_State": "SUSPENDED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "EXPIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.contract.expired",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0050",
+          "Domain": "Bright Spaces",
+          "Object": "Contract",
+          "Current_State": "EXPIRED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "TERMINATED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.contract.terminated",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0051",
+          "Domain": "Bright Spaces",
+          "Object": "Inspection",
+          "Current_State": "PENDING",
+          "Command_Class": "ADVANCE",
+          "Next_State": "PASS",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.inspection.pass",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0052",
+          "Domain": "Bright Spaces",
+          "Object": "Inspection",
+          "Current_State": "PASS",
+          "Command_Class": "ADVANCE",
+          "Next_State": "FAIL",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.inspection.fail",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0053",
+          "Domain": "Bright Spaces",
+          "Object": "Inspection",
+          "Current_State": "FAIL",
+          "Command_Class": "ADVANCE",
+          "Next_State": "REWORK_ASSIGNED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.inspection.rework_assigned",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-BRIGHT-0054",
+          "Domain": "Bright Spaces",
+          "Object": "Inspection",
+          "Current_State": "REWORK_ASSIGNED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "VERIFIED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "bright.inspection.verified",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0055",
+          "Domain": "DLS",
+          "Object": "WorkerProfile",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUBMITTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.workerprofile.submitted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0056",
+          "Domain": "DLS",
+          "Object": "WorkerProfile",
+          "Current_State": "SUBMITTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SCREENING",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.workerprofile.screening",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0057",
+          "Domain": "DLS",
+          "Object": "WorkerProfile",
+          "Current_State": "SCREENING",
+          "Command_Class": "ADVANCE",
+          "Next_State": "APPROVED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.workerprofile.approved",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0058",
+          "Domain": "DLS",
+          "Object": "WorkerProfile",
+          "Current_State": "APPROVED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUSPENDED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.workerprofile.suspended",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0059",
+          "Domain": "DLS",
+          "Object": "WorkerProfile",
+          "Current_State": "SUSPENDED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "DEACTIVATED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.workerprofile.deactivated",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0060",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "OPEN",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.open",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0061",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "OPEN",
+          "Command_Class": "ADVANCE",
+          "Next_State": "OFFERED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.offered",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0062",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "OFFERED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "MATCHED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.matched",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0063",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "MATCHED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "BOOKED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.booked",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0064",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "BOOKED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "IN_PROGRESS",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.in_progress",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0065",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "IN_PROGRESS",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COMPLETED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.completed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0066",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "COMPLETED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "DISPUTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.disputed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0067",
+          "Domain": "DLS",
+          "Object": "TaskRequest",
+          "Current_State": "DISPUTED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "CANCELLED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.taskrequest.cancelled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0068",
+          "Domain": "DLS",
+          "Object": "Offer",
+          "Current_State": "SENT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COUNTERED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.offer.countered",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0069",
+          "Domain": "DLS",
+          "Object": "Offer",
+          "Current_State": "COUNTERED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACCEPTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.offer.accepted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0070",
+          "Domain": "DLS",
+          "Object": "Offer",
+          "Current_State": "ACCEPTED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "DECLINED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.offer.declined",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0071",
+          "Domain": "DLS",
+          "Object": "Offer",
+          "Current_State": "DECLINED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "EXPIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.offer.expired",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0072",
+          "Domain": "DLS",
+          "Object": "Offer",
+          "Current_State": "EXPIRED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "WITHDRAWN",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.offer.withdrawn",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0073",
+          "Domain": "DLS",
+          "Object": "SafetyCase",
+          "Current_State": "OPEN",
+          "Command_Class": "ADVANCE",
+          "Next_State": "TRIAGED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.safetycase.triaged",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0074",
+          "Domain": "DLS",
+          "Object": "SafetyCase",
+          "Current_State": "TRIAGED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "INVESTIGATING",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.safetycase.investigating",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0075",
+          "Domain": "DLS",
+          "Object": "SafetyCase",
+          "Current_State": "INVESTIGATING",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACTION_REQUIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.safetycase.action_required",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0076",
+          "Domain": "DLS",
+          "Object": "SafetyCase",
+          "Current_State": "ACTION_REQUIRED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "RESOLVED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.safetycase.resolved",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-DLS-0077",
+          "Domain": "DLS",
+          "Object": "SafetyCase",
+          "Current_State": "RESOLVED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "dls.safetycase.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0078",
+          "Domain": "RPM",
+          "Object": "Application",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUBMITTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.application.submitted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0079",
+          "Domain": "RPM",
+          "Object": "Application",
+          "Current_State": "SUBMITTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SCREENING",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.application.screening",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0080",
+          "Domain": "RPM",
+          "Object": "Application",
+          "Current_State": "SCREENING",
+          "Command_Class": "ADVANCE",
+          "Next_State": "APPROVED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.application.approved",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0081",
+          "Domain": "RPM",
+          "Object": "Application",
+          "Current_State": "APPROVED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "DECLINED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.application.declined",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0082",
+          "Domain": "RPM",
+          "Object": "Application",
+          "Current_State": "DECLINED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "WITHDRAWN",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.application.withdrawn",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0083",
+          "Domain": "RPM",
+          "Object": "Lease",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "OFFERED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.lease.offered",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0084",
+          "Domain": "RPM",
+          "Object": "Lease",
+          "Current_State": "OFFERED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SIGNED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.lease.signed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0085",
+          "Domain": "RPM",
+          "Object": "Lease",
+          "Current_State": "SIGNED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACTIVE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.lease.active",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0086",
+          "Domain": "RPM",
+          "Object": "Lease",
+          "Current_State": "ACTIVE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "NOTICE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.lease.notice",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0087",
+          "Domain": "RPM",
+          "Object": "Lease",
+          "Current_State": "NOTICE",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "EXPIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.lease.expired",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0088",
+          "Domain": "RPM",
+          "Object": "Lease",
+          "Current_State": "EXPIRED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "TERMINATED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.lease.terminated",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0089",
+          "Domain": "RPM",
+          "Object": "MaintenanceRequest",
+          "Current_State": "NEW",
+          "Command_Class": "ADVANCE",
+          "Next_State": "TRIAGED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.maintenancerequest.triaged",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0090",
+          "Domain": "RPM",
+          "Object": "MaintenanceRequest",
+          "Current_State": "TRIAGED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ASSIGNED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.maintenancerequest.assigned",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0091",
+          "Domain": "RPM",
+          "Object": "MaintenanceRequest",
+          "Current_State": "ASSIGNED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "IN_PROGRESS",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.maintenancerequest.in_progress",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0092",
+          "Domain": "RPM",
+          "Object": "MaintenanceRequest",
+          "Current_State": "IN_PROGRESS",
+          "Command_Class": "ADVANCE",
+          "Next_State": "AWAITING_PARTS",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.maintenancerequest.awaiting_parts",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0093",
+          "Domain": "RPM",
+          "Object": "MaintenanceRequest",
+          "Current_State": "AWAITING_PARTS",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COMPLETED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.maintenancerequest.completed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0094",
+          "Domain": "RPM",
+          "Object": "MaintenanceRequest",
+          "Current_State": "COMPLETED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "VERIFIED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.maintenancerequest.verified",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0095",
+          "Domain": "RPM",
+          "Object": "MaintenanceRequest",
+          "Current_State": "VERIFIED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.maintenancerequest.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0096",
+          "Domain": "RPM",
+          "Object": "Payment",
+          "Current_State": "INITIATED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "AUTHORIZED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.payment.authorized",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0097",
+          "Domain": "RPM",
+          "Object": "Payment",
+          "Current_State": "AUTHORIZED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SETTLED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.payment.settled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0098",
+          "Domain": "RPM",
+          "Object": "Payment",
+          "Current_State": "SETTLED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "FAILED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.payment.failed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0099",
+          "Domain": "RPM",
+          "Object": "Payment",
+          "Current_State": "FAILED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "REFUNDED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.payment.refunded",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-RPM-0100",
+          "Domain": "RPM",
+          "Object": "Payment",
+          "Current_State": "REFUNDED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "RECONCILED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "rpm.payment.reconciled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0101",
+          "Domain": "SKS",
+          "Object": "Booking",
+          "Current_State": "REQUESTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CONFIRMED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.booking.confirmed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0102",
+          "Domain": "SKS",
+          "Object": "Booking",
+          "Current_State": "CONFIRMED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CHECKED_IN",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.booking.checked_in",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0103",
+          "Domain": "SKS",
+          "Object": "Booking",
+          "Current_State": "CHECKED_IN",
+          "Command_Class": "ADVANCE",
+          "Next_State": "IN_USE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.booking.in_use",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0104",
+          "Domain": "SKS",
+          "Object": "Booking",
+          "Current_State": "IN_USE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CHECKED_OUT",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.booking.checked_out",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0105",
+          "Domain": "SKS",
+          "Object": "Booking",
+          "Current_State": "CHECKED_OUT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COMPLETED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.booking.completed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0106",
+          "Domain": "SKS",
+          "Object": "Booking",
+          "Current_State": "COMPLETED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "CANCELLED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.booking.cancelled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0107",
+          "Domain": "SKS",
+          "Object": "Booking",
+          "Current_State": "CANCELLED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "NO_SHOW",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.booking.no_show",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0108",
+          "Domain": "SKS",
+          "Object": "ComplianceDocument",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUBMITTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.compliancedocument.submitted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0109",
+          "Domain": "SKS",
+          "Object": "ComplianceDocument",
+          "Current_State": "SUBMITTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "VERIFIED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.compliancedocument.verified",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0110",
+          "Domain": "SKS",
+          "Object": "ComplianceDocument",
+          "Current_State": "VERIFIED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "EXPIRING",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.compliancedocument.expiring",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0111",
+          "Domain": "SKS",
+          "Object": "ComplianceDocument",
+          "Current_State": "EXPIRING",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "EXPIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.compliancedocument.expired",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0112",
+          "Domain": "SKS",
+          "Object": "ComplianceDocument",
+          "Current_State": "EXPIRED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "REJECTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.compliancedocument.rejected",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0113",
+          "Domain": "SKS",
+          "Object": "AccessCredential",
+          "Current_State": "REQUESTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ISSUED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.accesscredential.issued",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0114",
+          "Domain": "SKS",
+          "Object": "AccessCredential",
+          "Current_State": "ISSUED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACTIVE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.accesscredential.active",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0115",
+          "Domain": "SKS",
+          "Object": "AccessCredential",
+          "Current_State": "ACTIVE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUSPENDED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.accesscredential.suspended",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0116",
+          "Domain": "SKS",
+          "Object": "AccessCredential",
+          "Current_State": "SUSPENDED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "REVOKED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.accesscredential.revoked",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0117",
+          "Domain": "SKS",
+          "Object": "AccessCredential",
+          "Current_State": "REVOKED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "EXPIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.accesscredential.expired",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0118",
+          "Domain": "SKS",
+          "Object": "MaintenanceCase",
+          "Current_State": "OPEN",
+          "Command_Class": "ADVANCE",
+          "Next_State": "TRIAGED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.maintenancecase.triaged",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0119",
+          "Domain": "SKS",
+          "Object": "MaintenanceCase",
+          "Current_State": "TRIAGED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ASSIGNED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.maintenancecase.assigned",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0120",
+          "Domain": "SKS",
+          "Object": "MaintenanceCase",
+          "Current_State": "ASSIGNED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "IN_PROGRESS",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.maintenancecase.in_progress",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0121",
+          "Domain": "SKS",
+          "Object": "MaintenanceCase",
+          "Current_State": "IN_PROGRESS",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COMPLETED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.maintenancecase.completed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0122",
+          "Domain": "SKS",
+          "Object": "MaintenanceCase",
+          "Current_State": "COMPLETED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "VERIFIED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.maintenancecase.verified",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-SKS-0123",
+          "Domain": "SKS",
+          "Object": "MaintenanceCase",
+          "Current_State": "VERIFIED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "sks.maintenancecase.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0124",
+          "Domain": "Training Center",
+          "Object": "Course",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "REVIEW",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.course.review",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0125",
+          "Domain": "Training Center",
+          "Object": "Course",
+          "Current_State": "REVIEW",
+          "Command_Class": "ADVANCE",
+          "Next_State": "PUBLISHED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.course.published",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0126",
+          "Domain": "Training Center",
+          "Object": "Course",
+          "Current_State": "PUBLISHED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ARCHIVED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.course.archived",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0127",
+          "Domain": "Training Center",
+          "Object": "Enrollment",
+          "Current_State": "REQUESTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ENROLLED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.enrollment.enrolled",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0128",
+          "Domain": "Training Center",
+          "Object": "Enrollment",
+          "Current_State": "ENROLLED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ACTIVE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.enrollment.active",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0129",
+          "Domain": "Training Center",
+          "Object": "Enrollment",
+          "Current_State": "ACTIVE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "COMPLETED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.enrollment.completed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0130",
+          "Domain": "Training Center",
+          "Object": "Enrollment",
+          "Current_State": "COMPLETED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "FAILED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.enrollment.failed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0131",
+          "Domain": "Training Center",
+          "Object": "Enrollment",
+          "Current_State": "FAILED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "WITHDRAWN",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.enrollment.withdrawn",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0132",
+          "Domain": "Training Center",
+          "Object": "Assessment",
+          "Current_State": "DRAFT",
+          "Command_Class": "ADVANCE",
+          "Next_State": "PUBLISHED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.assessment.published",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0133",
+          "Domain": "Training Center",
+          "Object": "Assessment",
+          "Current_State": "PUBLISHED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "STARTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.assessment.started",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0134",
+          "Domain": "Training Center",
+          "Object": "Assessment",
+          "Current_State": "STARTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "SUBMITTED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.assessment.submitted",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0135",
+          "Domain": "Training Center",
+          "Object": "Assessment",
+          "Current_State": "SUBMITTED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "GRADED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.assessment.graded",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0136",
+          "Domain": "Training Center",
+          "Object": "Assessment",
+          "Current_State": "GRADED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "REVIEW_REQUIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.assessment.review_required",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0137",
+          "Domain": "Training Center",
+          "Object": "Assessment",
+          "Current_State": "REVIEW_REQUIRED",
+          "Command_Class": "ADVANCE",
+          "Next_State": "CLOSED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.assessment.closed",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0138",
+          "Domain": "Training Center",
+          "Object": "Certificate",
+          "Current_State": "PENDING",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ELIGIBLE",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.certificate.eligible",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0139",
+          "Domain": "Training Center",
+          "Object": "Certificate",
+          "Current_State": "ELIGIBLE",
+          "Command_Class": "ADVANCE",
+          "Next_State": "ISSUED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.certificate.issued",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0140",
+          "Domain": "Training Center",
+          "Object": "Certificate",
+          "Current_State": "ISSUED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "REVOKED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.certificate.revoked",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        },
+        {
+          "State_ID": "DSM-TRAIN-0141",
+          "Domain": "Training Center",
+          "Object": "Certificate",
+          "Current_State": "REVOKED",
+          "Command_Class": "EXCEPTION",
+          "Next_State": "EXPIRED",
+          "Guard_Contract": "Permission + entitlement + object policy + required fields",
+          "Event_Type": "train.certificate.expired",
+          "Side_Effects": "Persist + audit + event + notification as configured",
+          "Recovery_Requirement": "Explicit failure/recovery path required"
+        }
+      ]
+    },
+    "ERROR_CODES": {
+      "headers": [
+        "Error_Code",
+        "Domain_Code",
+        "Error_Class",
+        "Meaning",
+        "Handling"
+      ],
+      "records": [
+        {
+          "Error_Code": "EL-CARE-001",
+          "Domain_Code": "CARE",
+          "Error_Class": "VALIDATION_FAILED",
+          "Meaning": "EthioCare: validation failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-002",
+          "Domain_Code": "CARE",
+          "Error_Class": "UNAUTHORIZED",
+          "Meaning": "EthioCare: unauthorized",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-003",
+          "Domain_Code": "CARE",
+          "Error_Class": "FORBIDDEN",
+          "Meaning": "EthioCare: forbidden",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-004",
+          "Domain_Code": "CARE",
+          "Error_Class": "NOT_FOUND",
+          "Meaning": "EthioCare: not found",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-005",
+          "Domain_Code": "CARE",
+          "Error_Class": "DUPLICATE",
+          "Meaning": "EthioCare: duplicate",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-006",
+          "Domain_Code": "CARE",
+          "Error_Class": "STALE_VERSION",
+          "Meaning": "EthioCare: stale version",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-007",
+          "Domain_Code": "CARE",
+          "Error_Class": "CONFLICT",
+          "Meaning": "EthioCare: conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-008",
+          "Domain_Code": "CARE",
+          "Error_Class": "RATE_LIMITED",
+          "Meaning": "EthioCare: rate limited",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-009",
+          "Domain_Code": "CARE",
+          "Error_Class": "DEPENDENCY_TIMEOUT",
+          "Meaning": "EthioCare: dependency timeout",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-010",
+          "Domain_Code": "CARE",
+          "Error_Class": "DEPENDENCY_REJECTED",
+          "Meaning": "EthioCare: dependency rejected",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-011",
+          "Domain_Code": "CARE",
+          "Error_Class": "PAYMENT_FAILED",
+          "Meaning": "EthioCare: payment failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-012",
+          "Domain_Code": "CARE",
+          "Error_Class": "SAFETY_HOLD",
+          "Meaning": "EthioCare: safety hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-013",
+          "Domain_Code": "CARE",
+          "Error_Class": "REGULATORY_HOLD",
+          "Meaning": "EthioCare: regulatory hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-014",
+          "Domain_Code": "CARE",
+          "Error_Class": "ACCOUNTING_MISMATCH",
+          "Meaning": "EthioCare: accounting mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-015",
+          "Domain_Code": "CARE",
+          "Error_Class": "RECONCILIATION_MISMATCH",
+          "Meaning": "EthioCare: reconciliation mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-016",
+          "Domain_Code": "CARE",
+          "Error_Class": "OFFLINE_CONFLICT",
+          "Meaning": "EthioCare: offline conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-CARE-017",
+          "Domain_Code": "CARE",
+          "Error_Class": "INTERNAL_ERROR",
+          "Meaning": "EthioCare: internal error",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-001",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "VALIDATION_FAILED",
+          "Meaning": "Bright Spaces: validation failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-002",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "UNAUTHORIZED",
+          "Meaning": "Bright Spaces: unauthorized",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-003",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "FORBIDDEN",
+          "Meaning": "Bright Spaces: forbidden",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-004",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "NOT_FOUND",
+          "Meaning": "Bright Spaces: not found",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-005",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "DUPLICATE",
+          "Meaning": "Bright Spaces: duplicate",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-006",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "STALE_VERSION",
+          "Meaning": "Bright Spaces: stale version",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-007",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "CONFLICT",
+          "Meaning": "Bright Spaces: conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-008",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "RATE_LIMITED",
+          "Meaning": "Bright Spaces: rate limited",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-009",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "DEPENDENCY_TIMEOUT",
+          "Meaning": "Bright Spaces: dependency timeout",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-010",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "DEPENDENCY_REJECTED",
+          "Meaning": "Bright Spaces: dependency rejected",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-011",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "PAYMENT_FAILED",
+          "Meaning": "Bright Spaces: payment failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-012",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "SAFETY_HOLD",
+          "Meaning": "Bright Spaces: safety hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-013",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "REGULATORY_HOLD",
+          "Meaning": "Bright Spaces: regulatory hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-014",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "ACCOUNTING_MISMATCH",
+          "Meaning": "Bright Spaces: accounting mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-015",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "RECONCILIATION_MISMATCH",
+          "Meaning": "Bright Spaces: reconciliation mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-016",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "OFFLINE_CONFLICT",
+          "Meaning": "Bright Spaces: offline conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-BRIGHT-017",
+          "Domain_Code": "BRIGHT",
+          "Error_Class": "INTERNAL_ERROR",
+          "Meaning": "Bright Spaces: internal error",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-001",
+          "Domain_Code": "DLS",
+          "Error_Class": "VALIDATION_FAILED",
+          "Meaning": "DLS: validation failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-002",
+          "Domain_Code": "DLS",
+          "Error_Class": "UNAUTHORIZED",
+          "Meaning": "DLS: unauthorized",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-003",
+          "Domain_Code": "DLS",
+          "Error_Class": "FORBIDDEN",
+          "Meaning": "DLS: forbidden",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-004",
+          "Domain_Code": "DLS",
+          "Error_Class": "NOT_FOUND",
+          "Meaning": "DLS: not found",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-005",
+          "Domain_Code": "DLS",
+          "Error_Class": "DUPLICATE",
+          "Meaning": "DLS: duplicate",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-006",
+          "Domain_Code": "DLS",
+          "Error_Class": "STALE_VERSION",
+          "Meaning": "DLS: stale version",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-007",
+          "Domain_Code": "DLS",
+          "Error_Class": "CONFLICT",
+          "Meaning": "DLS: conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-008",
+          "Domain_Code": "DLS",
+          "Error_Class": "RATE_LIMITED",
+          "Meaning": "DLS: rate limited",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-009",
+          "Domain_Code": "DLS",
+          "Error_Class": "DEPENDENCY_TIMEOUT",
+          "Meaning": "DLS: dependency timeout",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-010",
+          "Domain_Code": "DLS",
+          "Error_Class": "DEPENDENCY_REJECTED",
+          "Meaning": "DLS: dependency rejected",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-011",
+          "Domain_Code": "DLS",
+          "Error_Class": "PAYMENT_FAILED",
+          "Meaning": "DLS: payment failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-012",
+          "Domain_Code": "DLS",
+          "Error_Class": "SAFETY_HOLD",
+          "Meaning": "DLS: safety hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-013",
+          "Domain_Code": "DLS",
+          "Error_Class": "REGULATORY_HOLD",
+          "Meaning": "DLS: regulatory hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-014",
+          "Domain_Code": "DLS",
+          "Error_Class": "ACCOUNTING_MISMATCH",
+          "Meaning": "DLS: accounting mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-015",
+          "Domain_Code": "DLS",
+          "Error_Class": "RECONCILIATION_MISMATCH",
+          "Meaning": "DLS: reconciliation mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-016",
+          "Domain_Code": "DLS",
+          "Error_Class": "OFFLINE_CONFLICT",
+          "Meaning": "DLS: offline conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-DLS-017",
+          "Domain_Code": "DLS",
+          "Error_Class": "INTERNAL_ERROR",
+          "Meaning": "DLS: internal error",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-001",
+          "Domain_Code": "RPM",
+          "Error_Class": "VALIDATION_FAILED",
+          "Meaning": "RPM: validation failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-002",
+          "Domain_Code": "RPM",
+          "Error_Class": "UNAUTHORIZED",
+          "Meaning": "RPM: unauthorized",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-003",
+          "Domain_Code": "RPM",
+          "Error_Class": "FORBIDDEN",
+          "Meaning": "RPM: forbidden",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-004",
+          "Domain_Code": "RPM",
+          "Error_Class": "NOT_FOUND",
+          "Meaning": "RPM: not found",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-005",
+          "Domain_Code": "RPM",
+          "Error_Class": "DUPLICATE",
+          "Meaning": "RPM: duplicate",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-006",
+          "Domain_Code": "RPM",
+          "Error_Class": "STALE_VERSION",
+          "Meaning": "RPM: stale version",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-007",
+          "Domain_Code": "RPM",
+          "Error_Class": "CONFLICT",
+          "Meaning": "RPM: conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-008",
+          "Domain_Code": "RPM",
+          "Error_Class": "RATE_LIMITED",
+          "Meaning": "RPM: rate limited",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-009",
+          "Domain_Code": "RPM",
+          "Error_Class": "DEPENDENCY_TIMEOUT",
+          "Meaning": "RPM: dependency timeout",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-010",
+          "Domain_Code": "RPM",
+          "Error_Class": "DEPENDENCY_REJECTED",
+          "Meaning": "RPM: dependency rejected",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-011",
+          "Domain_Code": "RPM",
+          "Error_Class": "PAYMENT_FAILED",
+          "Meaning": "RPM: payment failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-012",
+          "Domain_Code": "RPM",
+          "Error_Class": "SAFETY_HOLD",
+          "Meaning": "RPM: safety hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-013",
+          "Domain_Code": "RPM",
+          "Error_Class": "REGULATORY_HOLD",
+          "Meaning": "RPM: regulatory hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-014",
+          "Domain_Code": "RPM",
+          "Error_Class": "ACCOUNTING_MISMATCH",
+          "Meaning": "RPM: accounting mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-015",
+          "Domain_Code": "RPM",
+          "Error_Class": "RECONCILIATION_MISMATCH",
+          "Meaning": "RPM: reconciliation mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-016",
+          "Domain_Code": "RPM",
+          "Error_Class": "OFFLINE_CONFLICT",
+          "Meaning": "RPM: offline conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-RPM-017",
+          "Domain_Code": "RPM",
+          "Error_Class": "INTERNAL_ERROR",
+          "Meaning": "RPM: internal error",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-001",
+          "Domain_Code": "SKS",
+          "Error_Class": "VALIDATION_FAILED",
+          "Meaning": "SKS: validation failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-002",
+          "Domain_Code": "SKS",
+          "Error_Class": "UNAUTHORIZED",
+          "Meaning": "SKS: unauthorized",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-003",
+          "Domain_Code": "SKS",
+          "Error_Class": "FORBIDDEN",
+          "Meaning": "SKS: forbidden",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-004",
+          "Domain_Code": "SKS",
+          "Error_Class": "NOT_FOUND",
+          "Meaning": "SKS: not found",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-005",
+          "Domain_Code": "SKS",
+          "Error_Class": "DUPLICATE",
+          "Meaning": "SKS: duplicate",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-006",
+          "Domain_Code": "SKS",
+          "Error_Class": "STALE_VERSION",
+          "Meaning": "SKS: stale version",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-007",
+          "Domain_Code": "SKS",
+          "Error_Class": "CONFLICT",
+          "Meaning": "SKS: conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-008",
+          "Domain_Code": "SKS",
+          "Error_Class": "RATE_LIMITED",
+          "Meaning": "SKS: rate limited",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-009",
+          "Domain_Code": "SKS",
+          "Error_Class": "DEPENDENCY_TIMEOUT",
+          "Meaning": "SKS: dependency timeout",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-010",
+          "Domain_Code": "SKS",
+          "Error_Class": "DEPENDENCY_REJECTED",
+          "Meaning": "SKS: dependency rejected",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-011",
+          "Domain_Code": "SKS",
+          "Error_Class": "PAYMENT_FAILED",
+          "Meaning": "SKS: payment failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-012",
+          "Domain_Code": "SKS",
+          "Error_Class": "SAFETY_HOLD",
+          "Meaning": "SKS: safety hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-013",
+          "Domain_Code": "SKS",
+          "Error_Class": "REGULATORY_HOLD",
+          "Meaning": "SKS: regulatory hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-014",
+          "Domain_Code": "SKS",
+          "Error_Class": "ACCOUNTING_MISMATCH",
+          "Meaning": "SKS: accounting mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-015",
+          "Domain_Code": "SKS",
+          "Error_Class": "RECONCILIATION_MISMATCH",
+          "Meaning": "SKS: reconciliation mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-016",
+          "Domain_Code": "SKS",
+          "Error_Class": "OFFLINE_CONFLICT",
+          "Meaning": "SKS: offline conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-SKS-017",
+          "Domain_Code": "SKS",
+          "Error_Class": "INTERNAL_ERROR",
+          "Meaning": "SKS: internal error",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-001",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "VALIDATION_FAILED",
+          "Meaning": "Training Center: validation failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-002",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "UNAUTHORIZED",
+          "Meaning": "Training Center: unauthorized",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-003",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "FORBIDDEN",
+          "Meaning": "Training Center: forbidden",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-004",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "NOT_FOUND",
+          "Meaning": "Training Center: not found",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-005",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "DUPLICATE",
+          "Meaning": "Training Center: duplicate",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-006",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "STALE_VERSION",
+          "Meaning": "Training Center: stale version",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-007",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "CONFLICT",
+          "Meaning": "Training Center: conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-008",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "RATE_LIMITED",
+          "Meaning": "Training Center: rate limited",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-009",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "DEPENDENCY_TIMEOUT",
+          "Meaning": "Training Center: dependency timeout",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-010",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "DEPENDENCY_REJECTED",
+          "Meaning": "Training Center: dependency rejected",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-011",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "PAYMENT_FAILED",
+          "Meaning": "Training Center: payment failed",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-012",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "SAFETY_HOLD",
+          "Meaning": "Training Center: safety hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-013",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "REGULATORY_HOLD",
+          "Meaning": "Training Center: regulatory hold",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-014",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "ACCOUNTING_MISMATCH",
+          "Meaning": "Training Center: accounting mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-015",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "RECONCILIATION_MISMATCH",
+          "Meaning": "Training Center: reconciliation mismatch",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-016",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "OFFLINE_CONFLICT",
+          "Meaning": "Training Center: offline conflict",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        },
+        {
+          "Error_Code": "EL-TRAIN-017",
+          "Domain_Code": "TRAIN",
+          "Error_Class": "INTERNAL_ERROR",
+          "Meaning": "Training Center: internal error",
+          "Handling": "Safe client message + audit + telemetry; retry only when safe"
+        }
+      ]
+    },
+    "INTEGRATIONS": {
+      "headers": [
+        "Integration_ID",
+        "Domain",
+        "External_System",
+        "Protocol",
+        "Auth",
+        "Failure_Handling",
+        "Idempotency",
+        "Testing",
+        "Decision_Boundary"
+      ],
+      "records": [
+        {
+          "Integration_ID": "INT-CARE-0001",
+          "Domain": "EthioCare",
+          "External_System": "Payment Gateway",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0002",
+          "Domain": "EthioCare",
+          "External_System": "SMS",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0003",
+          "Domain": "EthioCare",
+          "External_System": "Email",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0004",
+          "Domain": "EthioCare",
+          "External_System": "Identity/KYC",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0005",
+          "Domain": "EthioCare",
+          "External_System": "Maps",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0006",
+          "Domain": "EthioCare",
+          "External_System": "Accounting/ERP",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0007",
+          "Domain": "EthioCare",
+          "External_System": "Document Storage",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0008",
+          "Domain": "EthioCare",
+          "External_System": "Analytics",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0009",
+          "Domain": "EthioCare",
+          "External_System": "Push Notifications",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-CARE-0010",
+          "Domain": "EthioCare",
+          "External_System": "Contact Center",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0011",
+          "Domain": "Bright Spaces",
+          "External_System": "Payment Gateway",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0012",
+          "Domain": "Bright Spaces",
+          "External_System": "SMS",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0013",
+          "Domain": "Bright Spaces",
+          "External_System": "Email",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0014",
+          "Domain": "Bright Spaces",
+          "External_System": "Identity/KYC",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0015",
+          "Domain": "Bright Spaces",
+          "External_System": "Maps",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0016",
+          "Domain": "Bright Spaces",
+          "External_System": "Accounting/ERP",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0017",
+          "Domain": "Bright Spaces",
+          "External_System": "Document Storage",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0018",
+          "Domain": "Bright Spaces",
+          "External_System": "Analytics",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0019",
+          "Domain": "Bright Spaces",
+          "External_System": "Push Notifications",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-BRIGHT-0020",
+          "Domain": "Bright Spaces",
+          "External_System": "Contact Center",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0021",
+          "Domain": "DLS",
+          "External_System": "Payment Gateway",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0022",
+          "Domain": "DLS",
+          "External_System": "SMS",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0023",
+          "Domain": "DLS",
+          "External_System": "Email",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0024",
+          "Domain": "DLS",
+          "External_System": "Identity/KYC",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0025",
+          "Domain": "DLS",
+          "External_System": "Maps",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0026",
+          "Domain": "DLS",
+          "External_System": "Accounting/ERP",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0027",
+          "Domain": "DLS",
+          "External_System": "Document Storage",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0028",
+          "Domain": "DLS",
+          "External_System": "Analytics",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0029",
+          "Domain": "DLS",
+          "External_System": "Push Notifications",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-DLS-0030",
+          "Domain": "DLS",
+          "External_System": "Contact Center",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0031",
+          "Domain": "RPM",
+          "External_System": "Payment Gateway",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0032",
+          "Domain": "RPM",
+          "External_System": "SMS",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0033",
+          "Domain": "RPM",
+          "External_System": "Email",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0034",
+          "Domain": "RPM",
+          "External_System": "Identity/KYC",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0035",
+          "Domain": "RPM",
+          "External_System": "Maps",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0036",
+          "Domain": "RPM",
+          "External_System": "Accounting/ERP",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0037",
+          "Domain": "RPM",
+          "External_System": "Document Storage",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0038",
+          "Domain": "RPM",
+          "External_System": "Analytics",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0039",
+          "Domain": "RPM",
+          "External_System": "Push Notifications",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-RPM-0040",
+          "Domain": "RPM",
+          "External_System": "Contact Center",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0041",
+          "Domain": "SKS",
+          "External_System": "Payment Gateway",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0042",
+          "Domain": "SKS",
+          "External_System": "SMS",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0043",
+          "Domain": "SKS",
+          "External_System": "Email",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0044",
+          "Domain": "SKS",
+          "External_System": "Identity/KYC",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0045",
+          "Domain": "SKS",
+          "External_System": "Maps",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0046",
+          "Domain": "SKS",
+          "External_System": "Accounting/ERP",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0047",
+          "Domain": "SKS",
+          "External_System": "Document Storage",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0048",
+          "Domain": "SKS",
+          "External_System": "Analytics",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0049",
+          "Domain": "SKS",
+          "External_System": "Push Notifications",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-SKS-0050",
+          "Domain": "SKS",
+          "External_System": "Contact Center",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0051",
+          "Domain": "Training Center",
+          "External_System": "Payment Gateway",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0052",
+          "Domain": "Training Center",
+          "External_System": "SMS",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0053",
+          "Domain": "Training Center",
+          "External_System": "Email",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0054",
+          "Domain": "Training Center",
+          "External_System": "Identity/KYC",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0055",
+          "Domain": "Training Center",
+          "External_System": "Maps",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0056",
+          "Domain": "Training Center",
+          "External_System": "Accounting/ERP",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0057",
+          "Domain": "Training Center",
+          "External_System": "Document Storage",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0058",
+          "Domain": "Training Center",
+          "External_System": "Analytics",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0059",
+          "Domain": "Training Center",
+          "External_System": "Push Notifications",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        },
+        {
+          "Integration_ID": "INT-TRAIN-0060",
+          "Domain": "Training Center",
+          "External_System": "Contact Center",
+          "Protocol": "Approved adapter; REST/webhook where supported",
+          "Auth": "Provider-approved auth",
+          "Failure_Handling": "Timeout; backoff; circuit breaker",
+          "Idempotency": "Idempotency + correlation",
+          "Testing": "Sandbox contract test + production health check",
+          "Decision_Boundary": "Provider/regulatory approval required"
+        }
+      ]
+    },
+    "CONTROLLED_DECISION_GATE": {
+      "headers": [
+        "Decision_ID",
+        "Topic",
+        "Current_Status",
+        "Required_Owner",
+        "Required_Evidence",
+        "Required_Version_Date",
+        "Required_Test_Fixture",
+        "Gate",
+        "Developer_Constraint",
+        "Closure_Criterion"
+      ],
+      "records": [
+        {
+          "Decision_ID": "DEC-001",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-002",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-003",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-004",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-005",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-006",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-007",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-008",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-009",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-010",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-011",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-012",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "DEC-013",
+          "Topic": "CONTROLLED_DECISION",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-001",
+          "Topic": "Pricing/allowances/overage",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-002",
+          "Topic": "Tax and e-invoice authority",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-003",
+          "Topic": "Payment provider/settlement",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-004",
+          "Topic": "KYC levels",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-005",
+          "Topic": "Background-check policy",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-006",
+          "Topic": "EthioCare clinical boundary",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-007",
+          "Topic": "Data residency/cross-border",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-008",
+          "Topic": "SLA targets",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-009",
+          "Topic": "DR RTO/RPO",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        },
+        {
+          "Decision_ID": "CTRL-DEC-010",
+          "Topic": "Provider certification",
+          "Current_Status": "OPEN",
+          "Required_Owner": "BUSINESS_OR_REGULATORY_OWNER",
+          "Required_Evidence": "AUTHORITATIVE_SOURCE_OR_SIGNED_APPROVAL",
+          "Required_Version_Date": "VERSION_AND_EFFECTIVE_DATE",
+          "Required_Test_Fixture": "TEST_FIXTURE",
+          "Gate": "BLOCK_AFFECTED_CAPABILITY_ACTIVATION",
+          "Developer_Constraint": "NO_DEFAULT;NO_INFERENCE;NO_CODER_OVERRIDE",
+          "Closure_Criterion": "PASS only after evidence fields are populated and independently reviewed"
+        }
+      ]
+    }
+  }
+}

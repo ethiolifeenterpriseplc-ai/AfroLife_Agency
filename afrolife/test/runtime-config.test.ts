@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadRuntimeConfig, sessionIdleTimeoutMinutes } from '../src/runtime-config.js';
 
@@ -136,6 +137,15 @@ test('Insurance service routing requires an explicit cutover-readiness attestati
     INSURANCE_SERVICE_URL: serviceUrl,
     INSURANCE_SERVICE_CUTOVER_READY: '1',
   }));
+});
+
+test('production environment templates keep Insurance unset until cutover is approved', () => {
+  for (const template of ['../.env.production.example', '../.env.production.windows.example']) {
+    const contents = readFileSync(new URL(template, import.meta.url), 'utf8');
+    assert.match(contents, /^INSURANCE_SERVICE_URL=\s*$/m);
+    assert.match(contents, /^INSURANCE_GATEWAY_SECRET=\s*$/m);
+    assert.match(contents, /^INSURANCE_SERVICE_CUTOVER_READY=0$/m);
+  }
 });
 
 test('Agency service gateways require explicit cutover readiness and service credentials', () => {

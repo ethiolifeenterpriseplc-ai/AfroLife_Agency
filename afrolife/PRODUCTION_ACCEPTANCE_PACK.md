@@ -6,6 +6,13 @@ This pack consolidates the operational readiness, incident response, and approva
 
 The current platform remains in a guarded production-readiness state rather than a full production-authorized state. The implementation is hardened for the existing platform, its legacy flow remains protected, and regulated or legal-effect features stay disabled until named owners sign off on the applied policy and evidence.
 
+The 15 October 2026 local review passed 178 unit tests, all main/domain builds,
+the runtime ACL checker, and 49 API/supply integration tests against a fresh
+restricted-runtime disposable database. Details and scope limits are in
+[V7_RESTRICTED_ACL_ACCEPTANCE_2026-10-15.md](V7_RESTRICTED_ACL_ACCEPTANCE_2026-10-15.md).
+These results do not close staging, full-surface isolation, capacity, witnessed
+recovery, accessibility, provider, legal, finance, or named-owner gates.
+
 The approval gate includes these areas:
 - legal validity of notices and electronic-signature evidence
 - provider legal basis, data-processing, and KYC / screening approval

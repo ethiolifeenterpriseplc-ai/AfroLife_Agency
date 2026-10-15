@@ -103,6 +103,11 @@ complete from a local development check alone.
   release-approval acceptance test. Confirm list/insert attribution, denied
   non-admin access, append-only database behavior and no secret or
   personal-data content in evidence notes.
+- [ ] For a restricted-runtime database rehearsal, apply the one-time base
+  runtime grants before migrations as documented in `README.md`; do not apply
+  blanket grants after migration 039. Run
+  `npm run db:check-runtime-acls` against the exact runtime role and record
+  the result separately from test-fixture grants.
 - [ ] Record separate evidence entries for workforce, Insurance, MFI/SACCO,
   Edir, property, marketplace and shared platform gates in
   [PRODUCTION_ACCEPTANCE_PACK.md](PRODUCTION_ACCEPTANCE_PACK.md). A recorded

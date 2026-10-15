@@ -15,12 +15,12 @@ This is a working release record. Blank fields are not accepted evidence. Do not
 
 ## Gate evidence
 
-Supplemental synthetic-only results from 14 October 2026 are recorded in [V7_MOCK_ACCEPTANCE_EVIDENCE_2026-10-14.md](V7_MOCK_ACCEPTANCE_EVIDENCE_2026-10-14.md). Mock evidence does not close production gates.
+Supplemental synthetic-only results from 14 October 2026 are recorded in [V7_MOCK_ACCEPTANCE_EVIDENCE_2026-10-14.md](V7_MOCK_ACCEPTANCE_EVIDENCE_2026-10-14.md). The later local restricted-runtime rehearsal is recorded in [V7_RESTRICTED_ACL_ACCEPTANCE_2026-10-15.md](V7_RESTRICTED_ACL_ACCEPTANCE_2026-10-15.md). Neither report is staging or production acceptance.
 
 | Gate | Evidence to attach or link | Owner | State |
 |---|---|---|---|
-| Build, unit, API and regression checks | CI run tied to release commit; list exclusions | Engineering | Open |
-| Full-surface tenant/party isolation | Mock suite: 45/46 API/supply checks; broad local insurance-ledger UPDATE privilege flagged. Full route/resource inventory and production-equivalent negative evidence still required. See mock evidence report. | Security/Engineering | Partial — production gate open |
+| Build, unit, API and regression checks | Local main/domain builds, 178 unit tests, production dependency audit, and 49/49 API/supply integrations passed; API/supply evidence used source commit `037f84d`, while the current working tree also passes builds and unit tests. CI run tied to exact release commit and full run evidence still required. See restricted-runtime acceptance report. | Engineering | Local checks passed; release gate open |
+| Full-surface tenant/party isolation | Restricted-runtime ACL checker passed for Insurance ledger and auth-session privileges; API/supply suite passed 49/49. This supersedes the earlier local Insurance `UPDATE` observation, which was caused by grant setup order. Full route/resource inventory and production-equivalent negative evidence remain required. See both mock and restricted-runtime evidence reports. | Security/Engineering | Partial — production gate open |
 | Performance/capacity | 50,000 synthetic leads were seeded; authenticated lead-list load attempt produced no usable report. Prior health-only smoke: 500 requests, concurrency 25, p95 105.3 ms/p99 172.3 ms. See mock evidence report. | Product/IT | Partial — production gate open |
 | Recovery and rollback | Synthetic database plus file restore passed with matching control totals/hash in 18.2 seconds. Proposed RPO/RTO, PITR, target infrastructure, backup protection and rollback remain unverified. See mock evidence report. | IT/Operations | Partial — production gate open |
 | Accessibility/localisation | Automated browser checks reached the final role sweep; harness reported two unexpected 401 background responses. Manual accessibility, Amharic/English/calendar and physical-device review remain. See mock evidence report. | Product/UX | Partial — production gate open |
