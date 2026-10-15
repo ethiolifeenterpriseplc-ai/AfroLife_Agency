@@ -675,6 +675,7 @@ async function refresh() {
     state.businessRules = state.user.role === 'global_admin' ? await api('/business-rules') : [];
     state.globalAdminPromotions = isPlatformAdmin() ? await api('/global-admin-promotions') : [];
     state.serviceIdentities = isPlatformAdmin() ? await api('/service-identities') : [];
+    state.readinessEvidence = isPlatformAdmin() ? await api('/readiness-evidence') : [];
     state.propertyAccountingTemplate = ['global_admin','super_admin','finance','finance_manager'].includes(state.user.role)
       ? await api('/finance/property-chart-of-accounts-template') : null;
     state.roleAccess = state.user.role === 'super_admin' ? await api('/role-access') : null;
@@ -1769,23 +1770,15 @@ function renderRoleAccess() {
   return section;
 }
 
-function loadReadinessEvidence() {
-  try {
-    const cached = JSON.parse(localStorage.getItem('afrolife.readiness-evidence') ?? '[]');
-    state.readinessEvidence = Array.isArray(cached) ? cached : [];
-  } catch (error) {
-    state.readinessEvidence = [];
-  }
-}
-
 function renderReadinessEvidence() {
   const section = node('section', undefined, 'panel form-card');
   section.style.marginTop = '20px';
   section.append(node('h3', 'Production readiness evidence'));
-  section.append(node('p', 'Capture legal, provider, DR, service-account, and release-owner evidence. These records support the final go/no-go decision and remain separate from any live legal or provider authorization.'));
+  section.append(node('p', 'Append operational evidence for each service. Records are stored in the shared database and attributed to the signed-in administrator. An evidence record does not itself grant legal, provider, finance, or production authorization.'));
   const form = node('form', undefined, 'inline-form');
   form.dataset.form = 'readiness-evidence';
   form.append(
+    field('Service / module', 'module', 'select', true).label,
     field('Evidence category', 'category', 'select', true).label,
     field('Owner / domain', 'owner', 'text', true, { placeholder: 'Legal, Finance, Provider, Ops, Security' }).label,
     field('Approver / reviewer', 'approver', 'text', true, { placeholder: 'Named approver' }).label,
@@ -1794,12 +1787,16 @@ function renderReadinessEvidence() {
     field('Environment', 'environment', 'select', true).label,
     field('Approval notes', 'notes', 'textarea', false, { rows: '3', placeholder: 'Required conditions, review outcome, or unresolved risk.' }).label,
   );
+  const moduleSelect = form.elements.module;
+  for (const value of ['platform', 'workforce', 'insurance', 'mfi', 'edir', 'property', 'marketplace', 'agency']) {
+    const option = node('option', value.toUpperCase()); option.value = value; moduleSelect.append(option);
+  }
   const category = form.elements.category;
-  for (const value of ['legal', 'provider', 'dr', 'incident', 'service_account', 'release_owner']) {
+  for (const value of ['legal', 'provider', 'finance', 'security', 'operations', 'accessibility', 'capacity', 'dr', 'incident', 'service_account', 'release_owner', 'privacy']) {
     const option = node('option', value.replaceAll('_', ' ')); option.value = value; category.append(option);
   }
   const statusSelect = form.elements.status;
-  for (const value of ['draft', 'pending_review', 'approved', 'rejected']) {
+  for (const value of ['open', 'evidence_recorded', 'blocked', 'not_applicable']) {
     const option = node('option', value.replaceAll('_', ' ')); option.value = value; statusSelect.append(option);
   }
   const environmentSelect = form.elements.environment;
@@ -1811,8 +1808,9 @@ function renderReadinessEvidence() {
   const list = node('div', undefined, 'list');
   if (!state.readinessEvidence.length) list.append(empty('No operational-readiness evidence has been recorded yet.'));
   for (const entry of state.readinessEvidence) {
-    const item = card(`${entry.category.replaceAll('_', ' ')} · ${entry.owner}`, `${entry.environment} · ${entry.approver} · ${entry.status.replaceAll('_', ' ')}`, entry.status);
-    if (entry.evidence_ref) item.append(node('p', `Reference: ${entry.evidence_ref}`));
+    const item = card(`${entry.module.toUpperCase()} · ${entry.category.replaceAll('_', ' ')} · ${entry.owner_name}`, `${entry.environment} · approver/reviewer ${entry.approver_name} · ${entry.status.replaceAll('_', ' ')}`, entry.status);
+    item.append(node('p', `Recorded by ${entry.recorded_by_name} (${entry.recorded_by_role}) · ${new Date(entry.created_at).toLocaleString(document.documentElement.lang)}`));
+    if (entry.evidence_reference) item.append(node('p', `Reference: ${entry.evidence_reference}`));
     if (entry.notes) item.append(node('p', entry.notes));
     list.append(item);
   }
@@ -2126,25 +2124,23 @@ async function submitForm(form) {
     return;
   }
   if (form.dataset.form === 'readiness-evidence') {
-    const entry = {
+    const payload = {
+      module: values.module,
       category: values.category,
-      owner: values.owner.trim(),
-      approver: values.approver.trim(),
+      owner_name: values.owner.trim(),
+      approver_name: values.approver.trim(),
       status: values.status,
-      evidence_ref: values.evidence_ref.trim(),
+      evidence_reference: values.evidence_ref.trim(),
       environment: values.environment,
       notes: values.notes?.trim() ?? '',
-      created_at: new Date().toISOString(),
     };
-    if (!entry.owner || !entry.approver || !entry.evidence_ref) {
+    if (!payload.owner_name || !payload.approver_name || !payload.evidence_reference) {
       throw new Error('Owner, approver, and evidence reference are required.');
     }
-    const current = JSON.parse(localStorage.getItem('afrolife.readiness-evidence') ?? '[]');
-    const next = [entry, ...Array.isArray(current) ? current : []].slice(0, 80);
-    localStorage.setItem('afrolife.readiness-evidence', JSON.stringify(next));
-    state.readinessEvidence = next;
+    await api('/readiness-evidence', { method: 'POST', body: JSON.stringify(payload) });
+    state.readinessEvidence = await api('/readiness-evidence');
     renderPanel();
-    showAlert('Operational readiness evidence recorded. Keep the named approver and evidence reference with the release pack.');
+    showAlert('Operational readiness evidence recorded in the shared database. This is evidence only and does not grant approval.');
     return;
   }
   if (form.dataset.form === 'learning-content') {

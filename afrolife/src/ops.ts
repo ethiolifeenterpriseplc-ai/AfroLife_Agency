@@ -721,6 +721,43 @@ ops.get('/finance/property-period-close', requireRole('finance','finance_manager
 }));
 
 // ----------------- Release approvals (record owner sign-off) -----------------
+ops.get('/readiness-evidence', requireRole('super_admin','global_admin'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT e.id,e.module,e.category,e.status,e.owner_name,e.approver_name,
+       e.evidence_reference,e.environment,e.notes,e.recorded_by_role,e.created_at,
+       u.legal_name AS recorded_by_name
+     FROM release_readiness_evidence e
+     JOIN users u ON u.id=e.recorded_by
+     ORDER BY e.created_at DESC LIMIT 500`,
+  )).rows));
+}));
+
+ops.post('/readiness-evidence', requireRole('super_admin','global_admin'), h(async (req, res) => {
+  const b = z.object({
+    module: z.enum(['platform','workforce','insurance','mfi','edir','property','marketplace','agency']),
+    category: z.enum(['legal','provider','finance','security','operations','accessibility','capacity','dr','incident','service_account','release_owner','privacy']),
+    status: z.enum(['open','evidence_recorded','blocked','not_applicable']),
+    owner_name: z.string().trim().min(2).max(160),
+    approver_name: z.string().trim().min(2).max(160),
+    evidence_reference: z.string().trim().min(3).max(500),
+    environment: z.enum(['production','staging','sandbox','development']),
+    notes: z.string().trim().max(4000).default(''),
+  }).strict().parse(req.body);
+  res.status(201).json(await withUser(req.user!, async (c) => {
+    const row = (await c.query(
+      `INSERT INTO release_readiness_evidence
+         (module,category,status,owner_name,approver_name,evidence_reference,environment,notes,recorded_by,recorded_by_role)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING id,module,category,status,owner_name,approver_name,evidence_reference,environment,notes,recorded_by_role,created_at`,
+      [b.module,b.category,b.status,b.owner_name,b.approver_name,b.evidence_reference,b.environment,b.notes,req.user!.id,req.user!.role],
+    )).rows[0];
+    await audit(c, req.user!.id, 'release_readiness_evidence_recorded', 'release_readiness_evidence', row.id, null, {
+      module: b.module, category: b.category, status: b.status, environment: b.environment,
+    });
+    return row;
+  }));
+}));
+
 ops.post('/releases/:id/approve', requireRole('super_admin','global_admin','finance','finance_manager'), h(async (req, res) => {
   const b = z.object({
     decision: z.enum(['approve','reject']),

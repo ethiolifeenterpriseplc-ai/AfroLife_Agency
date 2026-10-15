@@ -23,6 +23,36 @@ One person may temporarily fill multiple roles in a small pilot, but the IC must
 name the role assignments at incident start. The person deciding notification
 obligations must have the relevant legal/compliance authority.
 
+## Final release-owner sign-off matrix
+
+The local implementation and disposable-environment evidence are useful for
+engineering readiness, but they do not replace the required named approval
+records below. Before a production release decision, the responsible owners
+must record a named sign-off for each relevant standard and keep the evidence
+reference with the release package.
+
+| Control area | Required owner(s) | Evidence to retain | Status |
+|---|---|---|---|
+| Legal validity of notices and e-signatures | Ethiopian Legal + Leasing/Product | Counsel review, contract clause, test evidence, dispute handling | Gate: pending named sign-off |
+| Provider legal basis and KYC / screening | Compliance + Legal + provider owner | Data basis, processor agreement, source review, adverse-action process | Gate: pending named sign-off |
+| Finance / accounting policy | Finance Controller + Tax/Legal | Chart of accounts, close checklist, reconciliation evidence, sign-off memo | Gate: pending named sign-off |
+| Service account lifecycle and rotation | Security + Platform Ops | Secret-manager inventory, rotation evidence, expiry review | Gate: pending named sign-off |
+| Resilience, observability, DR / restore | IT/Operations + Security | Backup retention, restore rehearsal, log retention, blackout plan | Gate: pending named sign-off |
+| Incident playbooks and release authority | Incident Commander + Release Owner | Role roster, severity decision tree, rehearsal report, go/no-go record | Gate: pending named sign-off |
+
+No project delivery or release package should be treated as production-accepted
+without the responsible owner filling the control record and attaching their
+evidence reference.
+
+## Cross-module production boundaries
+
+Use the module-specific status table in
+[PRODUCTION_ACCEPTANCE_PACK.md](PRODUCTION_ACCEPTANCE_PACK.md) when planning a
+release. Workforce, Insurance, MFI/SACCO, Edir, property, marketplace, and
+agency changes have distinct owners and legal/accounting/provider dependencies.
+Do not infer one module's approval from another's, and do not enable a pilot
+provider or regulated financial path through a configuration workaround.
+
 ## Severity and response
 
 | Priority | Trigger examples | Initial handling |
@@ -196,4 +226,3 @@ During an invited pilot, exercise at least quarterly:
 Keep participant list, scenario, measured outcomes, decision log, issues and
 retest evidence with the release record. A tabletop is not a restore test; a
 restore test is not a production failover certification.
-

@@ -882,4 +882,49 @@ test('service identity inventory requires independent administrators for rotatio
   assert.equal(approval.body.approver_name, 'finance-3');
 });
 
+test('readiness evidence is persisted, attributed, and restricted to platform administrators', async () => {
+  const forbidden = await call(learningCustomer, 'POST', '/readiness-evidence', {
+    module: 'workforce',
+    category: 'operations',
+    status: 'evidence_recorded',
+    owner_name: 'Workforce Operations',
+    approver_name: 'Workforce Lead',
+    evidence_reference: `ops-evidence-${run}`,
+    environment: 'staging',
+    notes: 'Synthetic workforce acceptance evidence.',
+  });
+  assert.equal(forbidden.status, 403);
+
+  const recorded = await call(globalAdmin, 'POST', '/readiness-evidence', {
+    module: 'workforce',
+    category: 'operations',
+    status: 'evidence_recorded',
+    owner_name: 'Workforce Operations',
+    approver_name: 'Workforce Lead',
+    evidence_reference: `ops-evidence-${run}`,
+    environment: 'staging',
+    notes: 'Synthetic workforce acceptance evidence.',
+  });
+  assert.equal(recorded.status, 201, JSON.stringify(recorded.body));
+  assert.equal(recorded.body.module, 'workforce');
+  assert.equal(recorded.body.recorded_by_role, 'global_admin');
+
+  const listed = await call(admin, 'GET', '/readiness-evidence');
+  assert.equal(listed.status, 200, JSON.stringify(listed.body));
+  assert.ok(listed.body.some((entry: any) =>
+    entry.id === recorded.body.id && entry.recorded_by_name === 'global_admin-10',
+  ));
+
+  const invalid = await call(admin, 'POST', '/readiness-evidence', {
+    module: 'unknown',
+    category: 'operations',
+    status: 'evidence_recorded',
+    owner_name: 'Workforce Operations',
+    approver_name: 'Workforce Lead',
+    evidence_reference: `ops-evidence-invalid-${run}`,
+    environment: 'staging',
+  });
+  assert.equal(invalid.status, 400);
+});
+
 test.after(() => db.end());

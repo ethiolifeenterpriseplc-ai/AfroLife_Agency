@@ -97,6 +97,19 @@ complete from a local development check alone.
 - [ ] Assign and exercise the incident, service-identity rotation, recovery,
   financial-integrity and release procedures in
   [PRODUCTION_OPERATIONS_RUNBOOK.md](PRODUCTION_OPERATIONS_RUNBOOK.md).
+- [ ] Apply `066_readiness_evidence.sql` after migration 065 and run the
+  platform-admin readiness-evidence API acceptance test. Confirm list/insert
+  attribution, denied non-admin access, append-only database behavior and no
+  secret or personal-data content in evidence notes.
+- [ ] Record separate evidence entries for workforce, Insurance, MFI/SACCO,
+  Edir, property, marketplace and shared platform gates in
+  [PRODUCTION_ACCEPTANCE_PACK.md](PRODUCTION_ACCEPTANCE_PACK.md). A recorded
+  reference is not an approval; obtain the required external owner sign-off
+  before enabling that module's gated activity.
+- [ ] Build the main app and each separately deployable domain service
+  (`npm run build`, `npm run build:insurance`, `npm run build:edir`,
+  `npm run build:mfi`, and `npm run build:agency-domains`) for the release
+  source. Keep local build evidence separate from staging acceptance.
 - [ ] Create a service-identity inventory and rotate at least one non-production
   credential using the documented procedure. Confirm `service_identities` exists
   in the schema and that the inventory records owner, environment, expiry and

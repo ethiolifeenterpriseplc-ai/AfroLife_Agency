@@ -63,11 +63,10 @@ test('existing rent workspace drives the approved lease lifecycle without removi
 
 test('parent EthioLife identity and install icons stay aligned with the brand shell', () => {
   const logo = readFileSync(new URL('../public/icon.svg', import.meta.url), 'utf8');
-  assert.match(logo, /<title[^>]*>EthioLife Agency/);
-  assert.match(logo, /#174b3d/);
-  assert.match(logo, /#d7ad59/);
-  assert.match(logo, /M26 24h40v11H38v8h21v10H38v8h30v11H26z/);
-  assert.match(logo, /#d7ad59/);
+  assert.match(logo, /<title[^>]*>EthioLife connected opportunity mark/);
+  assert.match(logo, /#174b3d/i);
+  assert.match(logo, /#d7ad59/i);
+  assert.match(logo, /three people connected through one shared service hub/i);
 
   const manifest = JSON.parse(readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8'));
   assert.equal(manifest.theme_color, '#174b3d');
@@ -83,7 +82,7 @@ test('parent EthioLife identity and install icons stay aligned with the brand sh
 
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.match(html, /class="brand-name">EthioLife/);
-  assert.match(html, /src="\/icon\.svg\?v=2"/);
+  assert.match(html, /src="\/icon\.svg\?v=3"/);
   assert.match(html, /ethio-life-icon-192\.png/);
   assert.match(html, /placeholder="https:\/\/afrolife-agency\.duckdns\.org"/);
   const manifestColor = html.match(/<meta name="theme-color" content="([^"]+)"/);
@@ -95,8 +94,9 @@ test('native Android launcher and splash resources use the EthioLife brand', () 
   const adaptiveMark = readFileSync(new URL('drawable-v24/ic_launcher_foreground.xml', resources), 'utf8');
   const adaptiveBackground = readFileSync(new URL('values/ic_launcher_background.xml', resources), 'utf8');
   const splash = readFileSync(new URL('drawable/splash.png', resources));
-  assert.match(adaptiveMark, /#D7AD59/);
-  assert.match(adaptiveMark, /M26,24h40v11h-28v8h21v10h-21v8h30v11h-42z/);
+  assert.match(adaptiveMark, /#FFD7AD59/i);
+  assert.match(adaptiveMark, /android:strokeColor="#FFE8F1E9"/);
+  assert.match(adaptiveMark, /android:fillColor="#FFFFFFFF"/);
   assert.match(adaptiveMark, /#FFFFFFFF/);
   assert.match(adaptiveBackground, /#174b3d/i);
   const manifest = readFileSync(new URL('AndroidManifest.xml', new URL('../android/app/src/main/', import.meta.url)), 'utf8');

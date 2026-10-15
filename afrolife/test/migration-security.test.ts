@@ -23,6 +23,7 @@ const leaseLifecycle = readFileSync(new URL('../migrations/060_lease_lifecycle.s
 const leaseNoticeRecords = readFileSync(new URL('../migrations/061_lease_notice_records.sql', import.meta.url), 'utf8');
 const financeAndIdentityControls = readFileSync(new URL('../migrations/064_finance_and_identity_controls.sql', import.meta.url), 'utf8');
 const ownerRentTransactionRead = readFileSync(new URL('../migrations/065_owner_rent_transaction_read.sql', import.meta.url), 'utf8');
+const readinessEvidence = readFileSync(new URL('../migrations/066_readiness_evidence.sql', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
 
@@ -204,6 +205,19 @@ test('service identity lifecycle evidence and release approvals are platform-adm
   assert.match(financeAndIdentityControls, /approver_name = \(SELECT legal_name FROM users WHERE id=app_user_id\(\)\)/);
   assert.match(operations, /ops\.post\('\/service-identities\/:id\/rotate', requireRole\('super_admin', 'global_admin'\)/);
   assert.match(operations, /ops\.post\('\/service-identities\/:id\/retire', requireRole\('super_admin', 'global_admin'\)/);
+});
+
+test('production readiness evidence is append-only and platform-admin scoped', () => {
+  assert.match(readinessEvidence, /CREATE TABLE release_readiness_evidence/);
+  assert.match(readinessEvidence, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(readinessEvidence, /FORCE ROW LEVEL SECURITY/);
+  assert.match(readinessEvidence, /Release readiness evidence is append-only/);
+  assert.match(readinessEvidence, /recorded_by = app_user_id\(\)/);
+  assert.match(readinessEvidence, /recorded_by_role = app_role\(\)/);
+  assert.match(readinessEvidence, /REVOKE ALL ON TABLE release_readiness_evidence FROM "\{\{role\}\}"/);
+  assert.match(readinessEvidence, /GRANT SELECT, INSERT ON TABLE release_readiness_evidence TO "\{\{role\}\}"/);
+  assert.match(operations, /ops\.post\('\/readiness-evidence', requireRole\('super_admin','global_admin'\)/);
+  assert.match(operations, /ops\.get\('\/readiness-evidence', requireRole\('super_admin','global_admin'\)/);
 });
 
 test('rent submission RLS relies on unique indexes instead of recursive self-queries', () => {
