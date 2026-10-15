@@ -21,6 +21,8 @@ const rentRlsRecursionFix = readFileSync(new URL('../migrations/058_rent_rls_rec
 const userAccessHistory = readFileSync(new URL('../migrations/059_user_access_history.sql', import.meta.url), 'utf8');
 const leaseLifecycle = readFileSync(new URL('../migrations/060_lease_lifecycle.sql', import.meta.url), 'utf8');
 const leaseNoticeRecords = readFileSync(new URL('../migrations/061_lease_notice_records.sql', import.meta.url), 'utf8');
+const financeAndIdentityControls = readFileSync(new URL('../migrations/064_finance_and_identity_controls.sql', import.meta.url), 'utf8');
+const ownerRentTransactionRead = readFileSync(new URL('../migrations/065_owner_rent_transaction_read.sql', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
 
@@ -148,6 +150,14 @@ test('agents can only submit scoped pending rent and deposit transactions', () =
   assert.match(operations, /ops\.post\('\/rent-transactions\/:id\/reconcile', requireActivity\('rent\.transactions\.reconcile'\)/);
 });
 
+test('property owners can read rent transactions only for their own statements', () => {
+  assert.match(ownerRentTransactionRead, /CREATE POLICY rent_transactions_owner_read ON rent_transactions/);
+  assert.match(ownerRentTransactionRead, /FOR SELECT/);
+  assert.match(ownerRentTransactionRead, /app_role\(\) = 'property_owner'/);
+  assert.match(ownerRentTransactionRead, /p\.owner_user_id = app_user_id\(\)/);
+  assert.doesNotMatch(ownerRentTransactionRead, /FOR (?:ALL|INSERT|UPDATE|DELETE)/);
+});
+
 test('lease lifecycle evidence is scoped and append-only while the legacy lease route remains intact', () => {
   assert.match(leaseLifecycle, /CREATE TABLE lease_documents/);
   assert.match(leaseLifecycle, /CREATE TABLE lease_versions/);
@@ -181,6 +191,19 @@ test('lease notice records are scoped, append-only, idempotent, and non-terminat
   assert.match(operations, /legal_effect: 'record_only'/);
   assert.match(operations, /ON CONFLICT \(lease_id,idempotency_key\) DO NOTHING/);
   assert.match(operations, /ops\.get\('\/leases\/:id\/notices'/);
+});
+
+test('service identity lifecycle evidence and release approvals are platform-admin scoped', () => {
+  assert.match(financeAndIdentityControls, /service_identity_events/);
+  assert.match(financeAndIdentityControls, /Service identity events are append-only/);
+  assert.match(financeAndIdentityControls, /ALTER TABLE service_identities FORCE ROW LEVEL SECURITY/);
+  assert.match(financeAndIdentityControls, /app_role\(\) IN \('global_admin','super_admin'\)/);
+  assert.ok(financeAndIdentityControls.includes("secret_manager_reference ~ '^(vault|aws-sm|azure-kv)://[A-Za-z0-9._/-]+$'"));
+  assert.match(financeAndIdentityControls, /ALTER TABLE release_approvals FORCE ROW LEVEL SECURITY/);
+  assert.match(financeAndIdentityControls, /approver_role = app_role\(\)/);
+  assert.match(financeAndIdentityControls, /approver_name = \(SELECT legal_name FROM users WHERE id=app_user_id\(\)\)/);
+  assert.match(operations, /ops\.post\('\/service-identities\/:id\/rotate', requireRole\('super_admin', 'global_admin'\)/);
+  assert.match(operations, /ops\.post\('\/service-identities\/:id\/retire', requireRole\('super_admin', 'global_admin'\)/);
 });
 
 test('rent submission RLS relies on unique indexes instead of recursive self-queries', () => {

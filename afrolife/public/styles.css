@@ -397,6 +397,8 @@ main { width: min(1360px, calc(100% - 48px)); }
 .welcome-panel .eyebrow { color: #e7c77e; }
 .welcome-panel h1 { max-width: 650px; font-size: clamp(2.55rem, 5vw, 4.5rem); line-height: 1.04; letter-spacing: -.055em; }
 .welcome-panel > p:not(.eyebrow) { max-width: 560px; color: rgba(244, 248, 244, .78); font-size: clamp(15px, 1.35vw, 18px); line-height: 1.7; }
+.brand-illustration { width: min(100%, 560px); margin: 22px 0 26px; }
+.brand-illustration img { display: block; width: 100%; height: auto; border: 1px solid rgba(255, 255, 255, .42); border-radius: 23px; box-shadow: 0 14px 34px rgba(7, 31, 24, .16); }
 .trust-points { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 13px 20px; margin-block-start: 28px; color: #edf5ef; }
 .trust-points span { align-items: flex-start; line-height: 1.5; }
 .trust-points i { flex: 0 0 8px; margin-block-start: 5px; background: #e6c16d; box-shadow: 0 0 0 5px rgba(214, 174, 94, .14); }
@@ -491,6 +493,8 @@ footer { padding: 20px max(22px, calc((100vw - 1360px) / 2)); padding-block-end:
   .topbar { padding-inline: 14px; }
   main { width: calc(100% - 28px); }
   .welcome-panel { border-radius: 22px; }
+  .brand-illustration { margin: 16px 0 20px; }
+  .brand-illustration img { border-radius: 17px; }
   .hub-section-heading { align-items: flex-start; flex-direction: column; }
   .welcome-panel h1 { font-size: clamp(2.1rem, 9vw, 3.1rem); }
   .trust-points { grid-template-columns: 1fr; }

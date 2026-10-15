@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 340" role="img" aria-labelledby="title desc">
+  <title id="title">EthioLife service network</title>
+  <desc id="desc">A worker, a home, an opportunity and a community connected through EthioLife.</desc>
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3f7ef"/>
+      <stop offset="1" stop-color="#e7efe3"/>
+    </linearGradient>
+    <linearGradient id="hub" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#246450"/>
+      <stop offset="1" stop-color="#123c32"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="#173d32" flood-opacity=".12"/>
+    </filter>
+  </defs>
+  <rect x="6" y="8" width="628" height="324" rx="28" fill="url(#field)"/>
+  <circle cx="320" cy="170" r="120" fill="#dce9d8" opacity=".62"/>
+  <circle cx="320" cy="170" r="92" fill="none" stroke="#c8d9c9" stroke-dasharray="3 9" stroke-linecap="round" stroke-width="2"/>
+  <g fill="none" stroke="#9cb9a5" stroke-linecap="round" stroke-width="3">
+    <path d="M176 91c48 5 69 29 91 53"/>
+    <path d="M464 91c-48 5-69 29-91 53"/>
+    <path d="M180 259c46-3 65-28 87-52"/>
+    <path d="M460 259c-46-3-65-28-87-52"/>
+  </g>
+  <g fill="#d7ad59" stroke="#fff" stroke-width="4">
+    <circle cx="254" cy="132" r="7"/><circle cx="386" cy="132" r="7"/>
+    <circle cx="254" cy="208" r="7"/><circle cx="386" cy="208" r="7"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="48" y="47" width="132" height="88" rx="19" fill="#fff"/>
+    <rect x="460" y="47" width="132" height="88" rx="19" fill="#fff"/>
+    <rect x="48" y="215" width="132" height="88" rx="19" fill="#fff"/>
+    <rect x="460" y="215" width="132" height="88" rx="19" fill="#fff"/>
+  </g>
+  <g fill="none" stroke="#174b3d" stroke-linecap="round" stroke-linejoin="round" stroke-width="5">
+    <circle cx="114" cy="78" r="13" fill="#dce9d8" stroke="none"/>
+    <circle cx="114" cy="75" r="7" fill="#174b3d" stroke="none"/>
+    <path d="M99 101c2-10 7-15 15-15s13 5 15 15"/>
+    <path d="m493 91 33-27 33 27v28h-66z"/>
+    <path d="M518 119V99h17v20"/>
+    <rect x="87" y="245" width="54" height="39" rx="7"/>
+    <path d="M101 245v-8h26v8M88 261h52M111 260v7h7v-7"/>
+    <circle cx="502" cy="253" r="9" fill="#dce9d8" stroke="none"/>
+    <circle cx="550" cy="253" r="9" fill="#f3e7c9" stroke="none"/>
+    <path d="M486 287c1-12 7-18 16-18s15 6 16 18M534 287c1-12 7-18 16-18s15 6 16 18"/>
+    <circle cx="526" cy="250" r="10" fill="#fff" stroke="none"/>
+    <path d="M514 288c1-13 5-20 12-20s11 7 12 20"/>
+  </g>
+  <g fill="url(#hub)" stroke="#fff" stroke-width="7">
+    <circle cx="320" cy="170" r="51"/>
+  </g>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-width="5">
+    <path d="M316 164 303 153M324 164l13-11M320 177v10"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="299" cy="150" r="8"/><circle cx="341" cy="150" r="8"/><circle cx="320" cy="194" r="8"/>
+  </g>
+  <g fill="#174b3d">
+    <circle cx="299" cy="148" r="1.8"/><circle cx="341" cy="148" r="1.8"/><circle cx="320" cy="192" r="1.8"/>
+    <path d="M295 154c.4-2.2 1.7-3.2 4-3.2s3.6 1 4 3.2zM337 154c.4-2.2 1.7-3.2 4-3.2s3.6 1 4 3.2zM316 198c.4-2.2 1.7-3.2 4-3.2s3.6 1 4 3.2z"/>
+  </g>
+  <circle cx="320" cy="170" r="6" fill="#d7ad59"/>
+  <circle cx="320" cy="170" r="2" fill="#fff"/>
+  <circle cx="208" cy="173" r="4" fill="#d7ad59" opacity=".72"/>
+  <circle cx="432" cy="173" r="4" fill="#174b3d" opacity=".32"/>
+  <path d="M213 54h24M225 42v24M412 286h22M423 275v22" stroke="#d7ad59" stroke-linecap="round" stroke-width="2" opacity=".7"/>
+</svg>

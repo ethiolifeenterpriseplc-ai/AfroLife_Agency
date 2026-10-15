@@ -15,7 +15,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [] };
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
 let sessionIdleTimer = null;
@@ -534,6 +534,7 @@ function signOut({ revoke = true, message = '' } = {}) {
     roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
     marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
     insuranceStaffRequests: [], edirMe: null, mfaSetup: null,
+    serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null,
   });
   state.features = { mfiPilotEnabled: false, edirEnabled: false };
   $('#app-view').hidden = true;
@@ -673,6 +674,9 @@ async function refresh() {
     state.team = ['global_admin', 'super_admin', 'master_agent'].includes(state.user.role) ? await getOptional('/agents/team', []) : [];
     state.businessRules = state.user.role === 'global_admin' ? await api('/business-rules') : [];
     state.globalAdminPromotions = isPlatformAdmin() ? await api('/global-admin-promotions') : [];
+    state.serviceIdentities = isPlatformAdmin() ? await api('/service-identities') : [];
+    state.propertyAccountingTemplate = ['global_admin','super_admin','finance','finance_manager'].includes(state.user.role)
+      ? await api('/finance/property-chart-of-accounts-template') : null;
     state.roleAccess = state.user.role === 'super_admin' ? await api('/role-access') : null;
     state.learningContent = hasActivity('learning.content.view') || hasActivity('learning.content.manage')
       ? await api('/learning/content')
@@ -1201,6 +1205,7 @@ function renderProperties() {
     const statements = node('section', undefined, 'panel form-card');
     statements.append(node('h2','Owner rent & deposit statements'));
     statements.append(node('p','These read-only records show lease charges and reconciled rent/deposit receipts. They do not initiate or confirm a payout to you.'));
+    statements.append(button('Download CSV statement', 'owner-statement-download', 'button button-outline'));
     if (!state.ownerStatements.length) statements.append(empty('No lease statements are available for your listings yet.'));
     for (const item of state.ownerStatements) {
       const statement = card(`${item.address} · ${item.unit_no}`, `Lease ${item.start_date} to ${item.end_date} · ${item.status}`);
@@ -1516,6 +1521,26 @@ function renderAgents() {
 function renderRent() {
   const wrap = node('div');
   wrap.append(sectionHeading('Rent & deposits', 'Record payments first. A different finance officer reconciles them into the ledger.'));
+  if (['global_admin','super_admin','finance','finance_manager'].includes(state.user.role)) {
+    const close = node('section', undefined, 'panel form-card');
+    close.append(node('h3', 'Property period-close checks'));
+    close.append(node('p', 'Read-only exception checks for outstanding rent, receipts awaiting reconciliation and unbalanced rent journals. This is evidence for Finance review, not a period lock or accounting approval.'));
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = 'property-period-close';
+    const month = new Date().toISOString().slice(0, 7);
+    form.append(field('Accounting period', 'period', 'month', true, { value: month }).label);
+    form.append(button('Run checks', 'submit', 'button button-primary'));
+    close.append(form);
+    if (state.propertyAccountingTemplate) {
+      const link = button('Download chart-of-accounts draft JSON', 'coa-template-download', 'button button-outline');
+      close.append(link);
+      close.append(node('p', `Chart status: ${state.propertyAccountingTemplate.status}. Codes and recognition policy require Finance approval.`));
+    }
+    if (state.propertyPeriodClose) {
+      close.append(node('p', `Period ${state.propertyPeriodClose.period}: ${state.propertyPeriodClose.ready_for_finance_review ? 'ready for Finance review' : 'exceptions found'} · pending receipts ${state.propertyPeriodClose.pending_receipts} · unpaid charges ${state.propertyPeriodClose.unpaid_rent_charges} · unbalanced journals ${state.propertyPeriodClose.unbalanced_ledger_transactions}`));
+    }
+    wrap.append(close);
+  }
   const columns = node('div', undefined, 'columns');
   if (['global_admin', 'super_admin', 'master_agent', 'field_agent'].includes(state.user.role)) {
     const tenantForm = node('form', undefined, 'panel form-card inline-form');
@@ -1744,6 +1769,57 @@ function renderRoleAccess() {
   return section;
 }
 
+function loadReadinessEvidence() {
+  try {
+    const cached = JSON.parse(localStorage.getItem('afrolife.readiness-evidence') ?? '[]');
+    state.readinessEvidence = Array.isArray(cached) ? cached : [];
+  } catch (error) {
+    state.readinessEvidence = [];
+  }
+}
+
+function renderReadinessEvidence() {
+  const section = node('section', undefined, 'panel form-card');
+  section.style.marginTop = '20px';
+  section.append(node('h3', 'Production readiness evidence'));
+  section.append(node('p', 'Capture legal, provider, DR, service-account, and release-owner evidence. These records support the final go/no-go decision and remain separate from any live legal or provider authorization.'));
+  const form = node('form', undefined, 'inline-form');
+  form.dataset.form = 'readiness-evidence';
+  form.append(
+    field('Evidence category', 'category', 'select', true).label,
+    field('Owner / domain', 'owner', 'text', true, { placeholder: 'Legal, Finance, Provider, Ops, Security' }).label,
+    field('Approver / reviewer', 'approver', 'text', true, { placeholder: 'Named approver' }).label,
+    field('Status', 'status', 'select', true).label,
+    field('Evidence reference', 'evidence_ref', 'text', true, { placeholder: 'contract, ticket, control ID, provider record' }).label,
+    field('Environment', 'environment', 'select', true).label,
+    field('Approval notes', 'notes', 'textarea', false, { rows: '3', placeholder: 'Required conditions, review outcome, or unresolved risk.' }).label,
+  );
+  const category = form.elements.category;
+  for (const value of ['legal', 'provider', 'dr', 'incident', 'service_account', 'release_owner']) {
+    const option = node('option', value.replaceAll('_', ' ')); option.value = value; category.append(option);
+  }
+  const statusSelect = form.elements.status;
+  for (const value of ['draft', 'pending_review', 'approved', 'rejected']) {
+    const option = node('option', value.replaceAll('_', ' ')); option.value = value; statusSelect.append(option);
+  }
+  const environmentSelect = form.elements.environment;
+  for (const value of ['production', 'staging', 'sandbox', 'development']) {
+    const option = node('option', value); option.value = value; environmentSelect.append(option);
+  }
+  form.append(button('Record evidence', 'submit', 'button button-primary span-2'));
+  section.append(form);
+  const list = node('div', undefined, 'list');
+  if (!state.readinessEvidence.length) list.append(empty('No operational-readiness evidence has been recorded yet.'));
+  for (const entry of state.readinessEvidence) {
+    const item = card(`${entry.category.replaceAll('_', ' ')} · ${entry.owner}`, `${entry.environment} · ${entry.approver} · ${entry.status.replaceAll('_', ' ')}`, entry.status);
+    if (entry.evidence_ref) item.append(node('p', `Reference: ${entry.evidence_ref}`));
+    if (entry.notes) item.append(node('p', entry.notes));
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
 function renderAdmin() {
   const wrap = node('div');
   const isAdmin = isPlatformAdmin();
@@ -1754,6 +1830,56 @@ function renderAdmin() {
   const columns = node('div', undefined, 'columns');
   if (isGlobalAdmin) wrap.append(renderBusinessRules());
   if (isAdmin) wrap.append(renderGlobalAdminPromotions());
+  if (isAdmin) wrap.append(renderReadinessEvidence());
+  if (isAdmin) {
+    const identities = node('section', undefined, 'panel form-card');
+    identities.style.marginTop = '20px';
+    identities.append(node('h3', 'Service identity inventory'));
+    identities.append(node('p', 'Record vault references and rotation evidence only. Never enter credential values or tokens. Rotation and retirement require a different platform administrator from the identity creator.'));
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = 'service-identity';
+    form.append(
+      field('Identity name', 'name', 'text', true, { minlength: '3', maxlength: '200' }).label,
+      field('Purpose', 'purpose', 'text', true, { minlength: '3', maxlength: '1000' }).label,
+      field('Environment', 'environment', 'select').label,
+      field('Owner', 'owner_user_id', 'select', false).label,
+      field('Vault reference (not a secret)', 'secret_manager_reference', 'text', true, { placeholder: 'vault://team/service-account' }).label,
+      field('Expiry date', 'expiry_date', 'date').label,
+      field('Evidence', 'evidence', 'text', true, { minlength: '10', maxlength: '2000' }).label,
+    );
+    const env = form.elements.environment;
+    for (const value of ['staging','production','development','sandbox']) {
+      const option = node('option', value); option.value = value; env.append(option);
+    }
+    const owner = form.elements.owner_user_id;
+    const noOwner = node('option', 'No named owner'); noOwner.value = ''; owner.append(noOwner);
+    for (const user of state.users.filter((item) => item.active)) {
+      const option = node('option', `${user.legal_name} · ${roleLabel(user.role)}`); option.value = user.id; owner.append(option);
+    }
+    form.append(button('Add service identity', 'submit', 'button button-primary span-2'));
+    identities.append(form);
+    if (!state.serviceIdentities.length) identities.append(empty('No service identities are registered.'));
+    for (const identity of state.serviceIdentities) {
+      const item = card(identity.name, `${identity.environment} · owner ${identity.owner_user_id ?? 'unassigned'} · expires ${identity.expiry_date ?? 'not set'} · rotated ${identity.rotated_at ?? 'never'}`, identity.status);
+      item.append(node('p', `${identity.purpose} · ${identity.secret_manager_reference ?? 'Vault reference missing'}`));
+      if (identity.status === 'active' && identity.created_by !== state.user.id) {
+        const rotation = node('form', undefined, 'inline-form');
+        rotation.dataset.form = 'service-identity-rotate';
+        rotation.dataset.identity = identity.id;
+        rotation.append(
+          field('New vault reference', 'secret_manager_reference', 'text', true, { placeholder: 'vault://team/service-account' }).label,
+          field('New expiry', 'expiry_date', 'date', true).label,
+          field('Rotation evidence', 'evidence', 'text', true, { minlength: '10', maxlength: '2000' }).label,
+          button('Record verified rotation', 'submit', 'button button-outline'),
+        );
+        item.append(rotation, button('Retire identity', 'service-identity-retire', 'button button-outline', { id: identity.id }));
+      }
+      const events = button('View lifecycle evidence', 'service-identity-events', 'button button-quiet', { id: identity.id });
+      item.append(events);
+      identities.append(item);
+    }
+    wrap.append(identities);
+  }
   if (isAdmin) {
     const form = node('form', undefined, 'panel form-card inline-form');
     form.dataset.form = 'user';
@@ -1975,6 +2101,50 @@ async function submitForm(form) {
     state.roleAccess = await api('/role-access');
     await refresh();
     showAlert('Role access saved.');
+    return;
+  }
+  if (form.dataset.form === 'property-period-close') {
+    const result = await api(`/finance/property-period-close?period=${encodeURIComponent(values.period)}`);
+    state.propertyPeriodClose = result;
+    renderPanel();
+    showAlert('Period checks complete. Confirm all findings with Finance before close.');
+    return;
+  }
+  if (form.dataset.form === 'service-identity') {
+    const payload = { ...values };
+    if (!payload.owner_user_id) delete payload.owner_user_id;
+    if (!payload.expiry_date) delete payload.expiry_date;
+    await api('/service-identities', { method: 'POST', body: JSON.stringify(payload) });
+    await refresh();
+    showAlert('Service identity recorded. No secret value was stored.');
+    return;
+  }
+  if (form.dataset.form === 'service-identity-rotate') {
+    await api(`/service-identities/${form.dataset.identity}/rotate`, { method: 'POST', body: JSON.stringify(values) });
+    await refresh();
+    showAlert('Rotation evidence recorded. The external secret manager remains authoritative for the credential.');
+    return;
+  }
+  if (form.dataset.form === 'readiness-evidence') {
+    const entry = {
+      category: values.category,
+      owner: values.owner.trim(),
+      approver: values.approver.trim(),
+      status: values.status,
+      evidence_ref: values.evidence_ref.trim(),
+      environment: values.environment,
+      notes: values.notes?.trim() ?? '',
+      created_at: new Date().toISOString(),
+    };
+    if (!entry.owner || !entry.approver || !entry.evidence_ref) {
+      throw new Error('Owner, approver, and evidence reference are required.');
+    }
+    const current = JSON.parse(localStorage.getItem('afrolife.readiness-evidence') ?? '[]');
+    const next = [entry, ...Array.isArray(current) ? current : []].slice(0, 80);
+    localStorage.setItem('afrolife.readiness-evidence', JSON.stringify(next));
+    state.readinessEvidence = next;
+    renderPanel();
+    showAlert('Operational readiness evidence recorded. Keep the named approver and evidence reference with the release pack.');
     return;
   }
   if (form.dataset.form === 'learning-content') {
@@ -2494,6 +2664,56 @@ document.addEventListener('click', async (event) => {
   const action = event.target.closest('button[data-action]');
   if (!action) return;
   const { action: name, id } = action.dataset;
+  if (name === 'owner-statement-download') {
+    try {
+      const response = await fetch(`${apiRoot()}/owner/statements?format=csv`, {
+        headers: { authorization: ['Bearer', sessionStorage.getItem(TOKEN_KEY)].join(' ') },
+      });
+      if (!response.ok) throw new Error(`Owner statement download failed (${response.status}).`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'owner-rent-statement.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showAlert(error.message, true);
+    }
+    return;
+  }
+  if (name === 'coa-template-download') {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(state.propertyAccountingTemplate, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'property-chart-of-accounts-draft.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+  if (name === 'service-identity-retire') {
+    const evidence = window.prompt(t('Enter retirement evidence (minimum 10 characters).'));
+    if (!evidence || evidence.trim().length < 10) return;
+    try {
+      await api(`/service-identities/${id}/retire`, { method: 'POST', body: JSON.stringify({ evidence: evidence.trim() }) });
+      await refresh();
+      showAlert('Inventory marked retired. Revoke the credential in the external secret manager separately.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'service-identity-events') {
+    try {
+      const events = await api(`/service-identities/${id}/events`);
+      const container = action.closest('.list-card');
+      container.querySelector('.service-identity-events')?.remove();
+      const evidence = node('div', undefined, 'service-identity-events');
+      evidence.append(node('h4', 'Lifecycle evidence'));
+      if (!events.length) evidence.append(empty('No lifecycle evidence is recorded.'));
+      for (const entry of events) evidence.append(node('p', `${entry.action} · ${entry.created_at} · ${entry.actor_id} · ${entry.evidence}`));
+      container.append(evidence);
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
   if (name === 'open-panel') {
     state.panel = action.dataset.panel;
     renderPanel();

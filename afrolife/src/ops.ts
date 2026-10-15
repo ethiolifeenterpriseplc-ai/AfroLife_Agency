@@ -11,12 +11,15 @@ import { loadRules } from './domain.js';
 import { getFile, putFile } from './storage.js';
 import { Phone } from './validators.js';
 import { legacyImmediateLeasesEnabled } from './runtime-config.js';
+import { toCsv } from './csv.js';
+import { PROPERTY_CHART_OF_ACCOUNTS, propertyPeriodCloseCheck } from './property-accounting.js';
 
 export const ops = Router();
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const AGENT = ['master_agent', 'field_agent'];
 
 ops.get('/owner/statements', requireRole('property_owner'), h(async (req, res) => {
+  const format = z.enum(['json', 'csv']).default('json').parse(req.query.format ?? 'json');
   const statements = await withUser(req.user!, async (client) => (await client.query(
     `SELECT l.id AS lease_id,p.id AS property_id,p.address,u.unit_no,l.start_date,l.end_date,l.status,
        l.rent::text AS monthly_rent,l.deposit::text AS agreed_deposit,
@@ -30,7 +33,19 @@ ops.get('/owner/statements', requireRole('property_owner'), h(async (req, res) =
      WHERE p.owner_user_id=$1 ORDER BY l.created_at DESC LIMIT 500`,
     [req.user!.id],
   )).rows);
-  res.json({ statements, note: 'Shows recorded lease charges and reconciled receipts. This is not a payout, remittance, or trust-account statement.' });
+  const note = 'Shows recorded lease charges and reconciled receipts. This is not a payout, remittance, or trust-account statement.';
+  if (format === 'csv') {
+    const columns = [
+      'lease_id', 'property_id', 'address', 'unit_no', 'start_date', 'end_date', 'status',
+      'monthly_rent', 'agreed_deposit', 'rent_charged', 'rent_reconciled',
+      'rent_pending_reconciliation', 'deposit_reconciled', 'deposit_refunded', 'last_reconciled_at',
+    ] as const;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="owner-rent-statement.csv"');
+    res.setHeader('X-Statement-Disclaimer', note);
+    return res.send(toCsv(statements, columns));
+  }
+  res.json({ statements, note });
 }));
 
 // ================= Disputes =================
@@ -550,73 +565,173 @@ ops.post('/leases/:id/end', requireActivity('property.tenancy.manage'), h(async 
 }));
 
 // ----------------- Service identity inventory -----------------
-ops.post('/service-identities', requireRole(...AGENT, 'super_admin', 'security'), h(async (req, res) => {
+ops.post('/service-identities', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
   const b = z.object({
     name: z.string().trim().min(3).max(200),
     purpose: z.string().trim().min(3).max(1000),
     environment: z.enum(['production','staging','development','sandbox']).default('staging'),
     owner_user_id: z.string().uuid().optional(),
-    expiry_date: z.string().optional(),
+    expiry_date: z.string().date().optional(),
+    secret_manager_reference: z.string().trim().regex(/^(vault|aws-sm|azure-kv):\/\/[A-Za-z0-9._/-]+$/),
+    evidence: z.string().trim().min(10).max(2000),
   }).parse(req.body);
+  if (b.expiry_date && b.expiry_date <= new Date().toISOString().slice(0, 10)) {
+    throw new HttpError(422, 'Expiry date must be in the future');
+  }
   res.status(201).json(await withUser(req.user!, async (c) => {
+    if (b.owner_user_id && !(await c.query('SELECT 1 FROM users WHERE id=$1 AND active=true', [b.owner_user_id])).rowCount) {
+      throw new HttpError(422, 'The named service identity owner must be an active user');
+    }
     const row = (await c.query(
-      `INSERT INTO service_identities (name,purpose,environment,owner_user_id,expiry_date,created_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [b.name, b.purpose, b.environment, b.owner_user_id ?? null, b.expiry_date ?? null, req.user!.id],
+      `INSERT INTO service_identities
+         (name,purpose,environment,owner_user_id,expiry_date,secret_manager_reference,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [b.name, b.purpose, b.environment, b.owner_user_id ?? null, b.expiry_date ?? null, b.secret_manager_reference, req.user!.id],
     )).rows[0];
+    await c.query(
+      `INSERT INTO service_identity_events
+         (service_identity_id,action,actor_id,current_status,evidence)
+       VALUES ($1,'created',$2,$3,$4)`,
+      [row.id, req.user!.id, row.status, b.evidence],
+    );
     await audit(c, req.user!.id, 'service_identity_created', 'service_identity', row.id, null, { name: b.name, environment: b.environment });
     return row;
   }));
 }));
 
-ops.get('/service-identities', requireRole(...AGENT, 'super_admin', 'security'), h(async (req, res) => {
-  res.json(await withUser(req.user!, async (c) => (await c.query('SELECT id,name,purpose,environment,owner_user_id,expiry_date,status,created_by,created_at FROM service_identities ORDER BY created_at DESC LIMIT 500')).rows));
+ops.get('/service-identities', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT si.id,si.name,si.purpose,si.environment,si.owner_user_id,si.expiry_date,
+       si.secret_manager_reference,si.rotated_at,si.last_rotated_by,si.last_rotation_evidence,
+       si.status,si.created_by,si.created_at,
+       (SELECT max(e.created_at) FROM service_identity_events e WHERE e.service_identity_id=si.id) AS last_event_at
+     FROM service_identities si ORDER BY si.created_at DESC LIMIT 500`,
+  )).rows));
 }));
 
-// ----------------- Owner rent statement and reconciliation export -----------------
-ops.get('/owners/:id/rent-statement', requireRole(...AGENT, 'property_owner', 'finance', 'finance_manager', 'super_admin'), h(async (req, res) => {
-  const ownerId = req.params.id;
-  const asCsv = String(req.query.format ?? '').toLowerCase() === 'csv';
-  const rows = await withUser(req.user!, async (c) => (await c.query(
-    `SELECT p.id AS property_id, p.address, u.unit_no, l.id AS lease_id,
-      COALESCE(SUM(rc.amount),0) AS total_charges,
-      COALESCE(SUM(CASE WHEN rt.status='reconciled' AND rt.kind='rent' THEN rt.amount ELSE 0 END),0) AS reconciled_rent,
-      COALESCE(SUM(CASE WHEN rt.status='pending' AND rt.kind='rent' THEN rt.amount ELSE 0 END),0) AS pending_rent,
-      COALESCE(SUM(CASE WHEN rt.status='reconciled' AND rt.kind='deposit' THEN rt.amount ELSE 0 END),0) AS deposit_reconciled,
-      COALESCE(SUM(CASE WHEN rt.status='pending' AND rt.kind='deposit' THEN rt.amount ELSE 0 END),0) AS deposit_pending
-     FROM properties p
-     JOIN property_units u ON u.property_id = p.id
-     JOIN leases l ON l.unit_id = u.id
-     LEFT JOIN rent_charges rc ON rc.lease_id = l.id
-     LEFT JOIN rent_transactions rt ON rt.lease_id = l.id
-     WHERE p.owner_user_id = $1
-     GROUP BY p.id, u.unit_no, l.id, p.address
-     ORDER BY p.address, u.unit_no
-    `, [ownerId])).rows);
-  if (asCsv) {
-    const header = ['property_id','address','unit_no','lease_id','total_charges','reconciled_rent','pending_rent','deposit_reconciled','deposit_pending'];
-    const csv = [header.join(',')].concat(rows.map((r: any) => header.map((h) => `"${String(r[h] ?? '').replace(/"/g,'""')}"`).join(','))).join('\n');
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="owner-${ownerId}-rent-statement.csv"`);
-    return res.send(csv);
-  }
-  res.json(rows);
+ops.post('/service-identities/:id/rotate', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+  const b = z.object({
+    secret_manager_reference: z.string().trim().regex(/^(vault|aws-sm|azure-kv):\/\/[A-Za-z0-9._/-]+$/),
+    expiry_date: z.string().date(),
+    evidence: z.string().trim().min(10).max(2000),
+  }).parse(req.body);
+  if (b.expiry_date <= new Date().toISOString().slice(0, 10)) throw new HttpError(422, 'Expiry date must be in the future');
+  res.json(await withUser(req.user!, async (c) => {
+    const current = (await c.query('SELECT id,status,created_by FROM service_identities WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!current) throw new HttpError(404, 'Service identity not found');
+    if (current.status !== 'active') throw new HttpError(409, 'Only an active service identity can be rotated');
+    if (current.created_by === req.user!.id) throw new HttpError(403, 'A different platform administrator must verify the rotation');
+    const row = (await c.query(
+      `UPDATE service_identities
+       SET secret_manager_reference=$2,expiry_date=$3,rotated_at=now(),
+           last_rotated_by=$4,last_rotation_evidence=$5
+       WHERE id=$1 RETURNING *`,
+      [current.id, b.secret_manager_reference, b.expiry_date, req.user!.id, b.evidence],
+    )).rows[0];
+    await c.query(
+      `INSERT INTO service_identity_events
+         (service_identity_id,action,actor_id,previous_status,current_status,evidence)
+       VALUES ($1,'rotated',$2,$3,$4,$5)`,
+      [row.id, req.user!.id, current.status, row.status, b.evidence],
+    );
+    await audit(c, req.user!.id, 'service_identity_rotated', 'service_identity', row.id, null, { expiry_date: b.expiry_date });
+    return row;
+  }));
+}));
+
+ops.post('/service-identities/:id/retire', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+  const { evidence } = z.object({ evidence: z.string().trim().min(10).max(2000) }).parse(req.body);
+  res.json(await withUser(req.user!, async (c) => {
+    const current = (await c.query('SELECT id,status,created_by FROM service_identities WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!current) throw new HttpError(404, 'Service identity not found');
+    if (current.status !== 'active') throw new HttpError(409, 'Only an active service identity can be retired');
+    if (current.created_by === req.user!.id) throw new HttpError(403, 'A different platform administrator must approve retirement');
+    const row = (await c.query(
+      "UPDATE service_identities SET status='retired' WHERE id=$1 RETURNING *",
+      [current.id],
+    )).rows[0];
+    await c.query(
+      `INSERT INTO service_identity_events
+         (service_identity_id,action,actor_id,previous_status,current_status,evidence)
+       VALUES ($1,'retired',$2,$3,$4,$5)`,
+      [row.id, req.user!.id, current.status, row.status, evidence],
+    );
+    await audit(c, req.user!.id, 'service_identity_retired', 'service_identity', row.id, { status: current.status }, { status: row.status });
+    return row;
+  }));
+}));
+
+ops.get('/service-identities/:id/events', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => {
+    if (!(await c.query('SELECT 1 FROM service_identities WHERE id=$1', [req.params.id])).rowCount) {
+      throw new HttpError(404, 'Service identity not found');
+    }
+    return (await c.query(
+      `SELECT id,action,actor_id,previous_status,current_status,evidence,created_at
+       FROM service_identity_events WHERE service_identity_id=$1 ORDER BY created_at DESC LIMIT 200`,
+      [req.params.id],
+    )).rows;
+  }));
+}));
+
+ops.get('/finance/property-chart-of-accounts-template', requireRole('finance','finance_manager','super_admin','global_admin'), h(async (_req, res) => {
+  res.json(PROPERTY_CHART_OF_ACCOUNTS);
+}));
+
+ops.get('/finance/property-period-close', requireRole('finance','finance_manager','super_admin','global_admin'), h(async (req, res) => {
+  const { period } = z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }).parse(req.query);
+  const result = await withUser(req.user!, async (c) => {
+    const pending = await c.query(
+      `SELECT count(*)::int AS count FROM rent_transactions
+       WHERE created_at < (($1 || '-01')::date + interval '1 month')
+         AND (status='pending'
+           OR (status='reconciled' AND reconciled_at >= (($1 || '-01')::date + interval '1 month'))
+           OR (status='void' AND voided_at >= (($1 || '-01')::date + interval '1 month')))`,
+      [period],
+    );
+    const unpaid = await c.query(
+      `SELECT count(*)::int AS count FROM rent_charges
+       WHERE due_on < (($1 || '-01')::date + interval '1 month')
+         AND (status='due' OR (status='paid' AND paid_at >= (($1 || '-01')::date + interval '1 month')))`,
+      [period],
+    );
+    const unbalanced = await c.query(
+      `SELECT count(*)::int AS count FROM (
+         SELECT entries.txn_id
+         FROM ledger_entries entries
+         WHERE entries.ref_type='rent_transaction'
+           AND entries.txn_id IN (
+             SELECT period_entries.txn_id FROM ledger_entries period_entries
+             WHERE period_entries.ref_type='rent_transaction'
+               AND period_entries.created_at >= ($1 || '-01')::date
+               AND period_entries.created_at < (($1 || '-01')::date + interval '1 month')
+           )
+         GROUP BY entries.txn_id HAVING sum(entries.debit) <> sum(entries.credit)
+       ) invalid`,
+      [period],
+    );
+    return propertyPeriodCloseCheck({
+      period,
+      pendingReceipts: Number(pending.rows[0].count),
+      unpaidRentCharges: Number(unpaid.rows[0].count),
+      unbalancedLedgerTransactions: Number(unbalanced.rows[0].count),
+    });
+  });
+  res.json({ ...result, chart_of_accounts_status: PROPERTY_CHART_OF_ACCOUNTS.status });
 }));
 
 // ----------------- Release approvals (record owner sign-off) -----------------
-ops.post('/releases/:id/approve', requireRole('super_admin','global_admin'), h(async (req, res) => {
+ops.post('/releases/:id/approve', requireRole('super_admin','global_admin','finance','finance_manager'), h(async (req, res) => {
   const b = z.object({
-    approver_role: z.string().min(2).max(100),
-    approver_name: z.string().min(2).max(200),
-    approver_email: z.string().email().optional(),
     decision: z.enum(['approve','reject']),
-    notes: z.string().max(4000).optional(),
+    notes: z.string().trim().min(10).max(4000),
   }).parse(req.body);
   res.status(201).json(await withUser(req.user!, async (c) => {
+    const approver = (await c.query('SELECT legal_name,email,role FROM users WHERE id=$1', [req.user!.id])).rows[0];
     const row = (await c.query(
       `INSERT INTO release_approvals (release_candidate, approver_role, approver_name, approver_email, decision, notes)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [req.params.id, b.approver_role, b.approver_name, b.approver_email ?? null, b.decision, b.notes ?? null],
+      [req.params.id, approver.role, approver.legal_name, approver.email, b.decision, b.notes ?? null],
     )).rows[0];
     await audit(c, req.user!.id, 'release_approval_recorded', 'release_approval', row.id, null, { release_candidate: req.params.id, decision: b.decision });
     return row;

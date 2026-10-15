@@ -22,34 +22,34 @@ function Fill-RoundedRectangle($graphics, $brush, [float]$x, [float]$y, [float]$
 }
 
 function Draw-OpportunityMark($graphics, [float]$originX, [float]$originY, [float]$scale) {
+  $connectorPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(232, 241, 233), 4 * $scale)
+  $connectorPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $connectorPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $nodeBrush = [System.Drawing.SolidBrush]::new($white)
+  $personBrush = [System.Drawing.SolidBrush]::new($green)
   $goldBrush = [System.Drawing.SolidBrush]::new($gold)
   $whiteBrush = [System.Drawing.SolidBrush]::new($white)
-  $e = @(
-    [System.Drawing.PointF]::new($originX + 26 * $scale, $originY + 24 * $scale),
-    [System.Drawing.PointF]::new($originX + 66 * $scale, $originY + 24 * $scale),
-    [System.Drawing.PointF]::new($originX + 66 * $scale, $originY + 35 * $scale),
-    [System.Drawing.PointF]::new($originX + 38 * $scale, $originY + 35 * $scale),
-    [System.Drawing.PointF]::new($originX + 38 * $scale, $originY + 43 * $scale),
-    [System.Drawing.PointF]::new($originX + 59 * $scale, $originY + 43 * $scale),
-    [System.Drawing.PointF]::new($originX + 59 * $scale, $originY + 53 * $scale),
-    [System.Drawing.PointF]::new($originX + 38 * $scale, $originY + 53 * $scale),
-    [System.Drawing.PointF]::new($originX + 38 * $scale, $originY + 61 * $scale),
-    [System.Drawing.PointF]::new($originX + 68 * $scale, $originY + 61 * $scale),
-    [System.Drawing.PointF]::new($originX + 68 * $scale, $originY + 72 * $scale),
-    [System.Drawing.PointF]::new($originX + 26 * $scale, $originY + 72 * $scale)
-  )
-  $spark = @(
-    [System.Drawing.PointF]::new($originX + 75 * $scale, $originY + 15 * $scale),
-    [System.Drawing.PointF]::new($originX + 78.5 * $scale, $originY + 23.5 * $scale),
-    [System.Drawing.PointF]::new($originX + 87 * $scale, $originY + 27 * $scale),
-    [System.Drawing.PointF]::new($originX + 78.5 * $scale, $originY + 30.5 * $scale),
-    [System.Drawing.PointF]::new($originX + 75 * $scale, $originY + 39 * $scale),
-    [System.Drawing.PointF]::new($originX + 71.5 * $scale, $originY + 30.5 * $scale),
-    [System.Drawing.PointF]::new($originX + 63 * $scale, $originY + 27 * $scale),
-    [System.Drawing.PointF]::new($originX + 71.5 * $scale, $originY + 23.5 * $scale)
-  )
-  $graphics.FillPolygon($whiteBrush, $e)
-  $graphics.FillPolygon($goldBrush, $spark)
+
+  $graphics.DrawLine($connectorPen, $originX + 43 * $scale, $originY + 44 * $scale, $originX + 32 * $scale, $originY + 35 * $scale)
+  $graphics.DrawLine($connectorPen, $originX + 53 * $scale, $originY + 44 * $scale, $originX + 64 * $scale, $originY + 35 * $scale)
+  $graphics.DrawLine($connectorPen, $originX + 48 * $scale, $originY + 56 * $scale, $originX + 48 * $scale, $originY + 63 * $scale)
+
+  foreach ($node in @(@{ X = 25; Y = 27 }, @{ X = 71; Y = 27 }, @{ X = 48; Y = 75 })) {
+    $x = $originX + $node.X * $scale
+    $y = $originY + $node.Y * $scale
+    $radius = 12 * $scale
+    $graphics.FillEllipse($nodeBrush, $x - $radius, $y - $radius, 2 * $radius, 2 * $radius)
+    $graphics.FillEllipse($personBrush, $x - 2.7 * $scale, $y - 6 * $scale, 5.4 * $scale, 5.4 * $scale)
+    $personPen = [System.Drawing.Pen]::new($green, 2.4 * $scale)
+    $graphics.DrawArc($personPen, $x - 6 * $scale, $y - 1 * $scale, 12 * $scale, 9 * $scale, 180, 180)
+    $personPen.Dispose()
+  }
+
+  $graphics.FillEllipse($goldBrush, $originX + 40 * $scale, $originY + 41 * $scale, 16 * $scale, 16 * $scale)
+  $graphics.FillEllipse($whiteBrush, $originX + 45.5 * $scale, $originY + 46.5 * $scale, 5 * $scale, 5 * $scale)
+  $connectorPen.Dispose()
+  $nodeBrush.Dispose()
+  $personBrush.Dispose()
   $goldBrush.Dispose()
   $whiteBrush.Dispose()
 }

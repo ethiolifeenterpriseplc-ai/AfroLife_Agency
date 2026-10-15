@@ -658,7 +658,7 @@ test('lease defaults and maximum duration follow business rules', async () => {
       tenant_id: tenant.body.id,
       rent: 15000,
       start_date: '2030-01-01',
-      months: 3,
+      months: 24,
     };
     assert.equal((await call(fa, 'POST', '/leases', lease)).status, 422);
     const created = await call(fa, 'POST', '/leases', { ...lease, months: 2 });
@@ -767,6 +767,119 @@ test('opt-in lease lifecycle requires independent approval, signature evidence, 
     db.query('UPDATE leases SET rent=rent+1 WHERE id=$1', [lease.body.id]),
     /Versioned lease terms are immutable/,
   );
+});
+
+test('owner rent statement CSV is scoped and reconciled totals match recorded evidence', async () => {
+  const owner = await mkUser('property_owner', 120);
+  const property = await call(fa, 'POST', '/properties', {
+    address: `Owner statement acceptance ${run}`,
+    ptype: 'apartment_building',
+    territory_id: tid,
+    units: [{ unit_no: `OS${run}`, rent: 15000 }],
+  });
+  assert.equal(property.status, 201, JSON.stringify(property.body));
+  const unit = (await db.query('SELECT id FROM property_units WHERE property_id=$1', [property.body.id])).rows[0];
+  const tenant = await call(fa, 'POST', '/tenants', {
+    name: `Owner Statement Tenant ${run}`,
+    phone: uniquePhone(),
+  });
+  assert.equal(tenant.status, 201, JSON.stringify(tenant.body));
+  const lease = await call(fa, 'POST', '/leases', {
+    unit_id: unit.id,
+    tenant_id: tenant.body.id,
+    rent: 15000,
+    deposit: 30000,
+    start_date: '2032-01-01',
+    months: 24,
+  });
+  assert.equal(lease.status, 201, JSON.stringify(lease.body));
+  await db.query(
+    'UPDATE properties SET owner_user_id=$2,source_agent_id=NULL,created_by=$2 WHERE id=$1',
+    [property.body.id, owner.id],
+  );
+  const charges = (await db.query(
+    'SELECT id,amount FROM rent_charges WHERE lease_id=$1 ORDER BY period',
+    [lease.body.id],
+  )).rows;
+  assert.equal(charges.length, 24);
+  const firstPayment = await call(fa, 'POST', `/charges/${charges[0].id}/pay`, {
+    reference: `owner-statement-reconciled-${run}`,
+    channel: 'manual',
+  });
+  const secondPayment = await call(fa, 'POST', `/charges/${charges[1].id}/pay`, {
+    reference: `owner-statement-pending-${run}`,
+    channel: 'manual',
+  });
+  assert.equal(firstPayment.status, 200, JSON.stringify(firstPayment.body));
+  assert.equal(secondPayment.status, 200, JSON.stringify(secondPayment.body));
+  assert.equal((await call(fin2, 'POST', `/rent-transactions/${firstPayment.body.id}/reconcile`, {})).status, 200);
+
+  const json = await call(owner, 'GET', '/owner/statements');
+  assert.equal(json.status, 200, JSON.stringify(json.body));
+  assert.equal(json.body.statements.length, 1);
+  assert.equal(Number(json.body.statements[0].rent_charged), 360000);
+  assert.equal(Number(json.body.statements[0].rent_reconciled), 15000);
+  assert.equal(Number(json.body.statements[0].rent_pending_reconciliation), 15000);
+  assert.match(json.body.note, /not a payout/);
+
+  const csv = await fetch(`${API}/owner/statements?format=csv`, {
+    headers: { authorization: `Bearer ${owner.token}` },
+  });
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-type') ?? '', /text\/csv/);
+  const csvText = await csv.text();
+  assert.match(csvText, /rent_reconciled/);
+  assert.match(csvText, /owner statement acceptance/i);
+  assert.equal((await call(fa, 'GET', '/owner/statements')).status, 403);
+
+  const chart = await call(fin1, 'GET', '/finance/property-chart-of-accounts-template');
+  assert.equal(chart.status, 200);
+  assert.equal(chart.body.status, 'draft_requires_finance_signoff');
+  const close = await call(fin1, 'GET', '/finance/property-period-close?period=2032-03');
+  assert.equal(close.status, 200, JSON.stringify(close.body));
+  assert.ok(close.body.unpaid_rent_charges >= 1);
+  assert.equal(close.body.ready_for_finance_review, false);
+  assert.equal(close.body.evidence_only, true);
+});
+
+test('service identity inventory requires independent administrators for rotation and retirement', async () => {
+  const created = await call(admin, 'POST', '/service-identities', {
+    name: `staging-recon-${run}`,
+    purpose: 'Staging ledger reconciliation test identity',
+    environment: 'staging',
+    secret_manager_reference: `vault://afrolife/test/${run}`,
+    evidence: 'Approved staging service identity inventory entry.',
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  assert.equal((await call(admin, 'POST', `/service-identities/${created.body.id}/rotate`, {
+    secret_manager_reference: `vault://afrolife/test/${run}/rotated`,
+    expiry_date: '2030-01-01',
+    evidence: 'Rotated in the staging secret manager and independently verified.',
+  })).status, 403);
+  const rotated = await call(globalAdmin, 'POST', `/service-identities/${created.body.id}/rotate`, {
+    secret_manager_reference: `vault://afrolife/test/${run}/rotated`,
+    expiry_date: '2030-01-01',
+    evidence: 'Rotated in the staging secret manager and independently verified.',
+  });
+  assert.equal(rotated.status, 200, JSON.stringify(rotated.body));
+  assert.equal(rotated.body.status, 'active');
+  assert.equal(rotated.body.last_rotated_by, globalAdmin.id);
+  const retired = await call(globalAdmin, 'POST', `/service-identities/${created.body.id}/retire`, {
+    evidence: 'Staging identity retired after test completion.',
+  });
+  assert.equal(retired.status, 200, JSON.stringify(retired.body));
+  assert.equal(retired.body.status, 'retired');
+  const events = await call(globalAdmin, 'GET', `/service-identities/${created.body.id}/events`);
+  assert.equal(events.status, 200);
+  assert.deepEqual(events.body.map((event: any) => event.action).reverse(), ['created','rotated','retired']);
+
+  const approval = await call(fin1, 'POST', `/releases/v7-finance-acceptance-${run}/approve`, {
+    decision: 'approve',
+    notes: 'Finance reviewed the property ledger and reconciliation evidence.',
+  });
+  assert.equal(approval.status, 201, JSON.stringify(approval.body));
+  assert.equal(approval.body.approver_role, 'finance');
+  assert.equal(approval.body.approver_name, 'finance-3');
 });
 
 test.after(() => db.end());

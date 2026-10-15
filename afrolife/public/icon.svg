@@ -1,6 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
-  <title id="title">EthioLife Agency — opportunity mark</title>
-  <rect width="96" height="96" rx="20" fill="#174b3d"/>
-  <path fill="#fff" d="M26 24h40v11H38v8h21v10H38v8h30v11H26z"/>
-  <path fill="#d7ad59" d="m75 15 3.5 8.5L87 27l-8.5 3.5L75 39l-3.5-8.5L63 27l8.5-3.5z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">EthioLife connected opportunity mark</title>
+  <desc id="desc">Three people connected through one shared service hub.</desc>
+  <rect width="96" height="96" rx="21" fill="#174b3d"/>
+  <g fill="none" stroke="#e8f1e9" stroke-linecap="round" stroke-width="4">
+    <path d="M43 44 32 35M53 44l11-9M48 56v8"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="25" cy="27" r="12"/>
+    <circle cx="71" cy="27" r="12"/>
+    <circle cx="48" cy="75" r="12"/>
+  </g>
+  <g fill="#174b3d">
+    <circle cx="25" cy="24" r="2.7"/>
+    <path d="M19.5 32c.4-3.2 2.2-4.8 5.5-4.8s5.1 1.6 5.5 4.8z"/>
+    <circle cx="71" cy="24" r="2.7"/>
+    <path d="M65.5 32c.4-3.2 2.2-4.8 5.5-4.8s5.1 1.6 5.5 4.8z"/>
+    <circle cx="48" cy="72" r="2.7"/>
+    <path d="M42.5 80c.4-3.2 2.2-4.8 5.5-4.8s5.1 1.6 5.5 4.8z"/>
+  </g>
+  <circle cx="48" cy="49" r="8" fill="#d7ad59"/>
+  <circle cx="48" cy="49" r="2.5" fill="#fff"/>
 </svg>

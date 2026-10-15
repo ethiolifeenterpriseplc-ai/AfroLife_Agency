@@ -59,3 +59,11 @@ Treat this identity as a reasoned first version, not a market-acceptance guarant
 ## Related quality work
 
 Accessibility and interaction refinements are recorded in [UI_QUALITY_REVIEW_2026-10-13.md](UI_QUALITY_REVIEW_2026-10-13.md). Brand assets remain editable SVG so local review can refine the marks without losing resolution.
+
+## Visual rollout — 14 October 2026
+
+The core mark now shows three people connected through a single gold opportunity hub. This makes the master icon read as a broad service network rather than a standalone letter mark. The same symbol is used in the SVG app icon, PWA icons, Android launcher/adaptive icons, and Android splash artwork. A new service-network illustration connects a worker, home, work opportunity, and community in the public sign-in panel. Mini-app marks remain distinct within the shared family system.
+
+The design direction prioritizes clarity, accessible contrast, local language support, consistent navigation, and transparent service ownership. These priorities align with the National Bank of Ethiopia's [National Digital Payments Strategy 2026–2030 draft](https://nbe.gov.et/wp-content/uploads/2025/12/NATIONAL_DIGITAL_PAYMENT_STRATEGY_2026-2030_Draft_Document.pdf), which calls for simple and accessible experiences, local languages, consistent navigation, clear transaction details, and stronger trust. The strategy is a relevant UX reference for the product's financial service areas, not an endorsement of EthioLife or evidence that users accept this identity.
+
+Files applied: `public/icon.svg`, `public/brand/ethiolife-service-network.svg`, `public/icons/*`, `android/app/src/main/res/mipmap-*`, `android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml`, and Android splash images. Validate the new identity with local users across languages, screen sizes, and assistive technologies before treating it as a market-tested brand.

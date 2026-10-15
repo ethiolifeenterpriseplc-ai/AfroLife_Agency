@@ -102,9 +102,33 @@ complete from a local development check alone.
   in the schema and that the inventory records owner, environment, expiry and
   rotation evidence.
 - [ ] Produce an owner rent-statement and reconciliation export for at least
-  one property owner using `/owners/:id/rent-statement` and reconcile a pending
-  receipt into the ledger using the existing `rent-transactions` flow. Attach
-  the CSV/JSON outputs to the release record.
+  one property owner using `/owner/statements` and reconcile a pending receipt
+  into the ledger using the existing `rent-transactions` flow. Attach the
+  CSV/JSON outputs to the release record.
+- [ ] Run the owner statement integration acceptance case and confirm both JSON
+  and CSV amounts match reconciled and pending transactions. The export is
+  owner-scoped and is not evidence of a payout or trust-account balance.
+- [ ] Review the draft ETB chart-of-accounts template with the entity Finance
+  owner. It preserves current posting labels, remains non-operative until
+  approved and does not establish IFRS recognition, tax or custody policy.
+- [ ] Run the read-only property period-close checks for a staging period and
+  attach the exception report and Finance sign-off. A clear result means ready
+  for Finance review only; it does not close or lock the period.
+- [ ] Exercise service identity create, independent rotate and retire paths;
+  verify the external secret manager credential was rotated and no secret
+  material was entered into EthioLife. Attach append-only lifecycle evidence.
+- [ ] For a disposable restore rehearsal, capture source control totals with
+  `$env:AFROLIFE_CONTROL_DATABASE_URL='<loopback test database>'; node scripts\property-restore-verify.mjs capture | Tee-Object control-totals.json`,
+  restore to a different `test_*` database, then set
+  `AFROLIFE_RESTORE_DATABASE_URL` and `AFROLIFE_RESTORE_EXPECTED_FILE` and run
+  `node scripts\property-restore-verify.mjs verify`. Have the release owner sign or
+  otherwise approve the captured JSON manifest outside this script; the
+  verifier checks content and database identity, not a digital signature.
+  Never point this check at the production database. A staging rehearsal requires a separately approved,
+  isolated target and named operator.
+- [ ] Run `npm run perf:v7:local` against loopback with representative
+  authorized paths and a non-production token. Local load evidence is not a
+  staging capacity or SLO acceptance result.
 - [ ] CI checks pass for the exact release source.
 - [ ] All migrations apply to a fresh staging database and an upgrade copy of
   the prior schema; schema version and migration logs are recorded.
