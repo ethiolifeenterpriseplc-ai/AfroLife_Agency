@@ -97,10 +97,12 @@ complete from a local development check alone.
 - [ ] Assign and exercise the incident, service-identity rotation, recovery,
   financial-integrity and release procedures in
   [PRODUCTION_OPERATIONS_RUNBOOK.md](PRODUCTION_OPERATIONS_RUNBOOK.md).
-- [ ] Apply `066_readiness_evidence.sql` after migration 065 and run the
-  platform-admin readiness-evidence API acceptance test. Confirm list/insert
-  attribution, denied non-admin access, append-only database behavior and no
-  secret or personal-data content in evidence notes.
+- [ ] Apply `066_readiness_evidence.sql` and
+  `067_global_admin_release_approval_role.sql` after migration 065. Run the
+  platform-admin readiness-evidence API acceptance test and global-admin
+  release-approval acceptance test. Confirm list/insert attribution, denied
+  non-admin access, append-only database behavior and no secret or
+  personal-data content in evidence notes.
 - [ ] Record separate evidence entries for workforce, Insurance, MFI/SACCO,
   Edir, property, marketplace and shared platform gates in
   [PRODUCTION_ACCEPTANCE_PACK.md](PRODUCTION_ACCEPTANCE_PACK.md). A recorded

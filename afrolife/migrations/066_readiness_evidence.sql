@@ -42,7 +42,7 @@ CREATE POLICY release_readiness_evidence_insert ON release_readiness_evidence
   FOR INSERT WITH CHECK (
     app_role() IN ('global_admin','super_admin')
     AND recorded_by = app_user_id()
-    AND recorded_by_role = app_role()
+    AND recorded_by_role = coalesce(nullif(current_setting('app.role', true), ''), '')
   );
 
 REVOKE ALL ON TABLE release_readiness_evidence FROM PUBLIC;

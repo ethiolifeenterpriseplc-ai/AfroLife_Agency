@@ -24,6 +24,7 @@ const leaseNoticeRecords = readFileSync(new URL('../migrations/061_lease_notice_
 const financeAndIdentityControls = readFileSync(new URL('../migrations/064_finance_and_identity_controls.sql', import.meta.url), 'utf8');
 const ownerRentTransactionRead = readFileSync(new URL('../migrations/065_owner_rent_transaction_read.sql', import.meta.url), 'utf8');
 const readinessEvidence = readFileSync(new URL('../migrations/066_readiness_evidence.sql', import.meta.url), 'utf8');
+const globalAdminReleaseApprovalRole = readFileSync(new URL('../migrations/067_global_admin_release_approval_role.sql', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
 
@@ -213,11 +214,17 @@ test('production readiness evidence is append-only and platform-admin scoped', (
   assert.match(readinessEvidence, /FORCE ROW LEVEL SECURITY/);
   assert.match(readinessEvidence, /Release readiness evidence is append-only/);
   assert.match(readinessEvidence, /recorded_by = app_user_id\(\)/);
-  assert.match(readinessEvidence, /recorded_by_role = app_role\(\)/);
+  assert.match(readinessEvidence, /recorded_by_role = coalesce\(nullif\(current_setting\('app\.role', true\), ''\), ''\)/);
   assert.match(readinessEvidence, /REVOKE ALL ON TABLE release_readiness_evidence FROM "\{\{role\}\}"/);
   assert.match(readinessEvidence, /GRANT SELECT, INSERT ON TABLE release_readiness_evidence TO "\{\{role\}\}"/);
   assert.match(operations, /ops\.post\('\/readiness-evidence', requireRole\('super_admin','global_admin'\)/);
   assert.match(operations, /ops\.get\('\/readiness-evidence', requireRole\('super_admin','global_admin'\)/);
+});
+
+test('global admin release approvals compare the raw authenticated role', () => {
+  assert.match(globalAdminReleaseApprovalRole, /DROP POLICY release_approvals_insert/);
+  assert.match(globalAdminReleaseApprovalRole, /approver_role = coalesce\(nullif\(current_setting\('app\.role', true\), ''\), ''\)/);
+  assert.match(globalAdminReleaseApprovalRole, /approver_name = \(SELECT legal_name FROM users WHERE id=app_user_id\(\)\)/);
 });
 
 test('rent submission RLS relies on unique indexes instead of recursive self-queries', () => {

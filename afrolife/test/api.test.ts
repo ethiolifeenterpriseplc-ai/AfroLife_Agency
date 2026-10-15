@@ -880,6 +880,12 @@ test('service identity inventory requires independent administrators for rotatio
   assert.equal(approval.status, 201, JSON.stringify(approval.body));
   assert.equal(approval.body.approver_role, 'finance');
   assert.equal(approval.body.approver_name, 'finance-3');
+  const globalAdminApproval = await call(globalAdmin, 'POST', `/releases/v7-global-admin-acceptance-${run}/approve`, {
+    decision: 'approve',
+    notes: 'Global administration reviewed this release evidence.',
+  });
+  assert.equal(globalAdminApproval.status, 201, JSON.stringify(globalAdminApproval.body));
+  assert.equal(globalAdminApproval.body.approver_role, 'global_admin');
 });
 
 test('readiness evidence is persisted, attributed, and restricted to platform administrators', async () => {
