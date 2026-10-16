@@ -54,8 +54,17 @@ try {
   const pending = new Map();
   const pageErrors = [];
   const expectedPermissionResponses = [];
+  const expectedSignOutResponses = [];
+  const inFlightRequests = new Map();
+  let revokedRequestIds = new Set();
   socket.addEventListener('message', ({ data }) => {
     const event = JSON.parse(data);
+    if (event.method === 'Network.requestWillBeSent') {
+      inFlightRequests.set(event.params.requestId, event.params.request.url);
+    }
+    if (event.method === 'Network.loadingFinished' || event.method === 'Network.loadingFailed') {
+      inFlightRequests.delete(event.params.requestId);
+    }
     if (event.method === 'Runtime.exceptionThrown') pageErrors.push(event.params.exceptionDetails.text);
     if (event.method === 'Log.entryAdded' && event.params.entry.level === 'error') {
       const entry = event.params.entry;
@@ -64,12 +73,19 @@ try {
         try { return new URL(url).pathname.replace(/^\/api\/v1/, ''); }
         catch { return ''; }
       })();
-      const roleGuardedPaths = new Set(['/workers', '/requests', '/leases', '/tenants', '/rent-transactions/pending', '/insurance/requests']);
+      const roleGuardedPaths = new Set([
+        '/workers', '/requests', '/leases', '/tenants', '/rent-transactions/pending',
+        '/insurance/requests', '/insurance/requests/agent-referrals/me', '/insurance/requests/agent-referrals/agents',
+      ]);
       const sessionGuardedPaths = new Set(['/marketplace/config', '/marketplace/listings', '/learning/content']);
       const expectedRoleDenial = entry.text.includes('403 (Forbidden)') && roleGuardedPaths.has(deniedPath);
       const expectedSessionDenial = entry.text.includes('401 (Unauthorized)')
         && (sessionGuardedPaths.has(deniedPath) || deniedPath === '/rent-transactions/pending');
-      if (expectedRoleDenial || expectedSessionDenial) {
+      const expectedSignOutDenial = entry.text.includes('401 (Unauthorized)')
+        && revokedRequestIds.has(entry.networkRequestId);
+      if (expectedSignOutDenial) {
+        expectedSignOutResponses.push(deniedPath);
+      } else if (expectedRoleDenial || expectedSessionDenial) {
         expectedPermissionResponses.push(deniedPath);
       } else {
         pageErrors.push(`${entry.text}${url ? ` (${url})` : ''}`);
@@ -90,7 +106,11 @@ try {
   closeBrowser = () => socket.send(JSON.stringify({ id: ++nextId, method: 'Browser.close' }));
   const evaluate = async (expression) => {
     const response = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
+    if (response.exceptionDetails) {
+      const details = response.exceptionDetails.exception?.description
+        ?? response.exceptionDetails.text;
+      throw new Error(`Browser evaluation failed: ${details}`);
+    }
     return response.result.value;
   };
   const waitFor = async (expression, label) => {
@@ -215,6 +235,7 @@ try {
 
   await send('Page.enable');
   await send('Runtime.enable');
+  await send('Network.enable');
   await send('Log.enable');
   await waitFor("document.readyState === 'complete' && !!document.querySelector('#login-form')", 'login form');
   const accessibilityChecks = [await accessibilityAudit('login')];
@@ -293,9 +314,9 @@ try {
   if (edirEnabled) {
     await evaluate("document.querySelector('#edir-tab').click()");
     await waitFor("document.querySelector('#page-title')?.textContent === 'EthioLife Edir workspace' && document.querySelector('#stat-grid')?.hidden === true", 'Edir rendering in the shared workspace shell');
-    await waitFor("!!document.querySelector('#workspace .edir-service-nav [data-edir-focus=\"edir-finance\"])", 'Edir mini-app shortcuts');
-    await evaluate("document.querySelector('#workspace [data-edir-focus=\"edir-finance\"]').click()");
-    await waitFor("document.activeElement?.id === 'edir-finance'", 'Edir savings and accounts shortcut');
+    await waitFor("Array.from(document.querySelectorAll('#workspace .edir-service-nav button')).some((button) => button.dataset.edirFocus === 'edir-finance')", 'Edir mini-app shortcuts');
+    await evaluate("Array.from(document.querySelectorAll('#workspace .edir-service-nav button')).find((button) => button.dataset.edirFocus === 'edir-finance').click()");
+    await waitFor("document.activeElement && document.activeElement.id === 'edir-finance'", 'Edir savings and accounts shortcut');
   }
 
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
@@ -340,6 +361,7 @@ try {
     const accountLine = credentialLines.find((line) => line.startsWith(`${role} |`));
     assert.ok(accountLine, `Missing local ${role} credentials`);
     const [, rolePhone, rolePassword] = accountLine.split('|').map((part) => part.trim());
+    revokedRequestIds = new Set(inFlightRequests.keys());
     await evaluate("document.querySelector('#logout').click()");
     await waitFor("document.querySelector('#app-view')?.hidden === true && document.querySelector('#login-form')?.hidden === false", `${role} sign-in form`);
     await evaluate(`(() => {
@@ -385,7 +407,9 @@ try {
     ...(!mfiEnabled ? ['SACCO workflows (pilot disabled in this environment)'] : []),
     ...(edirEnabled ? [] : ['Edir workflows (disabled in this environment)']),
     ...(roleChecks.length ? [] : ['Additional-role journeys (no role accounts configured)']),
-  ], accessibilityChecks, mobileNavigation, layouts, roleChecks, mfaEnrollments, expectedPermissionResponses: { count: expectedPermissionResponses.length, endpoints: [...new Set(expectedPermissionResponses)] } }, null, 2));
+  ], accessibilityChecks, mobileNavigation, layouts, roleChecks, mfaEnrollments,
+  expectedPermissionResponses: { count: expectedPermissionResponses.length, endpoints: [...new Set(expectedPermissionResponses)] },
+  expectedSignOutResponses: { count: expectedSignOutResponses.length, endpoints: [...new Set(expectedSignOutResponses)] } }, null, 2));
 } finally {
   if (closeBrowser) {
     try { closeBrowser(); }

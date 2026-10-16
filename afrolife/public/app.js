@@ -15,7 +15,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [] };
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
 let sessionIdleTimer = null;
@@ -532,6 +532,7 @@ function signOut({ revoke = true, message = '' } = {}) {
     leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [],
     commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
     roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
+    platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [],
     marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
     insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [],
     edirMe: null, mfaSetup: null,
@@ -678,6 +679,19 @@ async function refresh() {
     state.globalAdminPromotions = isPlatformAdmin() ? await api('/global-admin-promotions') : [];
     state.serviceIdentities = isPlatformAdmin() ? await api('/service-identities') : [];
     state.readinessEvidence = isPlatformAdmin() ? await api('/readiness-evidence') : [];
+    if (state.user.role === 'global_admin') {
+      [state.platformServices, state.platformServicePackages, state.platformTenants, state.platformCatalogProducts] = await Promise.all([
+        api('/platform/services'),
+        api('/platform/service-packages'),
+        api('/platform/tenants'),
+        api('/platform/catalog-products'),
+      ]);
+    } else {
+      state.platformServices = [];
+      state.platformServicePackages = [];
+      state.platformTenants = [];
+      state.platformCatalogProducts = [];
+    }
     state.propertyAccountingTemplate = ['global_admin','super_admin','finance','finance_manager'].includes(state.user.role)
       ? await api('/finance/property-chart-of-accounts-template') : null;
     state.roleAccess = state.user.role === 'super_admin' ? await api('/role-access') : null;
@@ -1939,6 +1953,192 @@ function renderReadinessEvidence() {
   return section;
 }
 
+function renderPlatformControlPlane() {
+  const section = node('section', undefined, 'panel form-card');
+  section.style.marginTop = '20px';
+  section.append(node('h3', 'Tenant and service control plane'));
+  section.append(node('p', 'Manage tenant registry, deployment references, service packages, and non-financial catalog products. Tenant database credentials and infrastructure secrets are never stored here. Tenant data remains authoritative in the tenant deployment. A separate read-only BI projection is a planned component and is not connected yet.'));
+
+  const packageForm = node('form', undefined, 'inline-form');
+  packageForm.dataset.form = 'platform-service-package';
+  packageForm.append(
+    field('Package key', 'package_key', 'text', true, { pattern: '[a-z][a-z0-9_-]{1,79}', placeholder: 'full-platform' }).label,
+    field('Package name', 'display_name').label,
+    field('Description', 'description', 'text', true, { maxlength: '1000' }).label,
+  );
+  const services = node('fieldset', undefined, 'span-2');
+  services.append(node('legend', 'Services included'));
+  for (const service of state.platformServices.filter((item) => item.available)) {
+    const label = node('label', service.display_name);
+    const check = node('input');
+    check.type = 'checkbox';
+    check.name = 'services';
+    check.value = service.service_key;
+    label.prepend(check);
+    services.append(label);
+  }
+  packageForm.append(services, button('Create service package', 'submit', 'button button-primary span-2'));
+  section.append(packageForm);
+
+  const packageList = node('div', undefined, 'list');
+  for (const item of state.platformServicePackages) {
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = 'platform-service-package-update';
+    form.dataset.packageId = item.id;
+    const active = field('Package active', 'active', 'select');
+    for (const [value, labelText] of [['true', 'Yes'], ['false', 'No']]) {
+      const option = node('option', labelText); option.value = value; active.input.append(option);
+    }
+    active.input.value = String(item.active);
+    form.append(
+      field('Package', 'display_name', 'text', true, { value: item.display_name }).label,
+      field('Description', 'description', 'text', true, { value: item.description, maxlength: '1000' }).label,
+      active.label,
+    );
+    const servicesField = node('fieldset', undefined, 'span-2');
+    servicesField.append(node('legend', 'Included services'));
+    for (const service of state.platformServices) {
+      const label = node('label', service.display_name);
+      const check = node('input');
+      check.type = 'checkbox';
+      check.name = 'services';
+      check.value = service.service_key;
+      check.checked = item.services.includes(service.service_key);
+      check.disabled = !service.available && !check.checked;
+      label.prepend(check);
+      servicesField.append(label);
+    }
+    form.append(servicesField, button('Save package', 'submit', 'button button-outline span-2'));
+    packageList.append(form);
+  }
+  if (!state.platformServicePackages.length) packageList.append(empty('No service packages are configured yet.'));
+  section.append(packageList);
+
+  const tenantForm = node('form', undefined, 'inline-form');
+  tenantForm.dataset.form = 'platform-tenant';
+  tenantForm.append(
+    field('Tenant key', 'tenant_key', 'text', true, { pattern: '[a-z][a-z0-9-]{1,79}', placeholder: 'afrolife-legacy' }).label,
+    field('Tenant name', 'display_name').label,
+    field('Hosting mode', 'hosting_mode', 'select').label,
+    field('Region (optional)', 'region', 'text', false, { maxlength: '120' }).label,
+    field('Deployment reference (no URL or secret)', 'deployment_reference', 'text', false, { maxlength: '200', placeholder: 'deployment inventory reference' }).label,
+    field('Service package', 'package_id', 'select').label,
+  );
+  for (const [value, labelText] of [['cloud', 'Cloud'], ['on_premises', 'On premises']]) {
+    const option = node('option', labelText); option.value = value; tenantForm.elements.hosting_mode.append(option);
+  }
+  const packageSelect = tenantForm.elements.package_id;
+  const packagePlaceholder = node('option', 'Choose service package'); packagePlaceholder.value = ''; packageSelect.append(packagePlaceholder);
+  for (const item of state.platformServicePackages.filter((entry) => entry.active)) {
+    const option = node('option', `${item.display_name} · ${item.services.length} services`); option.value = item.id; packageSelect.append(option);
+  }
+  tenantForm.append(button('Register tenant', 'submit', 'button button-primary span-2'));
+  section.append(tenantForm);
+
+  const serviceList = node('div', undefined, 'list');
+  for (const service of state.platformServices) {
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = 'platform-service';
+    form.dataset.serviceKey = service.service_key;
+    const available = field('Available', 'available', 'select');
+    for (const [value, labelText] of [['true', 'Yes'], ['false', 'No']]) {
+      const option = node('option', labelText); option.value = value; available.input.append(option);
+    }
+    available.input.value = String(service.available);
+    form.append(
+      field('Service', 'display_name', 'text', true, { value: service.display_name }).label,
+      field('Description', 'description', 'text', true, { value: service.description, maxlength: '1000' }).label,
+      available.label,
+      button('Save service', 'submit', 'button button-outline'),
+    );
+    serviceList.append(form);
+  }
+  section.append(serviceList);
+
+  const tenants = node('div', undefined, 'list');
+  if (!state.platformTenants.length) tenants.append(empty('No tenant deployments are registered yet.'));
+  for (const tenant of state.platformTenants) {
+    const item = card(
+      `${tenant.display_name} · ${tenant.tenant_key}`,
+      `${tenant.hosting_mode.replaceAll('_', ' ')} · ${tenant.region ?? 'region not set'} · deployment ${tenant.deployment_status} · configuration v${tenant.config_version}`,
+      tenant.status,
+    );
+    item.append(node('p', `Packages: ${tenant.packages.map((entry) => entry.display_name).join(', ') || 'none'}`));
+    if (tenant.deployment_reference) item.append(node('p', `Deployment reference: ${tenant.deployment_reference}`));
+    if (tenant.deployment_verification_reference) item.append(node('p', `Verification evidence reference: ${tenant.deployment_verification_reference}`));
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = 'platform-tenant-update';
+    form.dataset.tenantId = tenant.id;
+    const status = field('Tenant status', 'status', 'select');
+    for (const value of ['provisioning', 'active', 'suspended', 'retired']) {
+      const option = node('option', value.replaceAll('_', ' ')); option.value = value; status.input.append(option);
+    }
+    status.input.value = tenant.status;
+    const deployment = field('Deployment verification', 'deployment_status', 'select');
+    for (const value of ['not_registered', 'registered', 'verified']) {
+      const option = node('option', value.replaceAll('_', ' ')); option.value = value; deployment.input.append(option);
+    }
+    deployment.input.value = tenant.deployment_status;
+    const verification = field(
+      'Verification evidence reference (non-secret)',
+      'deployment_verification_reference',
+      'text',
+      false,
+      { maxlength: '200', value: tenant.deployment_verification_reference ?? '', placeholder: 'release or attestation record ID' },
+    );
+    verification.input.required = deployment.input.value === 'verified' && !tenant.deployment_verification_reference;
+    deployment.input.addEventListener('change', () => {
+      verification.input.required = deployment.input.value === 'verified' && !tenant.deployment_verification_reference;
+    });
+    const packageField = field('Service package', 'package_id', 'select', false);
+    const none = node('option', 'Keep current packages'); none.value = ''; packageField.input.append(none);
+    for (const entry of state.platformServicePackages.filter((candidate) => candidate.active)) {
+      const option = node('option', entry.display_name); option.value = entry.id; packageField.input.append(option);
+    }
+    form.append(status.label, deployment.label, verification.label, packageField.label, button('Update tenant', 'submit', 'button button-outline'));
+    item.append(form);
+    tenants.append(item);
+  }
+  section.append(tenants);
+
+  const productForm = node('form', undefined, 'inline-form');
+  productForm.dataset.form = 'platform-catalog-product';
+  productForm.append(
+    field('Product key', 'product_key', 'text', true, { pattern: '[a-z][a-z0-9_-]{1,79}', placeholder: 'household-support-plan' }).label,
+    field('Product name', 'display_name').label,
+    field('Description', 'description', 'text', true, { maxlength: '2000' }).label,
+    field('Catalog category', 'category', 'select').label,
+  );
+  for (const value of ['catalog', 'marketplace', 'service_addon']) {
+    const option = node('option', value.replaceAll('_', ' ')); option.value = value; productForm.elements.category.append(option);
+  }
+  productForm.append(button('Create catalog product', 'submit', 'button button-primary span-2'));
+  section.append(productForm);
+  const products = node('div', undefined, 'list');
+  if (!state.platformCatalogProducts.length) products.append(empty('No non-financial catalog products are configured.'));
+  for (const product of state.platformCatalogProducts) {
+    const item = card(`${product.display_name} · ${product.product_key}`, `${product.category} · ${product.description}`, product.status);
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = 'platform-catalog-product-update';
+    form.dataset.productId = product.id;
+    const status = field('Product status', 'status', 'select');
+    for (const value of ['draft', 'active', 'retired']) {
+      const option = node('option', value); option.value = value; status.input.append(option);
+    }
+    status.input.value = product.status;
+    form.append(
+      field('Name', 'display_name', 'text', true, { value: product.display_name }).label,
+      field('Description', 'description', 'text', true, { value: product.description, maxlength: '2000' }).label,
+      status.label,
+      button('Save product', 'submit', 'button button-outline'),
+    );
+    item.append(form);
+    products.append(item);
+  }
+  section.append(products);
+  return section;
+}
+
 function renderAdmin() {
   const wrap = node('div');
   const isAdmin = isPlatformAdmin();
@@ -1948,6 +2148,7 @@ function renderAdmin() {
   if (state.user.role === 'super_admin') wrap.append(renderRoleAccess());
   const columns = node('div', undefined, 'columns');
   if (isGlobalAdmin) wrap.append(renderBusinessRules());
+  if (isGlobalAdmin) wrap.append(renderPlatformControlPlane());
   if (isAdmin) wrap.append(renderGlobalAdminPromotions());
   if (isAdmin) wrap.append(renderReadinessEvidence());
   if (isAdmin) {
@@ -2220,6 +2421,107 @@ async function submitForm(form) {
     state.roleAccess = await api('/role-access');
     await refresh();
     showAlert('Role access saved.');
+    return;
+  }
+  if (form.dataset.form === 'platform-service-package') {
+    const selected = [...form.querySelectorAll('input[name="services"]:checked')].map((input) => input.value);
+    await api('/platform/service-packages', {
+      method: 'POST',
+      body: JSON.stringify({
+        package_key: values.package_key,
+        display_name: values.display_name,
+        description: values.description,
+        services: selected,
+      }),
+    });
+    form.reset();
+    await refresh();
+    showAlert('Service package created.');
+    return;
+  }
+  if (form.dataset.form === 'platform-service-package-update') {
+    const selected = [...form.querySelectorAll('input[name="services"]:checked')].map((input) => input.value);
+    await api(`/platform/service-packages/${encodeURIComponent(form.dataset.packageId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        display_name: values.display_name,
+        description: values.description,
+        active: values.active === 'true',
+        services: selected,
+      }),
+    });
+    await refresh();
+    showAlert('Service package configuration saved.');
+    return;
+  }
+  if (form.dataset.form === 'platform-tenant') {
+    if (!values.package_id) throw new Error('Choose a service package before registering a tenant.');
+    const payload = { ...values };
+    if (!payload.region) delete payload.region;
+    if (!payload.deployment_reference) delete payload.deployment_reference;
+    await api('/platform/tenants', { method: 'POST', body: JSON.stringify(payload) });
+    form.reset();
+    await refresh();
+    showAlert('Tenant registered in provisioning state. Verify its deployment before activation.');
+    return;
+  }
+  if (form.dataset.form === 'platform-service') {
+    await api(`/platform/services/${encodeURIComponent(form.dataset.serviceKey)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        display_name: values.display_name,
+        description: values.description,
+        available: values.available === 'true',
+      }),
+    });
+    await refresh();
+    showAlert('Platform service configuration saved.');
+    return;
+  }
+  if (form.dataset.form === 'platform-tenant-update') {
+    const payload = {
+      status: values.status,
+      deployment_status: values.deployment_status,
+      ...(values.package_id ? { package_id: values.package_id } : {}),
+      ...(values.deployment_verification_reference ? { deployment_verification_reference: values.deployment_verification_reference } : {}),
+    };
+    await api(`/platform/tenants/${encodeURIComponent(form.dataset.tenantId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    await refresh();
+    showAlert('Tenant configuration saved.');
+    return;
+  }
+  if (form.dataset.form === 'platform-catalog-product') {
+    await api('/platform/catalog-products', {
+      method: 'POST',
+      body: JSON.stringify({
+        product_key: values.product_key,
+        display_name: values.display_name,
+        description: values.description,
+        category: values.category,
+      }),
+    });
+    form.reset();
+    await refresh();
+    showAlert('Catalog product created in draft state. Activate it after review.');
+    return;
+  }
+  if (form.dataset.form === 'platform-catalog-product-update') {
+    const prior = state.platformCatalogProducts.find((item) => item.id === form.dataset.productId);
+    if (!prior) throw new Error('Catalog product is no longer available; refresh and retry.');
+    await api(`/platform/catalog-products/${encodeURIComponent(form.dataset.productId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        display_name: values.display_name,
+        description: values.description,
+        status: values.status,
+        attributes: prior.attributes ?? {},
+      }),
+    });
+    await refresh();
+    showAlert('Catalog product updated.');
     return;
   }
   if (form.dataset.form === 'property-period-close') {

@@ -22,6 +22,14 @@ const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_
 const MFA_STAFF = [...STAFF, 'corporate_business_manager'];
 const AGENT_ROLES = ['master_agent', 'field_agent'];
 const PROVISIONABLE_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner'] as const;
+const PLATFORM_SERVICE_KEYS = [
+  'agency', 'workforce', 'staffing', 'property', 'marketplace', 'insurance',
+  'sacco_mfi', 'edir', 'learning', 'privacy', 'operations',
+] as const;
+const requireGlobalAdmin: RequestHandler = (req, _res, next) =>
+  req.user?.role === 'global_admin'
+    ? next()
+    : next(new HttpError(403, 'Only a Global Admin can change platform-wide configuration.'));
 const requireEnterprisePlan: RequestHandler = (req, _res, next) => {
   pool.query(
     `SELECT 1 FROM user_signups
@@ -365,6 +373,334 @@ loginRouter.get('/auth/signup/documents', h(async (req, res) => {
 
 // ================= Signed-in: own account =================
 export const adminRouter = Router();
+
+adminRouter.get('/platform/services', requireGlobalAdmin, h(async (req, res) => {
+  const services = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT service_key, display_name, description, available, updated_at
+     FROM platform_services ORDER BY display_name`,
+  )).rows);
+  res.json(services);
+}));
+
+adminRouter.patch('/platform/services/:serviceKey', requireGlobalAdmin, h(async (req, res) => {
+  const serviceKey = z.enum(PLATFORM_SERVICE_KEYS).parse(req.params.serviceKey);
+  const body = z.object({
+    display_name: z.string().trim().min(2).max(120),
+    description: z.string().trim().min(2).max(1000),
+    available: z.boolean(),
+  }).strict().parse(req.body);
+  const service = await withUser(req.user!, async (client) => {
+    const updated = await client.query(
+      `UPDATE platform_services
+       SET display_name=$2, description=$3, available=$4, updated_by=$5, updated_at=now()
+       WHERE service_key=$1 RETURNING service_key, display_name, description, available, updated_at`,
+      [serviceKey, body.display_name, body.description, body.available, req.user!.id],
+    );
+    if (!updated.rowCount) throw new HttpError(404, 'Platform service not found.');
+    await audit(client, req.user!.id, 'platform_service_updated', 'platform_service', serviceKey, null, body);
+    return updated.rows[0];
+  });
+  res.json(service);
+}));
+
+adminRouter.get('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
+  const packages = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT p.id, p.package_key, p.display_name, p.description, p.active, p.created_at, p.updated_at,
+       COALESCE(array_agg(i.service_key ORDER BY i.service_key)
+         FILTER (WHERE i.service_key IS NOT NULL), ARRAY[]::text[]) AS services
+     FROM platform_service_packages p
+     LEFT JOIN platform_service_package_items i ON i.package_id=p.id
+     GROUP BY p.id ORDER BY p.display_name`,
+  )).rows);
+  res.json(packages);
+}));
+
+adminRouter.post('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
+  const body = z.object({
+    package_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
+    display_name: z.string().trim().min(2).max(120),
+    description: z.string().trim().min(2).max(1000),
+    services: z.array(z.enum(PLATFORM_SERVICE_KEYS)).min(1).max(PLATFORM_SERVICE_KEYS.length),
+  }).strict().parse(req.body);
+  if (new Set(body.services).size !== body.services.length) {
+    throw new HttpError(422, 'A service may only appear once in a package.');
+  }
+  const created = await withUser(req.user!, async (client) => {
+    const available = (await client.query(
+      'SELECT service_key FROM platform_services WHERE service_key=ANY($1::text[]) AND available',
+      [body.services],
+    )).rows.map((row) => row.service_key);
+    if (available.length !== body.services.length) {
+      throw new HttpError(422, 'Packages may include only currently available platform services.');
+    }
+    const row = (await client.query(
+      `INSERT INTO platform_service_packages (package_key,display_name,description,created_by)
+       VALUES ($1,$2,$3,$4) RETURNING id,package_key,display_name,description,active`,
+      [body.package_key, body.display_name, body.description, req.user!.id],
+    )).rows[0];
+    for (const service of body.services) {
+      await client.query('INSERT INTO platform_service_package_items (package_id,service_key) VALUES ($1,$2)', [row.id, service]);
+    }
+    await audit(client, req.user!.id, 'platform_service_package_created', 'platform_service_package', row.id, null, body);
+    return { ...row, services: body.services };
+  });
+  res.status(201).json(created);
+}));
+
+adminRouter.patch('/platform/service-packages/:packageId', requireGlobalAdmin, h(async (req, res) => {
+  const packageId = z.string().uuid().parse(req.params.packageId);
+  const body = z.object({
+    display_name: z.string().trim().min(2).max(120),
+    description: z.string().trim().min(2).max(1000),
+    active: z.boolean(),
+    services: z.array(z.enum(PLATFORM_SERVICE_KEYS)).min(1).max(PLATFORM_SERVICE_KEYS.length),
+  }).strict().parse(req.body);
+  if (new Set(body.services).size !== body.services.length) {
+    throw new HttpError(422, 'A service may only appear once in a package.');
+  }
+  const updated = await withUser(req.user!, async (client) => {
+    const prior = (await client.query(
+      'SELECT package_key FROM platform_service_packages WHERE id=$1 FOR UPDATE', [packageId],
+    )).rows[0];
+    if (!prior) throw new HttpError(404, 'Service package not found.');
+    const available = (await client.query(
+      'SELECT service_key FROM platform_services WHERE service_key=ANY($1::text[]) AND available',
+      [body.services],
+    )).rows.map((row) => row.service_key);
+    if (available.length !== body.services.length) {
+      throw new HttpError(422, 'Packages may include only currently available platform services.');
+    }
+    await client.query(
+      `UPDATE platform_service_packages
+       SET display_name=$2,description=$3,active=$4,updated_at=now() WHERE id=$1`,
+      [packageId, body.display_name, body.description, body.active],
+    );
+    await client.query('DELETE FROM platform_service_package_items WHERE package_id=$1', [packageId]);
+    for (const service of body.services) {
+      await client.query('INSERT INTO platform_service_package_items (package_id,service_key) VALUES ($1,$2)', [packageId, service]);
+    }
+    await audit(client, req.user!.id, 'platform_service_package_updated', 'platform_service_package', packageId, null, body);
+    return { id: packageId, package_key: prior.package_key, ...body };
+  });
+  res.json(updated);
+}));
+
+adminRouter.get('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
+  const tenants = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT t.id,t.tenant_key,t.display_name,t.status,t.hosting_mode,t.region,
+       t.deployment_reference,t.deployment_status,t.config_version,t.created_at,t.updated_at,
+       t.deployment_verification_reference,
+       COALESCE(jsonb_agg(jsonb_build_object(
+         'id',p.id,'package_key',p.package_key,'display_name',p.display_name
+       ) ORDER BY p.package_key) FILTER (WHERE p.id IS NOT NULL),'[]'::jsonb) AS packages
+     FROM platform_tenants t
+     LEFT JOIN platform_tenant_packages tp ON tp.tenant_id=t.id
+     LEFT JOIN platform_service_packages p ON p.id=tp.package_id
+     GROUP BY t.id ORDER BY t.created_at,t.tenant_key`,
+  )).rows);
+  res.json(tenants);
+}));
+
+adminRouter.post('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
+  const body = z.object({
+    tenant_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9-]{1,79}$/),
+    display_name: z.string().trim().min(2).max(160),
+    hosting_mode: z.enum(['cloud','on_premises']),
+    region: z.string().trim().min(2).max(120).optional(),
+    deployment_reference: z.string().trim().min(2).max(200).optional(),
+    package_id: z.string().uuid(),
+  }).strict().parse(req.body);
+  if (body.deployment_reference && (/(password|secret|token|credential)/i.test(body.deployment_reference) || body.deployment_reference.includes('://'))) {
+    throw new HttpError(422, 'Deployment references must not contain credentials or connection URLs.');
+  }
+  const tenant = await withUser(req.user!, async (client) => {
+    const servicePackage = (await client.query(
+      'SELECT id FROM platform_service_packages WHERE id=$1 AND active FOR SHARE', [body.package_id],
+    )).rows[0];
+    if (!servicePackage) throw new HttpError(422, 'Choose an active service package.');
+    const created = (await client.query(
+      `INSERT INTO platform_tenants
+         (tenant_key,display_name,hosting_mode,region,deployment_reference,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id,tenant_key,display_name,status,hosting_mode,region,deployment_reference,
+         deployment_status,config_version,created_at,updated_at`,
+      [body.tenant_key, body.display_name, body.hosting_mode, body.region ?? null,
+        body.deployment_reference ?? null, req.user!.id],
+    )).rows[0];
+    await client.query(
+      'INSERT INTO platform_tenant_packages (tenant_id,package_id,assigned_by) VALUES ($1,$2,$3)',
+      [created.id, body.package_id, req.user!.id],
+    );
+    await client.query(
+      `INSERT INTO platform_tenant_events (tenant_id,actor_id,event_type,event_data)
+       VALUES ($1,$2,'tenant_created',$3)`,
+      [created.id, req.user!.id, JSON.stringify({
+        hosting_mode: body.hosting_mode, package_id: body.package_id,
+        deployment_reference: body.deployment_reference ?? null,
+      })],
+    );
+    await audit(client, req.user!.id, 'platform_tenant_created', 'platform_tenant', created.id, null, {
+      tenant_key: body.tenant_key, hosting_mode: body.hosting_mode,
+    });
+    return created;
+  });
+  res.status(201).json(tenant);
+}));
+
+adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const body = z.object({
+    display_name: z.string().trim().min(2).max(160).optional(),
+    status: z.enum(['provisioning','active','suspended','retired']).optional(),
+    hosting_mode: z.enum(['cloud','on_premises']).optional(),
+    region: z.string().trim().min(2).max(120).nullable().optional(),
+    deployment_reference: z.string().trim().min(2).max(200).nullable().optional(),
+    deployment_status: z.enum(['not_registered','registered','verified']).optional(),
+    deployment_verification_reference: z.string().trim().min(2).max(200).optional(),
+    package_id: z.string().uuid().optional(),
+  }).strict().refine((value) => Object.keys(value).length > 0);
+  const changes = body.parse(req.body);
+  if (changes.deployment_reference && (/(password|secret|token|credential)/i.test(changes.deployment_reference) || changes.deployment_reference.includes('://'))) {
+    throw new HttpError(422, 'Deployment references must not contain credentials or connection URLs.');
+  }
+  if (changes.deployment_verification_reference
+    && (/(password|secret|token|credential)/i.test(changes.deployment_verification_reference)
+      || changes.deployment_verification_reference.includes('://'))) {
+    throw new HttpError(422, 'Verification evidence must be a non-secret reference, not a URL or credential.');
+  }
+  const updated = await withUser(req.user!, async (client) => {
+    const prior = (await client.query('SELECT * FROM platform_tenants WHERE id=$1 FOR UPDATE', [tenantId])).rows[0];
+    if (!prior) throw new HttpError(404, 'Tenant not found.');
+    const deploymentChanged = ['hosting_mode', 'region', 'deployment_reference']
+      .some((key) => Object.hasOwn(changes, key));
+    if (prior.status === 'active' && deploymentChanged && changes.status !== 'suspended') {
+      throw new HttpError(409, 'Suspend the tenant before changing its deployment identity.');
+    }
+    const nextStatus = changes.status ?? prior.status;
+    const nextDeploymentStatus = changes.deployment_status
+      ?? (deploymentChanged ? (changes.deployment_reference ?? prior.deployment_reference ? 'registered' : 'not_registered') : prior.deployment_status);
+    const verificationReference = changes.deployment_verification_reference
+      ?? (deploymentChanged || nextDeploymentStatus !== 'verified' ? null : prior.deployment_verification_reference);
+    if (nextDeploymentStatus === 'verified' && !verificationReference) {
+      throw new HttpError(422, 'Record a non-secret deployment verification evidence reference before verification.');
+    }
+    if (changes.deployment_verification_reference && nextDeploymentStatus !== 'verified') {
+      throw new HttpError(422, 'Verification evidence can only be recorded while marking the deployment verified.');
+    }
+    if (nextStatus === 'active' && nextDeploymentStatus !== 'verified') {
+      throw new HttpError(409, 'Verify the tenant deployment before activating it.');
+    }
+    if (changes.package_id) {
+      const packageRow = (await client.query(
+        'SELECT id FROM platform_service_packages WHERE id=$1 AND active', [changes.package_id],
+      )).rows[0];
+      if (!packageRow) throw new HttpError(422, 'Choose an active service package.');
+      await client.query('DELETE FROM platform_tenant_packages WHERE tenant_id=$1', [tenantId]);
+      await client.query(
+        'INSERT INTO platform_tenant_packages (tenant_id,package_id,assigned_by) VALUES ($1,$2,$3)',
+        [tenantId, changes.package_id, req.user!.id],
+      );
+    }
+    const row = (await client.query(
+      `UPDATE platform_tenants SET
+         display_name=COALESCE($2,display_name),status=$3,hosting_mode=COALESCE($4,hosting_mode),
+         region=CASE WHEN $5 THEN $6 ELSE region END,
+         deployment_reference=CASE WHEN $7 THEN $8 ELSE deployment_reference END,
+         deployment_status=$9,deployment_verification_reference=$10,
+         config_version=config_version+1,updated_at=now()
+       WHERE id=$1
+       RETURNING id,tenant_key,display_name,status,hosting_mode,region,deployment_reference,
+         deployment_status,deployment_verification_reference,config_version,created_at,updated_at`,
+      [tenantId, changes.display_name ?? null, nextStatus, changes.hosting_mode ?? null,
+        Object.hasOwn(changes, 'region'), changes.region ?? null,
+        Object.hasOwn(changes, 'deployment_reference'), changes.deployment_reference ?? null,
+        nextDeploymentStatus, verificationReference],
+    )).rows[0];
+    const eventType = changes.status === 'suspended' ? 'tenant_suspended'
+      : changes.status === 'retired' ? 'tenant_retired'
+        : changes.status === 'active' ? 'tenant_reactivated'
+          : changes.deployment_status === 'verified' ? 'deployment_verified'
+            : changes.deployment_reference !== undefined ? 'deployment_registered'
+              : changes.package_id ? 'service_package_assigned' : 'tenant_updated';
+    await client.query(
+      `INSERT INTO platform_tenant_events (tenant_id,actor_id,event_type,event_data)
+       VALUES ($1,$2,$3,$4)`,
+      [tenantId, req.user!.id, eventType, JSON.stringify(changes)],
+    );
+    await audit(client, req.user!.id, 'platform_tenant_updated', 'platform_tenant', tenantId,
+      { status: prior.status, deployment_status: prior.deployment_status, config_version: prior.config_version }, changes);
+    return row;
+  });
+  res.json(updated);
+}));
+
+adminRouter.get('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
+  const products = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,product_key,display_name,description,category,status,attributes,created_by,updated_by,created_at,updated_at
+     FROM platform_catalog_products ORDER BY created_at DESC,product_key`,
+  )).rows);
+  res.json(products);
+}));
+
+adminRouter.post('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
+  const body = z.object({
+    product_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
+    display_name: z.string().trim().min(2).max(160),
+    description: z.string().trim().min(2).max(2000),
+    category: z.enum(['catalog','marketplace','service_addon']),
+    attributes: z.record(z.string(), z.union([z.string().max(500),z.number().finite(),z.boolean()])).default({}),
+  }).strict().parse(req.body);
+  const product = await withUser(req.user!, async (client) => {
+    const row = (await client.query(
+      `INSERT INTO platform_catalog_products
+         (product_key,display_name,description,category,attributes,created_by,updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$6)
+       RETURNING id,product_key,display_name,description,category,status,attributes,created_by,updated_by,created_at,updated_at`,
+      [body.product_key, body.display_name, body.description, body.category,
+        JSON.stringify(body.attributes), req.user!.id],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO platform_catalog_product_events (product_id,actor_id,event_type,event_data)
+       VALUES ($1,$2,'product_created',$3)`,
+      [row.id, req.user!.id, JSON.stringify({ category: body.category })],
+    );
+    await audit(client, req.user!.id, 'platform_catalog_product_created', 'platform_catalog_product', row.id, null, {
+      product_key: body.product_key, category: body.category,
+    });
+    return row;
+  });
+  res.status(201).json(product);
+}));
+
+adminRouter.patch('/platform/catalog-products/:productId', requireGlobalAdmin, h(async (req, res) => {
+  const productId = z.string().uuid().parse(req.params.productId);
+  const body = z.object({
+    display_name: z.string().trim().min(2).max(160),
+    description: z.string().trim().min(2).max(2000),
+    status: z.enum(['draft','active','retired']),
+    attributes: z.record(z.string(), z.union([z.string().max(500),z.number().finite(),z.boolean()])),
+  }).strict().parse(req.body);
+  const product = await withUser(req.user!, async (client) => {
+    const updated = await client.query(
+      `UPDATE platform_catalog_products
+       SET display_name=$2,description=$3,status=$4,attributes=$5,updated_by=$6,updated_at=now()
+       WHERE id=$1
+       RETURNING id,product_key,display_name,description,category,status,attributes,created_by,updated_by,created_at,updated_at`,
+      [productId, body.display_name, body.description, body.status, JSON.stringify(body.attributes), req.user!.id],
+    );
+    if (!updated.rowCount) throw new HttpError(404, 'Catalog product not found.');
+    const eventType = body.status === 'active' ? 'product_activated'
+      : body.status === 'retired' ? 'product_retired' : 'product_updated';
+    await client.query(
+      `INSERT INTO platform_catalog_product_events (product_id,actor_id,event_type,event_data)
+       VALUES ($1,$2,$3,$4)`,
+      [productId, req.user!.id, eventType, JSON.stringify({ status: body.status })],
+    );
+    await audit(client, req.user!.id, 'platform_catalog_product_updated', 'platform_catalog_product', productId, null, body);
+    return updated.rows[0];
+  });
+  res.json(product);
+}));
 
 const requireExactSuperAdmin: RequestHandler = (req, _res, next) =>
   req.user?.role === 'super_admin'

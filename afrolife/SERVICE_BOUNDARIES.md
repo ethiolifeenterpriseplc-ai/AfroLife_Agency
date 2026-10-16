@@ -5,31 +5,33 @@ does not claim that every boundary is already an independently deployed
 microservice. Keep the legacy Agency behavior intact while services are
 extracted behind compatible APIs.
 
-## Approved shared-database target
+## Tenant-owned data and global analytics target
 
-The approved global data target is one shared writable PostgreSQL database for
-all platform applications, including Agency operations, Workforce Management,
-Staffing, Property Management, Marketplace, Insurance, SACCO/MFI, Credit
-Scoring and Risk Management, Fraud Management, and Edir. Each application
-writes only its own schema through a restricted runtime role; Edir retains its
-own ledger schema, ledger rules, backend, and release ownership. Insurance and
-MFI likewise retain their own ledger and financial controls inside their
-respective schemas. Application separation is enforced through service APIs,
-schemas, roles, RLS, audit, and release pipelines—not through separate
-physical databases.
+Each platform tenant owns its authoritative database and independently
+deployable application environment, on premises or in its chosen cloud. Within
+that tenant boundary, domain services may use separately owned schemas and
+restricted runtime roles while legacy workflows are retained and migrated
+incrementally. A tenant remains operational on its last verified configuration
+if it cannot reach the central platform control plane.
 
-The unified mirror is a projection within this shared database, maintained by
-a dedicated projector role from approved domain events or transactional
-outbox records. Domain services write their owned operational schemas and
-must not write mirror rows directly. The mirror is writable only by the
-projector and is read-only to application roles. It supports unified global
-views without becoming the source of truth for domain or ledger transactions.
+The central platform control plane is a registry and configuration authority,
+not a tenant data plane. It must not hold tenant database URLs, credentials,
+or infrastructure secrets. A tenant may only be marked active after its
+deployment is verified; the current registry and verification field do not
+provision or independently attest to an actual deployment.
 
-This is the approved target, not the current deployment state. Existing
-separate databases and legacy-schema access remain transitional until
-schema-by-schema migrations, reconciliation, role grants, rollback, and
+Global BI is a separate read-only analytics database and is the only intended
+cross-tenant data exception. It may receive tenant-identified projections
+excluding secrets, while tenant databases remain authoritative for
+transactions. Projection delivery, classification, access controls, retention,
+and reliable offline/replay handling are not implemented yet. Do not describe
+the existing shared-database mirror as this global BI store or use it as a
+tenant-isolation boundary.
+
+Existing shared-database and legacy-schema access remain transitional until
+tenant-by-tenant migration, reconciliation, role grants, rollback, and
 disposable UAT have passed. Do not redirect production services or combine
-ledger data based on documentation alone.
+tenant/ledger data based on documentation alone.
 
 ## Current deployment boundaries (transition state)
 
@@ -50,18 +52,20 @@ ledger data based on documentation alone.
 
 ## Ownership rules for extraction
 
-- The approved target is one shared writable database partitioned by domain
-  schema, migration account, restricted runtime role, backup and retention
-  policy, health/readiness endpoint, and release pipeline. The current
-  separate databases and shared legacy schema are transitional. Edir keeps
-  its own backend and ledger schema within the target database.
+- Each tenant owns its writable database, backup/retention policy,
+  deployment, and release pipeline. Domain services may have separately
+  restricted schemas and runtime roles inside that tenant boundary. The
+  current shared legacy schema and local per-service databases are transitional.
+  Edir keeps its own backend and ledger schema inside the tenant deployment.
 - Cross-service access uses versioned HTTP contracts with authenticated
   service-to-service identity. Do not share database tables or give one
-  service's runtime role access to another service's schema; only the global
-  mirror projector role may aggregate approved records across domains.
+  service's runtime role access to another service's schema. Approved,
+  secret-filtered tenant projections are sent through a separate ingestion
+  path to the read-only global BI database; that path is not implemented yet.
 - Identity remains a central authority. Downstream services receive a signed,
   short-lived identity assertion and independently enforce their own
-  authorization and tenant scope.
+  authorization and tenant scope. A central identity authority does not grant
+  cross-tenant data access.
 - Agent specializations are descriptive business metadata, not service
   entitlements. Master and field agents retain access to the property and
   workforce workflows assigned to their existing role; record access and
@@ -129,7 +133,8 @@ forwards the site and `/api/v1/*` to the central API only. The API authenticates
 the session and dispatches configured service routes using short-lived signed
 identity assertions. Edir remains behind `/edir` as a separate ledger-backed
 service. Edir and Insurance currently use separate physical ledger databases;
-the approved target is dedicated schemas in the shared platform database.
+their eventual placement within each tenant's owned database requires a
+tenant-by-tenant migration and reconciliation.
 Insurance and MFI keep their public API paths under the same origin. Backend
 ports are loopback/private and must not be published directly.
 
@@ -153,39 +158,31 @@ flowchart LR
   Shell -->|signed request| CreditRisk[Credit Scoring and Risk service]
   Shell -->|signed request| Fraud[Fraud Management service]
   Shell -->|signed request| Edir[Edir service]
-  subgraph SharedDB[One shared writable PostgreSQL database]
-    AgencySchema[(agency schema)]
-    WorkforceSchema[(workforce schema)]
-    StaffingSchema[(staffing schema)]
-    PropertySchema[(property schema)]
-    MarketplaceSchema[(marketplace schema)]
-    InsuranceSchema[(insurance and ledger schema)]
-    MfiSchema[(SACCO MFI and risk schema)]
-    CreditRiskSchema[(credit scoring and risk schema)]
-    FraudSchema[(fraud management schema)]
-    EdirSchema[(Edir ledger schema)]
-    MirrorSchema[(global mirror projection schema)]
+  subgraph Tenant[Independently deployed tenant environment]
+    TenantAPI[Tenant API and services]
+    subgraph TenantDB[Tenant-owned writable database]
+      AgencySchema[(legacy and agency data)]
+      DomainSchemas[(domain-owned schemas and ledgers)]
+    end
+    TenantAPI --> AgencySchema
+    TenantAPI --> DomainSchemas
   end
-  Agency --> AgencySchema
-  Workers --> WorkforceSchema
-  Staffing --> StaffingSchema
-  Property --> PropertySchema
-  Market --> MarketplaceSchema
-  Insurance --> InsuranceSchema
-  MFI --> MfiSchema
-  CreditRisk --> CreditRiskSchema
-  Fraud --> FraudSchema
-  Edir --> EdirSchema
-  SharedDB --> MirrorSchema
+  subgraph ControlPlane[Central platform control plane]
+    Registry[Tenant registry and verified configuration]
+  end
+  Registry -. last verified config .-> TenantAPI
+  TenantDB -. approved secret-filtered projection .-> BI[(Separate read-only global BI database)]
 ```
 
 The shared frontend continues to use one browser origin and one session.
 Insurance, MFI, Edir, Workforce Management, Staffing, Property Management, and
 Marketplace are separate backend processes behind the central identity gateway.
-At the target state, all write only to their own schema in the shared database;
-the projector role maintains the global mirror schema. The four Agency domain
-services preserve old routes through the central compatibility composition.
-The target schemas and data protections remain under validation.
+The gateway and domain API processes are still coupled to legacy shared
+identity and data; the diagram describes the target topology, not a completed
+tenant deployment. The four Agency domain services preserve old routes through
+the central compatibility composition. Tenant database provisioning,
+independent operation, and the BI projection remain under implementation and
+validation.
 
 Do not add Kong alongside the current Nginx-to-central-gateway chain by
 default: that duplicates the ingress/gateway role without improving this
@@ -250,10 +247,10 @@ the `afrolife` directory. It only accepts the configured local
 database, creates a restricted runtime role for each domain, and applies the
 current migration chain. It writes private service environment files but does
 not copy application records or set service URLs on the central API.
-This separate-database setup is a transitional isolation/UAT harness, not the
-approved target topology. The target is the same shared database connection
-with schema-scoped roles per service; do not use this harness to declare the
-shared-database migration complete.
+This separate-database setup is a transitional isolation/UAT harness, not a
+complete tenant deployment. It can help verify restricted service roles but
+does not provision a tenant-owned application environment or the separate BI
+store; do not use it to declare tenant isolation or migration complete.
 To re-apply the service-specific grants to already-created local targets, run
 `npm run db:agency-domains:local:harden`. It revokes legacy-wide grants and
 allows only the domain's required tables and columns. Service startup rejects

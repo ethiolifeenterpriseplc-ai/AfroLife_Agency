@@ -172,6 +172,86 @@ test('Insurance Agent referrals require opt-in and remain within the assigned Ag
   ]);
 });
 
+test('Global Admin control plane enforces tenant verification and excludes financial products', async () => {
+  assert.equal((await call(admin, 'GET', '/platform/services')).status, 403);
+  const services = await call(globalAdmin, 'GET', '/platform/services');
+  assert.equal(services.status, 200);
+  assert.ok(services.body.some((service: any) => service.service_key === 'agency'));
+
+  const packageKey = `test-control-${run}`;
+  const packageResponse = await call(globalAdmin, 'POST', '/platform/service-packages', {
+    package_key: packageKey,
+    display_name: `Test Control Package ${run}`,
+    description: 'Synthetic package for control-plane integration coverage.',
+    services: ['agency'],
+  });
+  assert.equal(packageResponse.status, 201, JSON.stringify(packageResponse.body));
+
+  const tenantResponse = await call(globalAdmin, 'POST', '/platform/tenants', {
+    tenant_key: `test-control-${run}`,
+    display_name: `Test Control Tenant ${run}`,
+    hosting_mode: 'on_premises',
+    deployment_reference: `uat-deployment-${run}`,
+    package_id: packageResponse.body.id,
+  });
+  assert.equal(tenantResponse.status, 201, JSON.stringify(tenantResponse.body));
+  assert.equal(tenantResponse.body.status, 'provisioning');
+  assert.equal(tenantResponse.body.deployment_status, 'not_registered');
+
+  const activateWithoutVerification = await call(globalAdmin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
+    status: 'active',
+  });
+  assert.equal(activateWithoutVerification.status, 409);
+
+  const verifyWithoutEvidence = await call(globalAdmin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
+    deployment_status: 'verified',
+  });
+  assert.equal(verifyWithoutEvidence.status, 422);
+
+  const verified = await call(globalAdmin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
+    deployment_status: 'verified',
+    deployment_verification_reference: `uat-attestation-${run}`,
+  });
+  assert.equal(verified.status, 200, JSON.stringify(verified.body));
+  assert.equal(verified.body.deployment_status, 'verified');
+  assert.equal(verified.body.deployment_verification_reference, `uat-attestation-${run}`);
+
+  const active = await call(globalAdmin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
+    status: 'active',
+  });
+  assert.equal(active.status, 200, JSON.stringify(active.body));
+  assert.equal(active.body.status, 'active');
+
+  const unsafeDeploymentChange = await call(globalAdmin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
+    region: 'another-region',
+  });
+  assert.equal(unsafeDeploymentChange.status, 409);
+
+  const productResponse = await call(globalAdmin, 'POST', '/platform/catalog-products', {
+    product_key: `test-product-${run}`,
+    display_name: `Test Catalog Product ${run}`,
+    description: 'Synthetic non-financial catalog item.',
+    category: 'marketplace',
+  });
+  assert.equal(productResponse.status, 201, JSON.stringify(productResponse.body));
+  const activeProduct = await call(globalAdmin, 'PATCH', `/platform/catalog-products/${productResponse.body.id}`, {
+    display_name: productResponse.body.display_name,
+    description: productResponse.body.description,
+    status: 'active',
+    attributes: {},
+  });
+  assert.equal(activeProduct.status, 200);
+  assert.equal(activeProduct.body.status, 'active');
+
+  const regulatedProduct = await call(globalAdmin, 'POST', '/platform/catalog-products', {
+    product_key: `test-credit-${run}`,
+    display_name: 'Regulated credit offer',
+    description: 'Must be configured by the financial product workflow.',
+    category: 'credit',
+  });
+  assert.equal(regulatedProduct.status, 400);
+});
+
 async function newContract(agent: U, track: 'A' | 'B', suffix: number) {
   const lead = await call(agent, 'POST', '/leads', { lead_type: 'household', name: 'Test Customer ' + suffix, phone: `+2517${run}${suffix}` });
   assert.equal(lead.status, 201);
