@@ -1,5 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -9,11 +11,15 @@ const chrome = process.env.AFROLIFE_CHROME_PATH
 const appUrl = process.env.AFROLIFE_UI_URL ?? 'http://127.0.0.1:3000/';
 const credentialFile = process.env.AFROLIFE_UI_USERS_FILE
   ?? join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
+const additionalRoles = (process.env.AFROLIFE_UI_ROLES
+  ?? 'corporate_business_manager,compliance,finance,finance_manager,master_agent,field_agent,customer,worker,property_owner')
+  .split(',').map((role) => role.trim()).filter(Boolean);
 const credentialLines = readFileSync(credentialFile, 'utf8').split(/\r?\n/);
 const adminLine = credentialLines
   .find((line) => line.startsWith('super_admin |'));
 assert.ok(adminLine, `A local Super Admin login is required in ${credentialFile}`);
 const [, phone, password] = adminLine.split('|').map((part) => part.trim());
+const mfaEnrollments = [];
 const profile = mkdtempSync(join(tmpdir(), 'afrolife-ui-smoke-'));
 assert.ok(profile.startsWith(tmpdir()), 'Browser profile must be isolated in the system temp directory');
 const browser = spawn(chrome, [
@@ -95,6 +101,93 @@ try {
     throw new Error(`Timed out waiting for ${label}`);
   };
 
+  const totp = (secret) => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    const bytes = [];
+    for (const character of secret.replace(/=+$/, '').toUpperCase()) {
+      const digit = alphabet.indexOf(character);
+      assert.ok(digit >= 0, 'Saved authenticator key must be valid Base32');
+      value = (value << 5) | digit;
+      bits += 5;
+      if (bits >= 8) {
+        bytes.push((value >>> (bits - 8)) & 255);
+        bits -= 8;
+        value &= (1 << bits) - 1;
+      }
+    }
+    const counter = Buffer.alloc(8);
+    counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
+    const digest = createHmac('sha1', Buffer.from(bytes)).update(counter).digest();
+    const offset = digest[19] & 15;
+    const code = (((digest[offset] & 127) << 24) | (digest[offset + 1] << 16)
+      | (digest[offset + 2] << 8) | digest[offset + 3]) % 1_000_000;
+    return String(code).padStart(6, '0');
+  };
+
+  const persistMfaKey = (role, rolePhone, rolePassword, secret) => {
+    const lines = readFileSync(credentialFile, 'utf8').split(/\r?\n/);
+    const index = lines.findIndex((line) => line.split('|')[1]?.trim() === rolePhone);
+    assert.notEqual(index, -1, `Credential row for ${role} must exist before storing its authenticator key`);
+    const label = lines[index].split('|')[0].trim();
+    lines[index] = `${label} | ${rolePhone} | ${rolePassword} | ${secret}`;
+    writeFileSync(credentialFile, lines.join('\n'), { encoding: 'utf8', mode: 0o600 });
+    if (process.platform === 'win32') {
+      const account = `${process.env.USERDOMAIN ?? ''}\\${process.env.USERNAME ?? ''}`;
+      spawnSync('icacls.exe', [credentialFile, '/inheritance:r', '/grant:r', `${account}:(M)`], { stdio: 'ignore' });
+    }
+    mfaEnrollments.push({ role, phone: rolePhone, authenticatorSetupKey: secret });
+  };
+
+  const completeStaffMfaSetup = async (role, rolePhone, rolePassword) => {
+    const pageTitle = await evaluate("document.querySelector('#page-title')?.textContent?.trim() || ''");
+    if (pageTitle !== 'Account security') return false;
+    const accountLine = credentialLines.find((line) => line.split('|')[1]?.trim() === rolePhone);
+    const existingSecret = accountLine?.split('|')[3]?.trim();
+    if (existingSecret) {
+      await waitFor("document.querySelector('#mfa-field')?.hidden === false", `${role} authenticator challenge`);
+      const code = totp(existingSecret);
+      await evaluate(`(() => {
+        const form = document.querySelector('#login-form');
+        form.elements.code.value = ${JSON.stringify(code)};
+        form.requestSubmit();
+        return true;
+      })()`);
+      await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Your workspace'", `${role} authenticator sign-in`);
+      return true;
+    }
+
+    const setupButton = await evaluate("!!document.querySelector('#workspace [data-action=\"mfa-setup\"]')");
+    if (!setupButton) return false;
+    await evaluate("document.querySelector('#workspace [data-action=\"mfa-setup\"]').click()");
+    try {
+      await waitFor("!!document.querySelector('#workspace form[data-form=\"mfa-enable\"]')", `${role} authenticator setup form`);
+    } catch {
+      const snapshot = await evaluate(`({
+        pageTitle: document.querySelector('#page-title')?.textContent?.trim(),
+        alert: document.querySelector('#alert')?.textContent?.trim(),
+        setupButton: !!document.querySelector('#workspace [data-action="mfa-setup"]'),
+        workspaceText: document.querySelector('#workspace')?.innerText?.slice(0, 500),
+      })`);
+      throw new Error(`Authenticator setup did not render for ${role}: ${JSON.stringify(snapshot)}`);
+    }
+    const secret = await evaluate("document.querySelector('#workspace code')?.textContent?.trim() || ''");
+    assert.ok(secret, `${role} authenticator setup key should be visible`);
+    const code = totp(secret);
+    await evaluate(`(() => {
+      const form = document.querySelector('#workspace form[data-form="mfa-enable"]');
+      form.elements.code.value = ${JSON.stringify(code)};
+      form.requestSubmit();
+      return true;
+    })()`);
+    await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Account security'", `${role} MFA enrollment confirmation`);
+    await evaluate("document.querySelector('#app-view .tabs [data-panel=\"overview\"]')?.click()");
+    await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Your workspace'", `${role} MFA enrollment and workspace`);
+    persistMfaKey(role, rolePhone, rolePassword, secret);
+    return true;
+  };
+
   const accessibilityAudit = async (label) => {
     const result = await evaluate(`(() => {
       const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
@@ -137,44 +230,65 @@ try {
   } catch {
     throw new Error(`Super Admin sign-in did not complete: ${await evaluate("document.querySelector('#login-error')?.textContent || 'no form error shown'")}`);
   }
-  await waitFor("document.querySelector('#mfi-tab')?.hidden === false", 'SACCO tab visibility');
-  await waitFor("!!document.querySelector('#mobile-workspace-nav [data-panel=\"overview\"][aria-current=\"page\"]')", 'accessible current-page state in mobile navigation');
-  await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]')", 'role-aware mini-app launcher');
+  await completeStaffMfaSetup('super_admin', phone, password);
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  try {
+    await waitFor("!!document.querySelector('#mobile-workspace-nav [data-panel=\"overview\"][aria-current=\"page\"]')", 'accessible current-page state in mobile navigation');
+  } catch {
+    const snapshot = await evaluate(`({
+      appHidden: document.querySelector('#app-view')?.hidden,
+      pageTitle: document.querySelector('#page-title')?.textContent?.trim(),
+      loginError: document.querySelector('#login-error')?.textContent?.trim(),
+      mobileNavHidden: document.querySelector('#mobile-workspace-nav')?.hidden,
+      mobileNav: document.querySelector('#mobile-workspace-nav')?.innerHTML,
+      currentTabs: [...document.querySelectorAll('.tab[aria-current="page"]')].map((tab) => tab.dataset.panel),
+      currentMobile: [...document.querySelectorAll('#mobile-workspace-nav [aria-current="page"]')].map((tab) => tab.dataset.panel || tab.id),
+    })`);
+    throw new Error(`Mobile current-page navigation state is missing: ${JSON.stringify(snapshot)}`);
+  }
   accessibilityChecks.push(await accessibilityAudit('Super Admin overview'));
-  await evaluate("document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]').click()");
-  await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace rendering');
+  const mfiEnabled = await evaluate("document.querySelector('#mfi-tab')?.hidden === false");
+  if (mfiEnabled) {
+    await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]')", 'role-aware mini-app launcher');
+    await evaluate("document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]').click()");
+    await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace rendering');
+  } else {
+    assert.equal(await evaluate("document.querySelector('#mfi-tab')?.hidden"), true, 'Disabled SACCO pilot should remain hidden');
+  }
   await evaluate("document.querySelector('#agents-tab').click()");
   await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"commissions\"]')", 'agent mini-app shortcuts');
-  await evaluate("document.querySelector('#mfi-tab').click()");
-  await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace return');
-  await waitFor("!!document.querySelector('#workspace [data-mfi-service-search]')", 'accessible service finder');
-  const serviceSearch = await evaluate(`(() => {
-    const field = document.querySelector('#workspace [data-mfi-service-search]');
-    field.value = 'Digital wallet';
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-    const visible = [...document.querySelectorAll('#workspace .mfi-module-link')].filter((item) => !item.hidden);
-    const result = visible.map((item) => item.querySelector('.mfi-module-name')?.textContent);
-    field.value = '';
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-    return result;
-  })()`);
-  assert.deepEqual(serviceSearch, ['Digital wallet'], 'Service finder should return the matching service and hide unrelated entries');
-  await waitFor("!!document.querySelector('#workspace [data-mfi-module=\"members\"]')", 'SACCO service navigation');
-  await waitFor("!!document.querySelector('#workspace [data-mfi-module=\"members\"] .mfi-module-status.status-partial')", 'module readiness indicator');
-  await evaluate("document.querySelector('#workspace [data-mfi-module=\"members\"]').click()");
-  await waitFor("!!document.querySelector('#workspace .mfi-member-form')", 'member registration form');
-  await evaluate("document.querySelector('#workspace [data-mfi-module=\"credit\"]').click()");
-  await waitFor("!!document.querySelector('#workspace .mfi-submodule-area .mfi-submodule-card')", 'credit service submodules');
-  await waitFor("!!document.querySelector('#workspace [data-mfi-form=\"credit-policy\"]')", 'credit policy configuration form');
-  await waitFor("!!document.querySelector('#workspace [name=\"monthly_income\"]')", 'credit application affordability inputs');
-  await evaluate("document.querySelector('#workspace [data-mfi-focus-target=\"mfi-credit-policy-settings\"]')?.click()");
-  await waitFor("document.activeElement?.id === 'mfi-credit-policy-settings'", 'submodule configuration shortcut');
-  await evaluate("document.querySelector('#workspace [data-mfi-module=\"collections\"]').click()");
-  await waitFor("!!document.querySelector('#workspace .mfi-section')", 'collections workflow screen');
-  await evaluate("document.querySelector('#workspace [data-mfi-module=\"risk-fraud\"]').click()");
-  await waitFor("!!document.querySelector('#workspace [data-mfi-form=\"npl-classification\"]') || !!document.querySelector('#workspace .mfi-record-list')", 'risk classification screen');
-  await evaluate("document.querySelector('#workspace [data-mfi-module=\"staff\"]')?.click()");
-  await waitFor("!!document.querySelector('#workspace .mfi-staff-form')", 'institution staff form');
+  if (mfiEnabled) {
+    await evaluate("document.querySelector('#mfi-tab').click()");
+    await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace return');
+    await waitFor("!!document.querySelector('#workspace [data-mfi-service-search]')", 'accessible service finder');
+    const serviceSearch = await evaluate(`(() => {
+      const field = document.querySelector('#workspace [data-mfi-service-search]');
+      field.value = 'Digital wallet';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      const visible = [...document.querySelectorAll('#workspace .mfi-module-link')].filter((item) => !item.hidden);
+      const result = visible.map((item) => item.querySelector('.mfi-module-name')?.textContent);
+      field.value = '';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      return result;
+    })()`);
+    assert.deepEqual(serviceSearch, ['Digital wallet'], 'Service finder should return the matching service and hide unrelated entries');
+    await waitFor("!!document.querySelector('#workspace [data-mfi-module=\"members\"]')", 'SACCO service navigation');
+    await waitFor("!!document.querySelector('#workspace [data-mfi-module=\"members\"] .mfi-module-status.status-partial')", 'module readiness indicator');
+    await evaluate("document.querySelector('#workspace [data-mfi-module=\"members\"]').click()");
+    await waitFor("!!document.querySelector('#workspace .mfi-member-form')", 'member registration form');
+    await evaluate("document.querySelector('#workspace [data-mfi-module=\"credit\"]').click()");
+    await waitFor("!!document.querySelector('#workspace .mfi-submodule-area .mfi-submodule-card')", 'credit service submodules');
+    await waitFor("!!document.querySelector('#workspace [data-mfi-form=\"credit-policy\"]')", 'credit policy configuration form');
+    await waitFor("!!document.querySelector('#workspace [name=\"monthly_income\"]')", 'credit application affordability inputs');
+    await evaluate("document.querySelector('#workspace [data-mfi-focus-target=\"mfi-credit-policy-settings\"]')?.click()");
+    await waitFor("document.activeElement?.id === 'mfi-credit-policy-settings'", 'submodule configuration shortcut');
+    await evaluate("document.querySelector('#workspace [data-mfi-module=\"collections\"]').click()");
+    await waitFor("!!document.querySelector('#workspace .mfi-section')", 'collections workflow screen');
+    await evaluate("document.querySelector('#workspace [data-mfi-module=\"risk-fraud\"]').click()");
+    await waitFor("!!document.querySelector('#workspace [data-mfi-form=\"npl-classification\"]') || !!document.querySelector('#workspace .mfi-record-list')", 'risk classification screen');
+    await evaluate("document.querySelector('#workspace [data-mfi-module=\"staff\"]')?.click()");
+    await waitFor("!!document.querySelector('#workspace .mfi-staff-form')", 'institution staff form');
+  }
   const edirEnabled = await evaluate("document.querySelector('#edir-tab')?.hidden === false");
   if (edirEnabled) {
     await evaluate("document.querySelector('#edir-tab').click()");
@@ -222,7 +336,7 @@ try {
     assert.ok(layout.bodyWidth <= layout.width + 1, `${layout.device} body overflows horizontally: ${JSON.stringify(layout)}`);
   }
   const roleChecks = [];
-  for (const role of ['corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner']) {
+  for (const role of additionalRoles) {
     const accountLine = credentialLines.find((line) => line.startsWith(`${role} |`));
     assert.ok(accountLine, `Missing local ${role} credentials`);
     const [, rolePhone, rolePassword] = accountLine.split('|').map((part) => part.trim());
@@ -236,6 +350,21 @@ try {
       return true;
     })()`);
     await waitFor("document.querySelector('#app-view')?.hidden === false", `${role} workspace`);
+    const roleCredentials = accountLine.split('|').map((part) => part.trim());
+    const roleMfaSecret = roleCredentials[3];
+    if (roleMfaSecret) {
+      await waitFor("document.querySelector('#mfa-field')?.hidden === false", `${role} authenticator challenge`);
+      const code = totp(roleMfaSecret);
+      await evaluate(`(() => {
+        const form = document.querySelector('#login-form');
+        form.elements.code.value = ${JSON.stringify(code)};
+        form.requestSubmit();
+        return true;
+      })()`);
+    }
+    if (await evaluate("document.querySelector('#page-title')?.textContent?.trim() === 'Account security'")) {
+      await completeStaffMfaSetup(role, rolePhone, rolePassword);
+    }
     await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Your workspace'", `${role} overview rendering`);
     const roleCheck = await evaluate(`({role:${JSON.stringify(role)},title:document.querySelector('#page-title')?.textContent?.trim() || '',adminVisible:document.querySelector('#admin-tab')?.hidden === false})`);
     assert.equal(roleCheck.title, 'Your workspace', `${role} should start in its own overview after another account signs out`);
@@ -243,7 +372,20 @@ try {
     roleChecks.push(roleCheck);
   }
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join('; ')}`);
-  console.log(JSON.stringify({ result: 'PASS', checks: ['Super Admin login', 'role-aware mini-app launcher', 'agent mini-app shortcuts', 'SACCO navigation and workspace', 'accessible service finder', 'service submodules and admin configuration shortcut', 'member, policy, affordability, collections, NPL, and staff screens rendered', 'Edir in the shared workspace title and shell metrics', 'Edir mini-app shortcuts when enabled', 'mobile bottom navigation visibility and touch target sizing', 'More sections sheet navigation', '320px/mobile/tablet/desktop horizontal overflow', 'nine additional seeded role sign-ins', 'accessible names, image alternatives, document language and main heading smoke', 'browser exceptions and unexpected console errors'], accessibilityChecks, mobileNavigation, layouts, roleChecks, expectedPermissionResponses: { count: expectedPermissionResponses.length, endpoints: [...new Set(expectedPermissionResponses)] } }, null, 2));
+  const checks = [
+    'Super Admin login', 'agent mini-app shortcuts', 'mobile bottom navigation visibility and touch target sizing',
+    'More sections sheet navigation', '320px/mobile/tablet/desktop horizontal overflow',
+    `${roleChecks.length} additional role sign-ins`, 'accessible names, image alternatives, document language and main heading smoke',
+    'browser exceptions and unexpected console errors',
+  ];
+  if (mfiEnabled) checks.push('SACCO navigation, service finder, member, policy, affordability, collections, NPL, and staff screens');
+  else checks.push('SACCO pilot remains hidden while disabled');
+  if (edirEnabled) checks.push('Edir workspace and finance shortcut');
+  console.log(JSON.stringify({ result: 'PASS', checks, skipped: [
+    ...(!mfiEnabled ? ['SACCO workflows (pilot disabled in this environment)'] : []),
+    ...(edirEnabled ? [] : ['Edir workflows (disabled in this environment)']),
+    ...(roleChecks.length ? [] : ['Additional-role journeys (no role accounts configured)']),
+  ], accessibilityChecks, mobileNavigation, layouts, roleChecks, mfaEnrollments, expectedPermissionResponses: { count: expectedPermissionResponses.length, endpoints: [...new Set(expectedPermissionResponses)] } }, null, 2));
 } finally {
   if (closeBrowser) {
     try { closeBrowser(); }

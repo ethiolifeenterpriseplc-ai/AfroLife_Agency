@@ -25,6 +25,10 @@ const financeAndIdentityControls = readFileSync(new URL('../migrations/064_finan
 const ownerRentTransactionRead = readFileSync(new URL('../migrations/065_owner_rent_transaction_read.sql', import.meta.url), 'utf8');
 const readinessEvidence = readFileSync(new URL('../migrations/066_readiness_evidence.sql', import.meta.url), 'utf8');
 const globalAdminReleaseApprovalRole = readFileSync(new URL('../migrations/067_global_admin_release_approval_role.sql', import.meta.url), 'utf8');
+const insuranceAgentReferrals = readFileSync(new URL('../migrations/068_insurance_agent_referrals.sql', import.meta.url), 'utf8');
+const insuranceBrokerageSandbox = readFileSync(new URL('../migrations/069_insurance_brokerage_sandbox.sql', import.meta.url), 'utf8');
+const insuranceRequests = readFileSync(new URL('../src/insurance-requests.ts', import.meta.url), 'utf8');
+const insuranceBrokerageSandboxRouter = readFileSync(new URL('../src/insurance-brokerage-sandbox.ts', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
 
@@ -77,6 +81,48 @@ test('effective user access history captures role and activation changes and is 
   assert.match(userAccessHistory, /REVOKE ALL ON TABLE user_access_history FROM "\{\{role\}\}"/);
   assert.match(admin, /\/users\/:id\/access-history/);
   assert.match(admin, /\/role-access\/history/);
+});
+
+test('Insurance Agent referrals require separate customer consent and stay non-binding and hierarchy-scoped', () => {
+  assert.match(insuranceAgentReferrals, /customer_consented_at timestamptz NOT NULL/);
+  assert.match(insuranceAgentReferrals, /customer_withdrew/);
+  assert.match(insuranceAgentReferrals, /insurance_agent_referral_customer_withdraw/);
+  assert.match(insuranceAgentReferrals, /CREATE TABLE insurance_agent_referral_events/);
+  assert.match(insuranceAgentReferrals, /Insurance agent referral events are append-only/);
+  assert.match(insuranceAgentReferrals, /REVOKE ALL ON TABLE insurance_agent_referral_events FROM "\{\{role\}\}"/);
+  assert.match(insuranceAgentReferrals, /insurance_agent_referral_read/);
+  assert.match(insuranceAgentReferrals, /assigned_agent_id IS NOT NULL\s+AND app_can_access_agent\(assigned_agent_id\)/);
+  assert.match(insuranceAgentReferrals, /insurance_agent_referral_staff_access\(\)/);
+  assert.match(insuranceAgentReferrals, /Insurance agent referral history cannot be deleted/);
+  assert.match(insuranceAgentReferrals, /Insurance referral updates are limited to the assigned Agent’s non-binding follow-up/);
+  assert.match(insuranceAgentReferrals, /GRANT SELECT, INSERT, UPDATE ON insurance_agent_referrals/);
+  assert.doesNotMatch(insuranceAgentReferrals, /GRANT .*DELETE ON insurance_agent_referrals/);
+  assert.match(insuranceRequests, /agent_referral_consent: z\.boolean\(\)\.optional\(\)\.default\(false\)/);
+  assert.match(insuranceRequests, /if \(body\.agent_referral_consent\)/);
+  assert.match(insuranceRequests, /referred_to_insurance_team/);
+});
+
+test('Insurance brokerage lifecycle sandbox is synthetic-only, append-only, and disabled in production', () => {
+  assert.match(insuranceBrokerageSandbox, /sandbox_only boolean NOT NULL DEFAULT true CHECK \(sandbox_only\)/);
+  assert.match(insuranceBrokerageSandbox, /insurance_brokerage_sandbox_event_immutable/);
+  assert.match(insuranceBrokerageSandbox, /Insurance brokerage sandbox events are append-only/);
+  assert.match(insuranceBrokerageSandbox, /FORCE ROW LEVEL SECURITY/);
+  assert.match(insuranceBrokerageSandbox, /REVOKE ALL ON TABLE insurance_brokerage_sandbox_cases FROM "\{\{role\}\}"/);
+  assert.match(insuranceBrokerageSandbox, /REVOKE ALL ON TABLE insurance_brokerage_sandbox_events FROM "\{\{role\}\}"/);
+  assert.match(insuranceBrokerageSandbox, /GRANT SELECT, INSERT ON insurance_brokerage_sandbox_events/);
+  assert.doesNotMatch(insuranceBrokerageSandbox, /GRANT .*UPDATE ON insurance_brokerage_sandbox_events/);
+  assert.doesNotMatch(insuranceBrokerageSandbox, /GRANT .*DELETE ON insurance_brokerage_sandbox/);
+  assert.match(insuranceBrokerageSandboxRouter, /environment\.NODE_ENV !== 'production'/);
+  assert.match(insuranceBrokerageSandboxRouter, /environment\.INSURANCE_BROKERAGE_MODE === 'sandbox'/);
+  assert.match(insuranceBrokerageSandboxRouter, /production_activities_enabled: false/);
+  for (const activity of [
+    'advice_review_simulated','product_comparison_simulated','quote_generated_simulated',
+    'policy_issuance_simulated','policy_change_simulated','premium_receipt_simulated',
+    'commission_settlement_simulated','claim_decision_simulated',
+  ]) {
+    assert.ok(insuranceBrokerageSandboxRouter.includes(activity), `sandbox lifecycle missing ${activity}`);
+  }
+  assert.doesNotMatch(insuranceBrokerageSandboxRouter, /createServiceGateway|fetch\(|paymentWebhook|INSURANCE_SERVICE_URL/);
 });
 
 test('MFI customer complaints are tenant-scoped and require documented resolution to close', () => {

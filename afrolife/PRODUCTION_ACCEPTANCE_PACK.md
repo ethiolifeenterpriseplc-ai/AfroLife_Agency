@@ -6,10 +6,16 @@ This pack consolidates the operational readiness, incident response, and approva
 
 The current platform remains in a guarded production-readiness state rather than a full production-authorized state. The implementation is hardened for the existing platform, its legacy flow remains protected, and regulated or legal-effect features stay disabled until named owners sign off on the applied policy and evidence.
 
-The 15 October 2026 local review passed 178 unit tests, all main/domain builds,
+An earlier 15 October 2026 baseline review passed 178 unit tests, all main/domain builds,
 the runtime ACL checker, and 49 API/supply integration tests against a fresh
 restricted-runtime disposable database. Details and scope limits are in
 [V7_RESTRICTED_ACL_ACCEPTANCE_2026-10-15.md](V7_RESTRICTED_ACL_ACCEPTANCE_2026-10-15.md).
+The subsequent Insurance brokerage sandbox change passed 183 unit tests,
+the main API and Insurance builds, and 51 API/supply integration tests against
+a fresh disposable PostgreSQL database migrated through 069, with sandbox mode
+explicitly enabled for the API rehearsal. UI JavaScript syntax and
+`git diff --check` also passed. This incremental verification is not a
+replacement for the broader release acceptance below.
 These results do not close staging, full-surface isolation, capacity, witnessed
 recovery, accessibility, provider, legal, finance, or named-owner gates.
 
@@ -98,12 +104,18 @@ passed. The current implementation and its stated limitations are detailed in
 |---|---|---|---|
 | Workforce management | Existing worker profiles, matching, role checks, and workforce service boundary. | Verified worker self-claim/account binding; complete engagement booking-to-completion lifecycle; credential scope/expiry/revocation; dispute/safeguarding separation; approved labour rules; privacy review for attendance/location/biometrics; leave/payroll hand-off reconciliation. | Partial; do not represent as full HR/payroll or licensed credential verification. |
 | Staffing | Request matching and idempotent request creation; shared supply integration tests and service boundary. | Disposable DB/API E2E against the same migrated schema; booking and fulfillment lifecycle; cancellation/reschedule, completion proof, customer confirmation, disputes, SLA and spend controls. | Partial; no automatic payroll or payment settlement. |
-| Insurance | Separate ledger/service boundary and a guarded service gateway; request workflow is not an insurance application or policy. | Licensed insurer/provider selection and contract; legal basis and disclosures; policy/claims lifecycle; premium/commission reconciliation; production cutover and runtime ACL review. | Gated; production in-process ledger disabled until the separate service cutover is accepted. |
+| Insurance | Separate ledger/service boundary, consent-based Agent referrals, and an opt-in synthetic brokerage training lifecycle with scoped append-only events; it has no live advice, provider, policy, notice, payment, commission, or claims effect. | Licensed insurer/provider selection and contract; legal basis and disclosures; production policy/claims lifecycle; premium/commission reconciliation; production cutover and runtime ACL review. Validate the sandbox in a fresh migrated disposable DB with `INSURANCE_BROKERAGE_MODE=sandbox`; then perform broader witnessed UAT separately. | Gated; sandbox only, no production authorization. |
 | SACCO / MFI | Institution isolation, role controls, maker-checker, balanced journals, reversals, KYC review controls, and synthetic sandbox; production pilot defaults off. | Institution/license-specific legal and accounting approval; verified member KYC/AML process and authorized providers; interest/fees/ECL, restructuring, collateral, regulatory returns, deposits and settlement remain outside the validated principal-only pilot; recovery, security and UAT acceptance. | Supervised principal-only pilot boundary only; not production banking, public-deposit, or general lending authorization. |
 | Edir | Existing Edir service and ledger boundary, institution/organization scope, member lifecycle, cap and transaction controls, role and approval checks. | Named cooperative/legal operating model; approved membership, contribution/share/benefit rules; accounting and financial validation; complaints and hardship paths; privacy/retention; member-facing disclosures; settlement provider and recovery acceptance. | Pilot/controlled workflow only; no claim of statutory Edir compliance or approved benefits. |
 | Property and tenancy | Lease draft and independent workflow, evidence-only signature uploads and notices, owner-scoped statements, and period-close checks. | Legal review of notice/e-signature rules, amendments/renewals, Finance-approved accounting policy, full restore/capacity and owner UAT. | Operational evidence only; no legal-effect claim or closed books. |
 | Marketplace | Role-scoped listing and seller review workflows. | Seller/business verification policy, consumer terms, fulfillment, complaint/refund policy, privacy retention and payment/settlement reconciliation. | Partial; no provider settlement or consumer-law sign-off implied. |
 | Shared platform / agency | Authentication/session controls, role/activity authorization, audit, service identities, security defaults and migration/test evidence. | Exhaustive cross-domain object/file/export/job isolation; access recertification/recovery; representative load and SLO; manual accessibility/localisation; witnessed production DR; named release owners. | Not generally production-accepted. |
+
+### Insurance brokerage sandbox evidence and limit
+
+The training sandbox models simulated intake, needs, disclosures, comparison, quote, proposal, insurer submission, issuance and changes, notices, premiums/refunds, commission, claims, and complaints. The API keeps production activation locked and does not connect to insurers, payment rails, or notification providers. The UI offers synthetic household comparison/quote controls for the fixed demo scenario; this does not imply product recommendation or advice.
+
+Validation for this change applied migrations 001–069 to a fresh disposable PostgreSQL database, then passed 183 unit tests, the main API and Insurance builds, and 51 API/supply integration tests with `INSURANCE_BROKERAGE_MODE=sandbox` explicitly set for the API. The sandbox tables were verified under restricted runtime grants and RLS. UI JavaScript syntax and `git diff --check` passed. The integration suite covers role denial, owner isolation, demo/idempotency, assessment-matched comparisons and quotes, append-only events, and the production lock; the sandbox case is skipped unless the test process and API are explicitly started in sandbox mode. These tests do not validate every Insurance workflow or any legal, provider, finance, capacity, DR, staging, or named-owner acceptance gate.
 
 ### Module evidence capture
 

@@ -57,7 +57,7 @@ async function callFile(u: Pick<U, 'token'>, path: string, file: Buffer, content
   const r = await fetch(API + path, {
     method: 'POST',
     headers: { authorization: 'Bearer ' + u.token, 'content-type': contentType },
-    body: file,
+    body: new Uint8Array(file),
   });
   return { status: r.status, body: (await r.json().catch(() => null)) as any };
 }
@@ -76,6 +76,101 @@ const fa = await mkUser('field_agent', 6);
 const fb = await mkUser('field_agent', 7);
 await db.query("INSERT INTO agents (id, agent_type, parent_id, territory_id) VALUES ($1,'master',NULL,$2)", [master.id, tid]);
 for (const f of [fa, fb]) await db.query("INSERT INTO agents (id, agent_type, parent_id, territory_id) VALUES ($1,'field',$2,$3)", [f.id, master.id, tid]);
+
+test('Insurance Agent referrals require opt-in and remain within the assigned Agent hierarchy', async () => {
+  const withoutAgentShare = await call(learningCustomer, 'POST', '/insurance/requests', {
+    product_interest: 'life',
+    message: 'Please send me general life insurance information.',
+    consent: true,
+    agent_referral_consent: false,
+  });
+  assert.equal(withoutAgentShare.status, 201);
+  const optedIn = await call(learningCustomer, 'POST', '/insurance/requests', {
+    product_interest: 'property',
+    message: 'Please send me general property insurance information.',
+    consent: true,
+    agent_referral_consent: true,
+  });
+  assert.equal(optedIn.status, 201);
+
+  const customerRequests = await call(learningCustomer, 'GET', '/insurance/requests/me');
+  assert.equal(customerRequests.status, 200);
+  assert.equal(customerRequests.body.find((item: any) => item.id === withoutAgentShare.body.id).agent_referral_status, null);
+  assert.equal(customerRequests.body.find((item: any) => item.id === optedIn.body.id).agent_referral_status, 'unassigned');
+
+  const staffQueue = await call(admin, 'GET', '/insurance/requests/agent-referrals/me');
+  assert.equal(staffQueue.status, 200);
+  assert.equal(staffQueue.body.some((item: any) => item.request_id === withoutAgentShare.body.id), false);
+  const referral = staffQueue.body.find((item: any) => item.request_id === optedIn.body.id);
+  assert.ok(referral);
+
+  const eligibleAgents = await call(admin, 'GET', '/insurance/requests/agent-referrals/agents');
+  assert.equal(eligibleAgents.status, 200);
+  assert.ok(eligibleAgents.body.some((item: any) => item.id === fa.id));
+  const assigned = await call(admin, 'POST', `/insurance/requests/agent-referrals/${referral.id}/assign`, {
+    agent_id: fa.id,
+    reason: 'staff_review',
+  });
+  assert.equal(assigned.status, 200, JSON.stringify(assigned.body));
+
+  const fieldQueue = await call(fa, 'GET', '/insurance/requests/agent-referrals/me');
+  assert.equal(fieldQueue.status, 200);
+  const fieldReferral = fieldQueue.body.find((item: any) => item.id === referral.id);
+  assert.ok(fieldReferral);
+  assert.equal(fieldReferral.can_update, true);
+  assert.equal('message' in fieldReferral, false);
+  assert.deepEqual(fieldReferral.events.map((event: any) => event.event_type), ['customer_consented', 'assigned']);
+  assert.equal((await call(fa, 'GET', '/insurance/requests')).status, 403);
+  const siblingQueue = await call(fb, 'GET', '/insurance/requests/agent-referrals/me');
+  assert.equal(siblingQueue.status, 200);
+  assert.equal(siblingQueue.body.some((item: any) => item.id === referral.id), false);
+  const masterQueue = await call(master, 'GET', '/insurance/requests/agent-referrals/me');
+  assert.equal(masterQueue.body.some((item: any) => item.id === referral.id), true);
+  assert.equal((await call(fb, 'POST', `/insurance/requests/agent-referrals/${referral.id}/status`, {
+    status: 'contact_attempted',
+  })).status, 404);
+
+  assert.equal((await call(fa, 'POST', `/insurance/requests/agent-referrals/${referral.id}/status`, {
+    status: 'contact_attempted',
+  })).status, 200);
+  assert.equal((await call(fa, 'POST', `/insurance/requests/agent-referrals/${referral.id}/status`, {
+    status: 'referred_to_insurance_team',
+  })).status, 200);
+  assert.equal((await call(fa, 'POST', `/insurance/requests/agent-referrals/${referral.id}/status`, {
+    status: 'customer_declined',
+  })).status, 404);
+  const finalRequests = await call(learningCustomer, 'GET', '/insurance/requests/me');
+  const finalRequest = finalRequests.body.find((item: any) => item.id === optedIn.body.id);
+  assert.equal(finalRequest.agent_referral_status, 'referred_to_insurance_team');
+  assert.equal(finalRequest.assigned_agent_name, 'field_agent-6');
+  assert.deepEqual(finalRequest.agent_referral_events.map((event: any) => event.event_type), [
+    'customer_consented', 'assigned', 'contact_attempted', 'referred_to_insurance_team',
+  ]);
+
+  const withdrawalRequest = await call(learningCustomer, 'POST', '/insurance/requests', {
+    product_interest: 'household',
+    message: 'Please send me general household cover information.',
+    consent: true,
+    agent_referral_consent: true,
+  });
+  assert.equal(withdrawalRequest.status, 201);
+  const withdrawalQueue = await call(admin, 'GET', '/insurance/requests/agent-referrals/me');
+  const withdrawalReferral = withdrawalQueue.body.find((item: any) => item.request_id === withdrawalRequest.body.id);
+  assert.ok(withdrawalReferral);
+  assert.equal((await call(admin, 'POST', `/insurance/requests/agent-referrals/${withdrawalReferral.id}/assign`, {
+    agent_id: fb.id,
+    reason: 'customer_requested',
+  })).status, 200);
+  assert.equal((await call(fb, 'GET', '/insurance/requests/agent-referrals/me')).body.some((item: any) => item.id === withdrawalReferral.id), true);
+  assert.equal((await call(learningCustomer, 'POST', `/insurance/requests/agent-referrals/${withdrawalReferral.id}/withdraw`, {})).status, 200);
+  assert.equal((await call(fb, 'GET', '/insurance/requests/agent-referrals/me')).body.some((item: any) => item.id === withdrawalReferral.id), false);
+  const withdrawnRequests = await call(learningCustomer, 'GET', '/insurance/requests/me');
+  const withdrawnRequest = withdrawnRequests.body.find((item: any) => item.id === withdrawalRequest.body.id);
+  assert.equal(withdrawnRequest.agent_referral_status, 'customer_withdrew');
+  assert.deepEqual(withdrawnRequest.agent_referral_events.map((event: any) => event.event_type), [
+    'customer_consented', 'assigned', 'customer_withdrew',
+  ]);
+});
 
 async function newContract(agent: U, track: 'A' | 'B', suffix: number) {
   const lead = await call(agent, 'POST', '/leads', { lead_type: 'household', name: 'Test Customer ' + suffix, phone: `+2517${run}${suffix}` });
@@ -931,6 +1026,100 @@ test('readiness evidence is persisted, attributed, and restricted to platform ad
     environment: 'staging',
   });
   assert.equal(invalid.status, 400);
+});
+
+test('Insurance brokerage sandbox runs a synthetic, scoped and production-locked lifecycle', {
+  skip: process.env.INSURANCE_BROKERAGE_MODE !== 'sandbox' || process.env.NODE_ENV === 'production',
+}, async () => {
+  const organizationId = '00000000-0000-4000-8000-000000000002';
+  for (const staff of [compliance, fin2]) {
+    await db.query(
+      `INSERT INTO insurance_ledger_staff (user_id, organization_id, role, assigned_by)
+       VALUES ($1,$2,$3,$4)`,
+      [staff.id, organizationId, staff.role === 'compliance' ? 'compliance' : 'finance_manager', admin.id],
+    );
+  }
+
+  const features = await call(admin, 'GET', '/features');
+  assert.equal(features.status, 200);
+  assert.equal(features.body.insuranceBrokerageSandboxEnabled, true);
+  assert.equal((await call(master, 'GET', '/insurance/brokerage-sandbox/status')).status, 403);
+
+  const unacknowledged = await call(compliance, 'POST', '/insurance/brokerage-sandbox/cases', {});
+  assert.equal(unacknowledged.status, 400);
+  const created = await call(compliance, 'POST', '/insurance/brokerage-sandbox/cases', {
+    acknowledge_synthetic_only: true,
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const otherStaffCases = await call(fin2, 'GET', '/insurance/brokerage-sandbox/cases/mine');
+  assert.equal(otherStaffCases.status, 200);
+  assert.equal(otherStaffCases.body.some((item: any) => item.id === created.body.id), false);
+  assert.equal((await call(fin2, 'GET', `/insurance/brokerage-sandbox/cases/${created.body.id}/events`)).status, 404);
+
+  const runId = randomUUID();
+  const quoteInput = {
+    scenario_run_id: runId,
+    product_key: 'demo-household-a',
+    term_months: 12,
+    acknowledge_synthetic_only: true,
+  };
+  const prematureQuote = await call(compliance, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/quotes`, quoteInput);
+  assert.equal(prematureQuote.status, 409);
+  const prematureComparison = await call(compliance, 'GET', `/insurance/brokerage-sandbox/cases/${created.body.id}/comparison?category=household`);
+  assert.equal(prematureComparison.status, 409);
+
+  const demo = await call(compliance, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/run-demo`, {
+    scenario_run_id: runId,
+    acknowledge_synthetic_only: true,
+  });
+  assert.equal(demo.status, 201, JSON.stringify(demo.body));
+  assert.equal(demo.body.events.length, 22);
+  assert.equal(demo.body.events.some((event: any) =>
+    event.event_type === 'claim_decision_simulated' && event.event_data.legal_effect === 'NONE',
+  ), true);
+  const repeatedDemo = await call(compliance, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/run-demo`, {
+    scenario_run_id: runId,
+    acknowledge_synthetic_only: true,
+  });
+  assert.equal(repeatedDemo.status, 201);
+  assert.equal(repeatedDemo.body.events.length, 22);
+  const eventTrace = await call(compliance, 'GET', `/insurance/brokerage-sandbox/cases/${created.body.id}/events`);
+  assert.equal(eventTrace.status, 200);
+  assert.equal(eventTrace.body.length, 22);
+  assert.equal(eventTrace.body.every((event: any) => event.scenario_run_id === runId), true);
+
+  const comparison = await call(compliance, 'GET', `/insurance/brokerage-sandbox/cases/${created.body.id}/comparison?category=household`);
+  assert.equal(comparison.status, 200, JSON.stringify(comparison.body));
+  assert.equal(comparison.body.products.length, 2);
+  assert.equal(comparison.body.products.every((item: any) => item.category === 'household'), true);
+  assert.equal((await call(compliance, 'GET', `/insurance/brokerage-sandbox/cases/${created.body.id}/comparison?category=life`)).status, 409);
+
+  const mismatchedQuote = await call(compliance, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/quotes`, {
+    ...quoteInput,
+    product_key: 'demo-life-a',
+  });
+  assert.equal(mismatchedQuote.status, 409);
+  const quote = await call(compliance, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/quotes`, quoteInput);
+  assert.equal(quote.status, 201, JSON.stringify(quote.body));
+  assert.equal(quote.body.quote.event_data.quote_state, 'SYNTHETIC_NOT_AN_OFFER', JSON.stringify(quote.body));
+  const repeatedQuote = await call(compliance, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/quotes`, quoteInput);
+  assert.equal(repeatedQuote.body.quote.id, quote.body.quote.id);
+  const conflictingQuote = await call(compliance, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/quotes`, {
+    ...quoteInput,
+    product_key: 'demo-household-b',
+  });
+  assert.equal(conflictingQuote.status, 409);
+  assert.equal((await call(fin2, 'POST', `/insurance/brokerage-sandbox/cases/${created.body.id}/quotes`, quoteInput)).status, 404);
+  const finalTrace = await call(compliance, 'GET', `/insurance/brokerage-sandbox/cases/${created.body.id}/events`);
+  assert.equal(finalTrace.body.filter((event: any) => event.event_type === 'quote_generated_simulated').length, 1);
+
+  await assert.rejects(
+    db.query('UPDATE insurance_brokerage_sandbox_events SET event_data=$1 WHERE id=$2', [{ tampered: true }, eventTrace.body[0].id]),
+    /append-only/i,
+  );
+  const activation = await call(admin, 'POST', '/insurance/brokerage-sandbox/production-activation', {});
+  assert.equal(activation.status, 423);
+  assert.equal(activation.body.enabled, false);
 });
 
 test.after(() => db.end());

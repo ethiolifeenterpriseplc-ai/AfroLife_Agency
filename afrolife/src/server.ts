@@ -14,6 +14,7 @@ import { supply } from './supply.js';
 import { createMfiRouter } from './mfi.js';
 import { createInsuranceLedgerRouter } from './insurance-ledger.js';
 import { createInsuranceRequestsRouter } from './insurance-requests.js';
+import { createInsuranceBrokerageSandboxRouter, isInsuranceBrokerageSandboxEnabled } from './insurance-brokerage-sandbox.js';
 import { createInsuranceRequestsServiceGateway, createInsuranceServiceGateway, createMfiServiceGateway, createPublicServiceGateway, createServiceGateway } from './insurance-service-gateway.js';
 import { loginRouter, adminRouter } from './admin.js';
 import { ops } from './ops.js';
@@ -113,6 +114,7 @@ api.use((req, _res, next) => {
 api.get('/features', (_req, res) => res.json({
   mfiPilotEnabled: runtimeConfig.mfiPilotEnabled,
   edirEnabled: Boolean(process.env.EDIR_SERVICE_URL),
+  insuranceBrokerageSandboxEnabled: isInsuranceBrokerageSandboxEnabled(),
 }));
 api.use(adminRouter);
 api.use(privacy);
@@ -173,6 +175,7 @@ api.use('/insurance/requests', process.env.INSURANCE_SERVICE_URL
   : runtimeConfig.isProduction
     ? (_req, res) => res.status(503).json({ error: 'Separate Insurance service is not configured' })
     : createInsuranceRequestsRouter(withUser));
+api.use('/insurance/brokerage-sandbox', createInsuranceBrokerageSandboxRouter(withUser));
 // Parse private Edir uploads before the signed service gateway so the raw
 // bytes and their content type can be forwarded and signed without JSON wrapping.
 api.post('/edir/credit/documents/:documentType', express.raw({ type: () => true, limit: '10mb' }));

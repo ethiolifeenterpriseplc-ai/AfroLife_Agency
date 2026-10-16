@@ -15,7 +15,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [] };
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
 let sessionIdleTimer = null;
@@ -533,10 +533,12 @@ function signOut({ revoke = true, message = '' } = {}) {
     commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
     roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
     marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
-    insuranceStaffRequests: [], edirMe: null, mfaSetup: null,
+    insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [],
+    edirMe: null, mfaSetup: null,
     serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null,
+    insuranceSandboxStatus: null, insuranceSandboxCases: [],
   });
-  state.features = { mfiPilotEnabled: false, edirEnabled: false };
+  state.features = { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false };
   $('#app-view').hidden = true;
   $('#mobile-workspace-nav').hidden = true;
   if ($('#workspace-more-dialog').open) $('#workspace-more-dialog').close();
@@ -553,7 +555,7 @@ function signOut({ revoke = true, message = '' } = {}) {
 async function loadWorkspace() {
   state.user = await api('/auth/me');
   startSessionActivity(state.user.session_idle_timeout_minutes ?? 30);
-  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false });
+  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false });
   state.edirMe = state.features.edirEnabled && state.user.kyc_status === 'verified'
     ? await getOptional('/edir/me', null) : null;
   $('#login-view').hidden = true;
@@ -689,6 +691,19 @@ async function refresh() {
       ? await getOptional('/marketplace/sellers', []) : [];
     state.insuranceRequests = await getOptional('/insurance/requests/me', []);
     state.insuranceStaffRequests = await getOptional('/insurance/requests', []);
+    [state.insuranceAgentReferrals, state.insuranceEligibleAgents] = await Promise.all([
+      getOptional('/insurance/requests/agent-referrals/me', []),
+      getOptional('/insurance/requests/agent-referrals/agents', []),
+    ]);
+    if (state.features.insuranceBrokerageSandboxEnabled) {
+      [state.insuranceSandboxStatus, state.insuranceSandboxCases] = await Promise.all([
+        getOptional('/insurance/brokerage-sandbox/status', null),
+        getOptional('/insurance/brokerage-sandbox/cases/mine', []),
+      ]);
+    } else {
+      state.insuranceSandboxStatus = null;
+      state.insuranceSandboxCases = [];
+    }
     if (state.panel === 'password') state.panel = 'overview';
     renderStats();
     renderPanel();
@@ -1308,7 +1323,7 @@ function renderMarketplace() {
 
 function renderInsurance() {
   const wrap = node('div');
-  wrap.append(sectionHeading('Insurance information', 'Review insurance information requests. No policy or coverage is created by this mini-app.'));
+  wrap.append(sectionHeading('Insurance information', 'Consent-based, non-binding information and referral workflow. No insurance policy or coverage is created by this mini-app.'));
   const notice = node('section', undefined, 'panel form-card');
   const requestCount = state.insuranceRequests.length;
   const pendingCount = state.insuranceRequests.filter((request) => request.status === 'pending').length;
@@ -1316,6 +1331,7 @@ function renderInsurance() {
   notice.append(
     node('h2', 'Insurance report dashboard'),
     node('p', 'Insurance policy enrollment, claims, member wallets, and loans are not available in this platform. Existing Insurance ledgers are separate organization accounting records and do not prove personal cover or a payment balance.'),
+    node('p', 'Agents may only make a consented, non-binding follow-up or refer a customer to the Insurance service team. Product recommendations, comparisons, quotes, premium collection, policy issuance or changes, and claims decisions are not available.'),
   );
   for (const [label, value] of [
     ['Policy membership', 'Not available'],
@@ -1343,13 +1359,29 @@ function renderInsurance() {
   consentInput.name = 'consent';
   consentInput.required = true;
   consent.append(consentInput, node('span', 'I consent to EthioLife forwarding this information request to the Insurance service team. This is not an application, policy, quote, or coverage confirmation.'));
-  requestForm.append(consent, button('Submit information request', 'submit', 'button button-primary span-2'));
+  const agentConsent = node('label', undefined, 'benefit-check span-2');
+  const agentConsentInput = document.createElement('input');
+  agentConsentInput.type = 'checkbox';
+  agentConsentInput.name = 'agent_referral_consent';
+  agentConsent.append(agentConsentInput, node('span', 'Optional: I consent to sharing my name, phone number, and selected topic with one assigned AfroLife Agent for non-binding follow-up and referral to the Insurance service team. The Agent cannot advise, quote, collect premiums, or issue or change a policy.'));
+  requestForm.append(consent, agentConsent, button('Submit information request', 'submit', 'button button-primary span-2'));
   wrap.append(notice, requestForm);
   const myRequests = node('section', undefined, 'panel form-card');
   myRequests.append(node('h2', 'Your requests and activity'));
   if (!state.insuranceRequests.length) myRequests.append(node('p', 'No Insurance information requests are linked to your account.'));
   for (const request of state.insuranceRequests) {
-    myRequests.append(card(request.product_interest, `${request.message} · Submitted ${new Date(request.created_at).toLocaleString(document.documentElement.lang)}${request.responded_at ? ` · Updated ${new Date(request.responded_at).toLocaleString(document.documentElement.lang)}` : ''}${request.response_note ? ` · Response: ${request.response_note}` : ''}`, request.status));
+    const referral = request.agent_referral_status
+      ? ` · Agent referral: ${request.agent_referral_status}${request.assigned_agent_name ? ` (${request.assigned_agent_name})` : ''}`
+      : '';
+    const item = card(request.product_interest, `${request.message} · Submitted ${new Date(request.created_at).toLocaleString(document.documentElement.lang)}${request.responded_at ? ` · Updated ${new Date(request.responded_at).toLocaleString(document.documentElement.lang)}` : ''}${request.response_note ? ` · Response: ${request.response_note}` : ''}${referral}`, request.status);
+    if (request.agent_referral_id && request.agent_referral_status !== 'customer_withdrew') {
+      item.append(button('Withdraw Agent-sharing consent', 'insurance-referral-withdraw', 'button button-outline', { id: request.agent_referral_id }));
+    }
+    if (request.agent_referral_events?.length) {
+      item.append(node('p', `Agent-sharing activity: ${request.agent_referral_events.map((event) =>
+        `${event.event_type} · ${new Date(event.created_at).toLocaleString(document.documentElement.lang)}`).join(' · ')}`));
+    }
+    myRequests.append(item);
   }
   wrap.append(myRequests);
   if (state.insuranceStaffRequests.length) {
@@ -1368,6 +1400,95 @@ function renderInsurance() {
       queue.append(item);
     }
     wrap.append(queue);
+  }
+  if (state.insuranceAgentReferrals.length) {
+    const referrals = node('section', undefined, 'panel form-card');
+    referrals.append(node('h2', 'Consent-based Agent referrals'));
+    for (const referral of state.insuranceAgentReferrals) {
+      const item = card(
+        `${referral.legal_name} · ${referral.product_interest}`,
+        `${referral.phone} · ${referral.status} · ${new Date(referral.created_at).toLocaleString(document.documentElement.lang)}`,
+        referral.status,
+      );
+      if (referral.events?.length) {
+        item.append(node('p', `Activity: ${referral.events.map((event) =>
+          `${event.event_type} · ${new Date(event.created_at).toLocaleString(document.documentElement.lang)}`).join(' · ')}`));
+      }
+      if (referral.status === 'unassigned' && state.insuranceEligibleAgents.length) {
+        const select = document.createElement('select');
+        select.setAttribute('aria-label', 'Assign referral to an active Agent');
+        select.dataset.referralAgent = referral.id;
+        select.append(new Option('Select Agent', ''));
+        for (const agent of state.insuranceEligibleAgents) {
+          select.append(new Option(`${agent.legal_name} · ${agent.role}`, agent.id));
+        }
+        const reason = document.createElement('select');
+        reason.setAttribute('aria-label', 'Referral assignment reason');
+        reason.dataset.referralReason = referral.id;
+        reason.append(new Option('Select assignment reason', ''));
+        for (const [value, label] of [
+          ['customer_requested', 'Customer requested this Agent'],
+          ['workload_balance', 'Workload balance'],
+          ['staff_review', 'Insurance staff review'],
+        ]) reason.append(new Option(label, value));
+        item.append(select, reason, button('Assign referral', 'insurance-referral-assign', 'button button-primary', { id: referral.id }));
+      } else if (referral.assigned_agent_name) {
+        item.append(node('p', `Assigned Agent: ${referral.assigned_agent_name}`));
+      }
+      if (referral.can_update && ['assigned', 'contact_attempted'].includes(referral.status)) {
+        item.append(button('Contact attempted', 'insurance-referral-status', 'button button-outline', { id: referral.id, status: 'contact_attempted' }));
+        item.append(button('Refer to Insurance team', 'insurance-referral-status', 'button button-outline', { id: referral.id, status: 'referred_to_insurance_team' }));
+        item.append(button('Customer declined', 'insurance-referral-status', 'button button-outline', { id: referral.id, status: 'customer_declined' }));
+      }
+      referrals.append(item);
+    }
+    wrap.append(referrals);
+  } else if (['master_agent', 'field_agent'].includes(state.user.role)) {
+    wrap.append(node('p', 'No consented Insurance referrals are assigned in your Agent scope.'));
+  }
+  if (state.features.insuranceBrokerageSandboxEnabled && state.insuranceSandboxStatus?.enabled) {
+    const sandbox = node('section', undefined, 'panel form-card');
+    sandbox.append(
+      node('h2', 'Brokerage lifecycle training sandbox'),
+      node('p', 'Development-only simulated workflow using synthetic product and transaction data. It cannot contact insurers, issue real policies, move money, settle commissions, or decide real claims.'),
+    );
+    const runForm = node('form', undefined, 'inline-form');
+    runForm.dataset.form = 'insurance-sandbox-create';
+    const acknowledgement = node('label', undefined, 'benefit-check span-2');
+    const acknowledgementInput = document.createElement('input');
+    acknowledgementInput.type = 'checkbox';
+    acknowledgementInput.name = 'acknowledge_synthetic_only';
+    acknowledgementInput.required = true;
+    acknowledgement.append(acknowledgementInput, node('span', 'I confirm that this scenario uses no real customer, policy, payment, or claims data.'));
+    runForm.append(acknowledgement, button('Create synthetic training case', 'submit', 'button button-primary span-2'));
+    sandbox.append(runForm);
+    for (const item of state.insuranceSandboxCases) {
+      const caseCard = card(item.scenario_reference, `${item.event_count} lifecycle events · Created ${new Date(item.created_at).toLocaleString(document.documentElement.lang)}`, 'synthetic only');
+      caseCard.append(button('Run complete demo', 'insurance-sandbox-run', 'button button-outline', { id: item.id }));
+      caseCard.append(button('View event trace', 'insurance-sandbox-view', 'button button-outline', { id: item.id }));
+      const comparisonCategory = document.createElement('select');
+      comparisonCategory.setAttribute('aria-label', 'Synthetic product comparison category');
+      for (const [value, label] of [['household', 'Household']]) {
+        comparisonCategory.append(new Option(label, value));
+      }
+      comparisonCategory.dataset.sandboxComparison = item.id;
+      caseCard.append(comparisonCategory, button('Compare synthetic products', 'insurance-sandbox-compare', 'button button-outline', { id: item.id }));
+      const quoteProduct = document.createElement('select');
+      quoteProduct.setAttribute('aria-label', 'Synthetic quote product');
+      quoteProduct.append(new Option('Select synthetic product', ''));
+      for (const product of state.insuranceSandboxStatus.synthetic_products.filter((item) => item.category === 'household')) {
+        quoteProduct.append(new Option(`${product.label} · ETB ${(product.monthlyPremiumMinor / 100).toFixed(2)}/month`, product.key));
+      }
+      quoteProduct.dataset.sandboxQuoteProduct = item.id;
+      caseCard.append(quoteProduct, button('Simulate a 12-month quote', 'insurance-sandbox-quote', 'button button-outline', { id: item.id }));
+      sandbox.append(caseCard);
+      if (item.events) {
+        for (const event of item.events) {
+          caseCard.append(node('p', `${event.sequence_number}. ${event.event_type} · ${JSON.stringify(event.event_data)}`));
+        }
+      }
+    }
+    wrap.append(sandbox);
   }
   return wrap;
 }
@@ -2178,10 +2299,21 @@ async function submitForm(form) {
         product_interest: values.product_interest,
         message: values.message,
         consent: values.consent === 'on',
+        agent_referral_consent: values.agent_referral_consent === 'on',
       }),
     });
     await refresh();
     showAlert('Your Insurance information request was submitted. It is not an application or policy.');
+    return;
+  }
+  if (form.dataset.form === 'insurance-sandbox-create') {
+    await api('/insurance/brokerage-sandbox/cases', {
+      method: 'POST',
+      body: JSON.stringify({ acknowledge_synthetic_only: values.acknowledge_synthetic_only === 'on' }),
+    });
+    state.insuranceSandboxCases = await api('/insurance/brokerage-sandbox/cases/mine');
+    renderPanel();
+    showAlert('Synthetic Insurance brokerage training case created; no live business activity occurred.');
     return;
   }
   if (form.dataset.form === 'mfa-enable') {
@@ -3025,6 +3157,109 @@ document.addEventListener('click', async (event) => {
     } catch (error) {
       showAlert(error.message, true);
     }
+    return;
+  }
+  if (name === 'insurance-referral-assign') {
+    const item = action.closest('.list-card');
+    const agentId = item?.querySelector(`[data-referral-agent="${CSS.escape(id)}"]`)?.value;
+    const reason = item?.querySelector(`[data-referral-reason="${CSS.escape(id)}"]`)?.value;
+    if (!agentId || !reason) { showAlert('Select an active Agent and assignment reason before assigning this referral.', true); return; }
+    try {
+      await api(`/insurance/requests/agent-referrals/${encodeURIComponent(id)}/assign`, {
+        method: 'POST',
+        body: JSON.stringify({ agent_id: agentId, reason }),
+      });
+      await refresh();
+      showAlert('Consent-based Insurance referral assigned.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'insurance-referral-status') {
+    try {
+      await api(`/insurance/requests/agent-referrals/${encodeURIComponent(id)}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: action.dataset.status }),
+      });
+      await refresh();
+      showAlert('Insurance referral activity updated.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'insurance-referral-withdraw') {
+    if (!window.confirm(t('Withdraw permission for Agent follow-up? The Agent will immediately lose access to this referral.'))) return;
+    try {
+      await api(`/insurance/requests/agent-referrals/${encodeURIComponent(id)}/withdraw`, {
+        method: 'POST',
+        body: '{}',
+      });
+      await refresh();
+      showAlert('Agent-sharing consent withdrawn.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'insurance-sandbox-run') {
+    if (!window.confirm(t('Run a fully synthetic training lifecycle? No real insurer, customer, policy, claim, or payment will be contacted or created.'))) return;
+    try {
+      await api(`/insurance/brokerage-sandbox/cases/${encodeURIComponent(id)}/run-demo`, {
+        method: 'POST',
+        body: JSON.stringify({ scenario_run_id: crypto.randomUUID(), acknowledge_synthetic_only: true }),
+      });
+      state.insuranceSandboxCases = await api('/insurance/brokerage-sandbox/cases/mine');
+      renderPanel();
+      showAlert('Synthetic end-to-end brokerage lifecycle completed. No real business activity occurred.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'insurance-sandbox-view') {
+    try {
+      const events = await api(`/insurance/brokerage-sandbox/cases/${encodeURIComponent(id)}/events`);
+      state.insuranceSandboxCases = state.insuranceSandboxCases.map((item) =>
+        item.id === id ? { ...item, events } : item);
+      renderPanel();
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'insurance-sandbox-compare') {
+    const item = action.closest('.list-card');
+    const category = item?.querySelector(`[data-sandbox-comparison="${CSS.escape(id)}"]`)?.value;
+    try {
+      const result = await api(`/insurance/brokerage-sandbox/cases/${encodeURIComponent(id)}/comparison?${new URLSearchParams({ category })}`);
+      showAlert(result.notes.join(' '));
+      const comparison = node('section', undefined, 'panel form-card');
+      comparison.append(node('h3', 'Synthetic product comparison'));
+      for (const product of result.products) {
+        comparison.append(card(product.label,
+          `ETB ${(product.monthlyPremiumMinor / 100).toFixed(2)} per synthetic month · ${product.features.join(', ')}`,
+          'illustrative only'));
+      }
+      item.append(comparison);
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'insurance-sandbox-quote') {
+    const item = action.closest('.list-card');
+    const productKey = item?.querySelector(`[data-sandbox-quote-product="${CSS.escape(id)}"]`)?.value;
+    if (!productKey) { showAlert('Select a synthetic training product.', true); return; }
+    try {
+      let events = state.insuranceSandboxCases.find((sandboxCase) => sandboxCase.id === id)?.events;
+      if (!events) {
+        events = await api(`/insurance/brokerage-sandbox/cases/${encodeURIComponent(id)}/events`);
+        state.insuranceSandboxCases = state.insuranceSandboxCases.map((sandboxCase) =>
+          sandboxCase.id === id ? { ...sandboxCase, events } : sandboxCase);
+      }
+      const runId = events.find((event) => event.event_type === 'needs_assessment_simulated')?.scenario_run_id;
+      if (!runId) throw new Error('Run the complete synthetic demo before simulating a quote.');
+      const result = await api(`/insurance/brokerage-sandbox/cases/${encodeURIComponent(id)}/quotes`, {
+        method: 'POST',
+        body: JSON.stringify({
+          scenario_run_id: runId,
+          product_key: productKey,
+          term_months: 12,
+          acknowledge_synthetic_only: true,
+        }),
+      });
+      showAlert(`Synthetic quote only, not an offer: ETB ${(result.quote.event_data.synthetic_monthly_premium_minor / 100).toFixed(2)} monthly. No cover or payment was created.`);
+    } catch (error) { showAlert(error.message, true); }
     return;
   }
   if (name === 'user-document-download') {
