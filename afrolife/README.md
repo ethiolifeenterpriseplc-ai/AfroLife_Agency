@@ -224,6 +224,20 @@ dependencies during the no-data-move transition. Do not describe those
 financial data stores as fully independent until their ownership and migration
 boundaries have been verified.
 
+The central AfroLife API image is built from this directory with
+`docker build -t afrolife-api .`. It serves the `public/` application, listens
+on port 3000, and runs as the unprivileged Node user. Configure its production
+database, authentication, and storage settings through the deployment secret
+manager, and mount persistent private storage at the configured
+`FILE_STORAGE_DIR`, writable by the image's unprivileged `node` user (UID
+1000); do not bake secrets or user uploads into the image. Apply the core schema
+as a controlled release job using the same image. Its environment file must set
+`MIGRATION_DATABASE_URL` to the migration owner and `DATABASE_URL` to the
+restricted runtime role, which migrations use when granting runtime
+permissions:
+`docker run --rm --env-file <migration-env-file> --entrypoint node afrolife-api dist/src/migrate.js`.
+Do not pass migration-owner credentials to the running API container.
+
 The insurance ledger can be deployed independently while the existing AfroLife
 API remains the identity authority and backward-compatible gateway. In
 development only, with `INSURANCE_SERVICE_URL` unset, requests continue to use
