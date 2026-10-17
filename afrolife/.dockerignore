@@ -11,5 +11,8 @@ uat
 deploy
 test
 scripts
+!scripts/
+scripts/*
+!scripts/copy-accounting-assets.mjs
 .env*
 npm-debug.log*

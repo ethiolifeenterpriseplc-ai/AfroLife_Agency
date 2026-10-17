@@ -3,6 +3,7 @@ WORKDIR /app/afrolife
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY src ./src
+COPY public/accounting-operations.js ./public/accounting-operations.js
 COPY services/accounting ./services/accounting
 COPY scripts/copy-accounting-assets.mjs ./scripts/copy-accounting-assets.mjs
 RUN npm run build:accounting
