@@ -5,6 +5,7 @@ import { correlationIdMiddleware, getCorrelationId } from '../../src/request-con
 import { pool, assertServiceDatabaseSafety } from './db.js';
 import { authenticateGateway } from './auth.js';
 import { edirRouter } from './router.js';
+import { dispatchAccountingEvents } from '../../src/accounting-outbox.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
@@ -44,6 +45,11 @@ await assertServiceDatabaseSafety();
 const server = app.listen(port, process.env.HOST ?? '0.0.0.0', () => {
   console.log(`AfroLife Edir service listening on ${port}`);
 });
+
+let accountingDispatching=false;
+if(process.env.ACCOUNTING_SERVICE_URL&&process.env.ACCOUNTING_INGEST_SECRET){
+  setInterval(async()=>{if(accountingDispatching)return;accountingDispatching=true;try{await dispatchAccountingEvents(pool,process.env.ACCOUNTING_SERVICE_URL!,process.env.ACCOUNTING_INGEST_SECRET!,'afrolife_core','accounting_dispatcher');}catch(error){console.error('Edir accounting event dispatch failed',error instanceof Error?error.message:error);}finally{accountingDispatching=false;}},5000).unref();
+}
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => server.close(() => pool.end().finally(() => process.exit(0))));

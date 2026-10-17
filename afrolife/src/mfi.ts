@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { AuthUser } from './auth-types.js';
 import { isPlatformAdminRole } from './auth-types.js';
 import { HttpError } from './http-error.js';
+import { enqueueAccountingEvent } from './accounting-outbox.js';
 import { centsToAmount, decimalToCents, mfiAmountSchema as amountSchema, normalizeAmount } from './mfi-money.js';
 import { Phone } from './validators.js';
 import { sniff } from './files.js';
@@ -110,6 +111,8 @@ async function findJournalReplay(
   )).rows[0];
   if (!existing) return null;
   if (existing.payload_hash !== payloadHash) throw new HttpError(409, 'This idempotency key was already used for a different financial request');
+  if (existing.status === 'draft' && existing.requires_approval) return { ...existing, replayed: true };
+  if (existing.status === 'rejected') throw new HttpError(409, 'This financial request was rejected by an independent reviewer');
   if (existing.status !== 'posted') throw new Error('An incomplete MFI journal was found for an idempotency key');
   return { ...existing, replayed: true };
 }
@@ -194,9 +197,11 @@ async function postJournal(
     writeoffId?: string | null;
     reversalOf?: string | null;
     reversalReason?: string | null;
+    requiresApproval?: boolean;
     amount: string;
     actorId: string;
     lines: { code: string; memberAccountId?: string | null; debit: string; credit: string }[];
+    accountingApproval?: { makerId: string; checkerId: string; reason: string };
   },
 ) {
   const amount = normalizeAmount(input.amount);
@@ -215,13 +220,13 @@ async function postJournal(
   const inserted = await client.query(
     `INSERT INTO mfi_journals
        (institution_id, idempotency_key, payload_hash, transaction_type, member_account_id, loan_id,
-        reversal_of, reversal_reason, amount, created_by,writeoff_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        reversal_of, reversal_reason, amount, created_by,writeoff_id,requires_approval)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (institution_id, idempotency_key) DO NOTHING
      RETURNING *`,
     [
       input.institutionId, input.idempotencyKey, payloadHash, input.type, input.memberAccountId,
-      input.loanId ?? null, input.reversalOf ?? null, input.reversalReason ?? null, amount, input.actorId,input.writeoffId??null,
+      input.loanId ?? null, input.reversalOf ?? null, input.reversalReason ?? null, amount, input.actorId,input.writeoffId??null,input.requiresApproval??false,
     ],
   );
   if (!inserted.rowCount) {
@@ -250,15 +255,116 @@ async function postJournal(
       [input.institutionId, inserted.rows[0].id, glAccountId, line.memberAccountId ?? null, line.debit, line.credit],
     );
   }
+  if (input.requiresApproval) {
+    await auditMfi(client,input.institutionId,input.actorId,'mfi_journal_submitted_for_approval','mfi_journal',inserted.rows[0].id,null,{
+      transaction_type:input.type,amount,idempotency_key:input.idempotencyKey,
+    });
+    return { ...inserted.rows[0], replayed:false };
+  }
   const posted = (await client.query(
     `UPDATE mfi_journals SET status = 'posted', posted_at = now()
-     WHERE id = $1 AND institution_id = $2 RETURNING *`,
+     WHERE id = $1 AND institution_id = $2 RETURNING *,posted_at::date::text AS posted_date`,
     [inserted.rows[0].id, input.institutionId],
   )).rows[0];
   await auditMfi(client, input.institutionId, input.actorId, 'mfi_journal_posted', 'mfi_journal', posted.id, null, {
     transaction_type: input.type, amount, idempotency_key: input.idempotencyKey,
   });
+  if(input.accountingApproval&&input.accountingApproval.makerId!==input.accountingApproval.checkerId){
+    await enqueueAccountingEvent(client,{
+      source_entity_id:input.institutionId,
+      entry_date:posted.posted_date,
+      source_reference:`mfi:${input.type}:${posted.id}`,
+      description:`MFI ${input.type.replaceAll('_',' ')} ${posted.id}`,
+      lines:input.lines.map(line=>({source_account_code:line.code,debit:line.debit,credit:line.credit})),
+      maker_id:input.accountingApproval.makerId,checker_id:input.accountingApproval.checkerId,
+      checker_reason:input.accountingApproval.reason,
+    });
+  }
   return { ...posted, replayed: false };
+}
+
+async function approvePendingFinancialJournal(
+  client:PoolClient,
+  institutionId:string,
+  journalId:string,
+  checkerId:string,
+  decision:'approve'|'reject',
+  reason:string,
+) {
+  const journal=(await client.query(
+    `SELECT * FROM mfi_journals WHERE institution_id=$1 AND id=$2 AND status='draft' AND requires_approval FOR UPDATE`,
+    [institutionId,journalId],
+  )).rows[0];
+  if(!journal)throw new HttpError(404,'Pending financial journal not found');
+  if(journal.created_by===checkerId)throw new HttpError(409,'The financial request maker cannot review their own request');
+  const lines=(await client.query(
+    `SELECT g.account_code,jl.member_account_id,jl.debit::text,jl.credit::text
+     FROM mfi_journal_lines jl JOIN mfi_gl_accounts g ON g.id=jl.gl_account_id AND g.institution_id=jl.institution_id
+     WHERE jl.institution_id=$1 AND jl.journal_id=$2 ORDER BY g.account_code`,[institutionId,journalId],
+  )).rows;
+  if(decision==='reject'){
+    const rejected=(await client.query(`UPDATE mfi_journals SET status='rejected',approved_by=$3,approval_reason=$4
+      WHERE institution_id=$1 AND id=$2 RETURNING *`,[institutionId,journalId,checkerId,reason])).rows[0];
+    await auditMfi(client,institutionId,checkerId,'mfi_journal_rejected','mfi_journal',journalId,{status:'draft'},{reason});
+    return rejected;
+  }
+
+  let loan:Record<string,unknown>|undefined;
+  if(journal.transaction_type==='loan_repayment'){
+    loan=(await client.query('SELECT * FROM mfi_loans WHERE institution_id=$1 AND id=$2 FOR UPDATE',[institutionId,journal.loan_id])).rows[0];
+    if(!loan||loan.status!=='disbursed')throw new HttpError(409,'The loan is no longer available for repayment approval');
+    const pending=(await client.query(`SELECT id FROM mfi_journals WHERE institution_id=$1 AND loan_id=$2 AND requires_approval AND status='draft' AND id<>$3 LIMIT 1`,[institutionId,journal.loan_id,journalId])).rows[0];
+    if(pending)throw new HttpError(409,'Resolve the other pending repayment before approving this one');
+  }
+  await lockCashAccount(client,institutionId);
+  if(journal.transaction_type==='savings_withdrawal'){
+    const account=(await client.query(`SELECT a.id,p.minimum_balance AS product_minimum,a.status
+      FROM mfi_member_accounts a JOIN mfi_products p ON p.id=a.product_id AND p.institution_id=a.institution_id
+      WHERE a.institution_id=$1 AND a.id=$2 FOR UPDATE OF a`,[institutionId,journal.member_account_id])).rows[0];
+    if(!account||account.status!=='active')throw new HttpError(409,'The member account is no longer active');
+    const balance=(await client.query(`SELECT COALESCE(sum(l.credit-l.debit),0)::numeric(16,2)::text AS amount
+      FROM mfi_journal_lines l JOIN mfi_journals j ON j.id=l.journal_id AND j.institution_id=l.institution_id AND j.status='posted'
+      WHERE l.institution_id=$1 AND l.member_account_id=$2`,[institutionId,account.id])).rows[0].amount;
+    const minimum=decimalToCents(String(account.product_minimum??account.minimum_balance));
+    const cash=decimalToCents(await cashBalance(client,institutionId));
+    if(decimalToCents(String(balance))-decimalToCents(String(journal.amount))<minimum)throw new HttpError(409,'Withdrawal would breach the product minimum balance');
+    if(cash<decimalToCents(String(journal.amount)))throw new HttpError(409,'The institution has insufficient cash for this withdrawal');
+  }
+  if(journal.transaction_type==='loan_repayment'&&loan){
+    const priority:('principal'|'interest'|'penalty'|'fee')[]=lendingProductTermsSchema.safeParse(loan.product_terms).success
+      ? [...lendingProductTermsSchema.parse(loan.product_terms).repayment_priority] : ['principal','interest','penalty','fee'];
+    const totals={principal:0n,interest:0n,penalty:0n};
+    for(const line of lines){const amount=decimalToCents(String(line.credit))-decimalToCents(String(line.debit));
+      if(line.account_code==='1300')totals.principal+=amount;
+      if(line.account_code==='4100')totals.interest+=amount;
+      if(line.account_code==='4300')totals.penalty+=amount;}
+    const installments=(await client.query(`SELECT id,principal_due::text,principal_paid::text,interest_due::text,interest_paid::text,
+      penalty_due::text,penalty_paid::text FROM mfi_loan_installments WHERE institution_id=$1 AND loan_id=$2 ORDER BY due_on,installment_no FOR UPDATE`,[institutionId,journal.loan_id])).rows;
+    const work=installments.map((r)=>({id:r.id as string,pd:decimalToCents(String(r.principal_due)),pp:decimalToCents(String(r.principal_paid)),
+      idue:decimalToCents(String(r.interest_due)),ip:decimalToCents(String(r.interest_paid)),td:decimalToCents(String(r.penalty_due)),tp:decimalToCents(String(r.penalty_paid))}));
+    for(const bucket of priority){if(bucket==='fee')continue;let remaining=totals[bucket];for(const row of work){if(!remaining)break;
+      const due=bucket==='principal'?row.pd:bucket==='interest'?row.idue:row.td;const paid=bucket==='principal'?row.pp:bucket==='interest'?row.ip:row.tp;
+      const applied=remaining<due-paid?remaining:due-paid;if(applied<=0n)continue;
+      if(bucket==='principal')row.pp+=applied;else if(bucket==='interest')row.ip+=applied;else row.tp+=applied;remaining-=applied;}
+      if(remaining>0n)throw new HttpError(409,'Repayment allocation is no longer available; reject and resubmit the payment');}
+    for(const row of work)await client.query(`UPDATE mfi_loan_installments SET principal_paid=$3,interest_paid=$4,penalty_paid=$5,
+      status=CASE WHEN $3::numeric=principal_due AND $4::numeric=interest_due AND $5::numeric=penalty_due THEN 'paid'
+        WHEN $3::numeric=0 AND $4::numeric=0 AND $5::numeric=0 THEN 'due' ELSE 'partial' END WHERE institution_id=$1 AND id=$2`,
+      [institutionId,row.id,centsToAmount(row.pp),centsToAmount(row.ip),centsToAmount(row.tp)]);
+    const principalPaid=decimalToCents(String(loan.principal_repaid))+totals.principal;
+    const remaining=(await client.query(`SELECT COALESCE(sum((principal_due-principal_paid)+(interest_due-interest_paid)+(penalty_due-penalty_paid)),0)::numeric(16,2)::text AS amount
+      FROM mfi_loan_installments WHERE institution_id=$1 AND loan_id=$2`,[institutionId,journal.loan_id])).rows[0].amount;
+    await client.query(`UPDATE mfi_loans SET principal_repaid=$3,status=$4 WHERE institution_id=$1 AND id=$2`,
+      [institutionId,journal.loan_id,centsToAmount(principalPaid),decimalToCents(String(remaining))===0n?'repaid':'disbursed']);
+  }
+  const posted=(await client.query(`UPDATE mfi_journals SET status='posted',approved_by=$3,approval_reason=$4
+    WHERE institution_id=$1 AND id=$2 RETURNING *,posted_at::date::text AS posted_date`,[institutionId,journalId,checkerId,reason])).rows[0];
+  await auditMfi(client,institutionId,checkerId,'mfi_journal_approved','mfi_journal',journalId,{status:'draft'},{reason,transaction_type:journal.transaction_type});
+  await enqueueAccountingEvent(client,{source_entity_id:institutionId,entry_date:posted.posted_date,
+    source_reference:`mfi:${journal.transaction_type}:${journalId}`,description:`MFI ${String(journal.transaction_type).replaceAll('_',' ')} ${journalId}`,
+    lines:lines.map((l)=>({source_account_code:String(l.account_code),debit:String(l.debit),credit:String(l.credit)})),
+    maker_id:String(journal.created_by),checker_id:checkerId,checker_reason:reason});
+  return posted;
 }
 
 export function createMfiRouter(withUser: MfiWithUser): Router {
@@ -957,7 +1063,7 @@ mfiRouter.get('/institutions/:institutionId/audit', h(async (req, res) => {
 mfiRouter.get('/institutions/:institutionId/transactions', h(async (req, res) => {
   const rows = await withInstitution(req.user!, req.params.institutionId, viewRoles, async (client) =>
     (await client.query(
-      `SELECT j.id, j.transaction_type, j.amount, j.created_at, j.posted_at, j.created_by,
+      `SELECT j.id, j.transaction_type, j.amount, j.created_at, j.posted_at, j.created_by,j.status,j.requires_approval,j.approved_by,j.approval_reason,
          j.reversal_of, j.reversal_reason,
          u.legal_name AS posted_by, j.loan_id, l.member_account_id AS loan_account_id,
          (SELECT r.id FROM mfi_journals r WHERE r.institution_id=j.institution_id AND r.reversal_of=j.id) AS reversal_id,
@@ -972,12 +1078,19 @@ mfiRouter.get('/institutions/:institutionId/transactions', h(async (req, res) =>
        JOIN mfi_gl_accounts g ON g.institution_id=jl.institution_id AND g.id=jl.gl_account_id
        LEFT JOIN mfi_member_accounts a ON a.institution_id=jl.institution_id AND a.id=jl.member_account_id
        LEFT JOIN mfi_loans l ON l.institution_id=j.institution_id AND l.id=j.loan_id
-       WHERE j.institution_id=$1 AND j.status='posted'
+       WHERE j.institution_id=$1 AND (j.status IN ('posted','rejected') OR (j.status='draft' AND j.requires_approval))
        GROUP BY j.id,u.legal_name,l.member_account_id ORDER BY j.posted_at DESC LIMIT 100`,
       [req.params.institutionId],
     )).rows,
   );
   res.json(rows);
+}));
+
+mfiRouter.post('/institutions/:institutionId/journals/:journalId/decision',h(async(req,res)=>{
+  const body=z.object({decision:z.enum(['approve','reject']),reason:z.string().trim().min(10).max(1000)}).strict().parse(req.body);
+  const result=await withInstitution(req.user!,req.params.institutionId,['institution_admin','finance_manager'],async(client)=>
+    approvePendingFinancialJournal(client,req.params.institutionId,req.params.journalId,req.user!.id,body.decision,body.reason));
+  res.json(result);
 }));
 
 mfiRouter.post('/institutions/:institutionId/journals/:journalId/reverse', h(async (req, res) => {
@@ -1086,6 +1199,7 @@ mfiRouter.post('/institutions/:institutionId/journals/:journalId/reverse', h(asy
       reversalReason: body.reason,
       amount: String(original.amount),
       actorId: req.user!.id,
+      accountingApproval: { makerId: String(original.created_by), checkerId: req.user!.id, reason: body.reason },
       lines: originalLines.map((line) => ({
         code: line.account_code,
         memberAccountId: line.member_account_id,
@@ -1504,7 +1618,8 @@ mfiRouter.get('/institutions/:institutionId/accounts', h(async (req, res) => {
       `SELECT a.id, a.account_number, a.account_type, a.status, a.created_at,
          m.id AS member_id, m.member_number, m.full_name AS member_name,
          p.product_code, p.name AS product_name,
-         COALESCE(sum(CASE WHEN a.account_type='loan' THEN l.debit-l.credit ELSE l.credit-l.debit END),0)::numeric(16,2) AS balance
+         COALESCE(sum(CASE WHEN j.status='posted' THEN
+           CASE WHEN a.account_type='loan' THEN l.debit-l.credit ELSE l.credit-l.debit END ELSE 0 END),0)::numeric(16,2) AS balance
        FROM mfi_member_accounts a
        JOIN mfi_members m ON m.id=a.member_id AND m.institution_id=a.institution_id
        JOIN mfi_products p ON p.id=a.product_id AND p.institution_id=a.institution_id
@@ -1603,6 +1718,7 @@ mfiRouter.post('/institutions/:institutionId/accounts/:accountId/transactions', 
       memberAccountId: account.id,
       amount: body.amount,
       actorId: req.user!.id,
+      requiresApproval: true,
       lines: deposit
         ? [{ code: '1000', debit: normalizeAmount(body.amount), credit: '0' },
           { code: memberCode, memberAccountId: account.id, debit: '0', credit: normalizeAmount(body.amount) }]
@@ -2188,6 +2304,7 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/disburse', h(async (r
       loanId: loan.id,
       amount: String(loan.principal_amount),
       actorId: req.user!.id,
+      accountingApproval: { makerId: loan.created_by, checkerId: loan.checked_by, reason: loan.decision_reason },
       lines: [
         { code: '1300', memberAccountId: account.id, debit: String(loan.principal_amount), credit: '0' },
         ...(netDisbursement > 0n ? [{ code: '1000', debit: '0', credit: centsToAmount(netDisbursement) }] : []),
@@ -2300,6 +2417,7 @@ mfiRouter.post('/institutions/:institutionId/writeoffs/:writeoffId/decision',h(a
       const journal=await postJournal(client,{
         institutionId:req.params.institutionId,idempotencyKey:current.idempotency_key,type:'loan_writeoff',
         memberAccountId:null,loanId:current.loan_id,writeoffId:current.id,amount:String(current.amount),actorId:req.user!.id,
+        accountingApproval:{makerId:current.created_by,checkerId:req.user!.id,reason:body.reason},
         lines:[
           {code:'5100',debit:String(current.amount),credit:'0'},
           {code:'1300',memberAccountId:current.member_account_id,debit:'0',credit:String(current.amount)},
@@ -2347,6 +2465,9 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/repay', h(async (req,
         type: 'loan_repayment', memberAccountId: null, loanId: req.params.loanId, amount: body.amount,
       });
       if (replay) return replay;
+      const pendingRepayment=(await client.query(`SELECT id FROM mfi_journals WHERE institution_id=$1 AND loan_id=$2
+        AND status='draft' AND requires_approval LIMIT 1`,[req.params.institutionId,loan.id])).rows[0];
+      if(pendingRepayment)throw new HttpError(409,'Approve or reject the existing pending repayment before submitting another');
     }
     if (!loan || loan.status !== 'disbursed' || !loan.member_account_id) {
       throw new HttpError(409, 'Only a disbursed loan can receive a repayment');
@@ -2404,6 +2525,7 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/repay', h(async (req,
       loanId: loan.id,
       amount: body.amount,
       actorId: req.user!.id,
+      requiresApproval: true,
       lines: [
         { code: '1000', debit: normalizeAmount(body.amount), credit: '0' },
         ...(paidTotals.principal > 0n ? [{ code: '1300', memberAccountId: loan.member_account_id, debit: '0', credit: centsToAmount(paidTotals.principal) }] : []),
@@ -2411,7 +2533,7 @@ mfiRouter.post('/institutions/:institutionId/loans/:loanId/repay', h(async (req,
         ...(paidTotals.penalty > 0n ? [{ code: '4300', debit: '0', credit: centsToAmount(paidTotals.penalty) }] : []),
       ],
     });
-    if (!journal.replayed) {
+    if (!journal.replayed && journal.status === 'posted') {
       for (const row of pendingUpdates) {
         await client.query(
           `UPDATE mfi_loan_installments SET principal_paid=$3,interest_paid=$4,penalty_paid=$5,

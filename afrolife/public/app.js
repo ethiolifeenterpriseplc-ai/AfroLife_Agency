@@ -1,6 +1,7 @@
 import { initializeLocale, t } from './i18n.js';
 import { ApiError, optionalApiFallback } from './api-errors.js';
 import { createMfiWorkspace } from './mfi.js';
+import { createAccountingWorkspace } from './accounting.js';
 import { createEdirWorkspace } from './edir.js';
 import { createPrivacyWorkspace } from './privacy.js';
 import { miniAppByPanel } from './mini-apps/registry.js';
@@ -15,7 +16,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [] };
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
 let sessionIdleTimer = null;
@@ -539,7 +540,7 @@ function signOut({ revoke = true, message = '' } = {}) {
     serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null,
     insuranceSandboxStatus: null, insuranceSandboxCases: [],
   });
-  state.features = { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false };
+  state.features = { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false };
   $('#app-view').hidden = true;
   $('#mobile-workspace-nav').hidden = true;
   if ($('#workspace-more-dialog').open) $('#workspace-more-dialog').close();
@@ -556,7 +557,7 @@ function signOut({ revoke = true, message = '' } = {}) {
 async function loadWorkspace() {
   state.user = await api('/auth/me');
   startSessionActivity(state.user.session_idle_timeout_minutes ?? 30);
-  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, insuranceBrokerageSandboxEnabled: false });
+  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false });
   state.edirMe = state.features.edirEnabled && state.user.kyc_status === 'verified'
     ? await getOptional('/edir/me', null) : null;
   $('#login-view').hidden = true;
@@ -584,8 +585,11 @@ async function loadWorkspace() {
   $('#agents-tab').hidden = !['global_admin', 'super_admin', 'master_agent'].includes(state.user.role);
   $('#rent-tab').hidden = !['property.tenancy.manage', 'rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity);
   $('#mfi-tab').hidden = !state.features.mfiPilotEnabled;
+  const accountingRole = ['global_admin','super_admin','finance','finance_manager','compliance','corporate_business_manager','master_agent','field_agent','property_owner','insurance_agent','insurance_broker'].includes(state.user.role);
+  $('#accounting-tab').hidden = !state.features.accountingEnabled || !accountingRole;
   $('#edir-tab').hidden = !state.features.edirEnabled;
   if ($('#mfi-tab').hidden && state.panel === 'mfi') state.panel = 'overview';
+  if ($('#accounting-tab').hidden && state.panel === 'accounting') state.panel = 'overview';
   if ($('#edir-tab').hidden && state.panel === 'edir') state.panel = 'overview';
   const sharedPanels = ['overview', 'marketplace', 'edir', 'insurance', 'mfi', 'security', 'privacy'];
   document.querySelectorAll('.tab').forEach((tab) => {
@@ -595,6 +599,7 @@ async function loadWorkspace() {
       if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
       if (hasActivity('staffing.requests.manage')) allowed.add('requests');
       if (['rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity)) allowed.add('rent');
+      if (accountingRole && state.features.accountingEnabled) allowed.add('accounting');
       tab.hidden = !allowed.has(tab.dataset.panel);
     } else if (['worker', 'corporate_business_manager', 'master_agent', 'field_agent'].includes(state.user.role)) {
       const allowed = new Set([
@@ -603,6 +608,7 @@ async function loadWorkspace() {
         'leads', 'contracts', 'commissions', 'agents',
       ]);
       if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
+      if (accountingRole && state.features.accountingEnabled) allowed.add('accounting');
       if (hasActivity('staffing.requests.manage')) allowed.add('requests');
       if (canUseListings) allowed.add('properties');
       if (hasActivity('learning.content.view') || hasActivity('learning.content.manage')) allowed.add('learning');
@@ -805,6 +811,7 @@ const serviceDescriptions = {
   rent: 'Manage leases, rent receipts, and deposit workflows.',
   edir: 'Open the central community membership and financial pilot.',
   mfi: 'Open institution-scoped SACCO and MFI pilot operations.',
+  accounting: 'Entity-scoped general ledger, journal approval, and parent consolidation.',
   insurance: 'Request insurance information and review your request activity.',
 };
 
@@ -1295,6 +1302,7 @@ function renderMarketplace() {
     item.append(node('p',listing.description,'marketplace-description'));
     if(listing.review_note) item.append(node('p',`Review note: ${listing.review_note}`,'form-error'));
     if(listing.media?.length){const gallery=node('div',undefined,'marketplace-gallery'); for(const media of listing.media){const figure=node('figure',undefined,'property-photo');const buttonEl=button(media.mime.startsWith('video/')?'Play video':'View photo','marketplace-media','button button-outline',{id:media.id,mime:media.mime});figure.append(buttonEl);if(media.caption)figure.append(node('figcaption',media.caption));gallery.append(figure);}item.append(gallery);}
+    if(state.user.role==='customer'&&listing.status==='published'&&listing.transaction_mode==='sale'&&listing.price&&config.sandbox_checkout_available){const quantity=field('Quantity','quantity','number',true,{min:1,max:1000,step:1});quantity.input.value='1';const checkout=button('Create sandbox order & simulate payment','marketplace-sandbox-checkout','button button-outline',{id:listing.id});checkout.addEventListener('click',async()=>{checkout.disabled=true;try{const order=await api(`/marketplace/listings/${listing.id}/sandbox-orders`,{method:'POST',body:JSON.stringify({quantity:Number(quantity.input.value),idempotency_key:crypto.randomUUID()})});const paid=await api(`/marketplace/sandbox-orders/${order.id}/mock-payment`,{method:'POST',body:'{}'});showAlert(paid.notice);}catch(error){showAlert(error.message,true);}finally{checkout.disabled=false;}});const sandboxNote=node('p','Test checkout only. No real payment is taken.','muted');item.append(quantity.label,sandboxNote,checkout);}
     if(['draft','rejected'].includes(listing.status)&&listing.created_by===state.user.id){
       const form=document.createElement('form');form.className='inline-form marketplace-resume';form.dataset.form='marketplace-existing-media';form.dataset.listing=listing.id;
       form.append(field('Add photos or video','media','file',true,{accept:'image/jpeg,image/png,video/mp4,video/webm',multiple:true}).label);
@@ -1321,7 +1329,7 @@ function renderMarketplace() {
     metric.append(node('span', label), node('strong', value));
     summary.append(metric);
   }
-  report.append(summary, node('p', 'Marketplace supports listings and discovery only. Orders, buyer memberships, wallets, loans, payments, and purchase transaction history are not available; listing prices are not payments.'));
+  report.append(summary, node('p', 'Marketplace listing prices are not payments. Local mock mode supports a sandbox order and simulated payment for published fixed-price sales; it never charges a buyer or posts to Accounting. Real checkout, buyer memberships, wallets, loans, and purchase history remain unavailable.'));
   const activity = node('div', undefined, 'list');
   activity.append(node('h3', 'Your detailed listing activity'));
   if (!ownedListings.length) activity.append(node('p', 'No marketplace listing activity is linked to your account.'));
@@ -2338,6 +2346,7 @@ function renderPanel() {
     admin: 'Admin workspace',
     learning: 'Training & support',
     mfi: 'SACCO / MFI workspace',
+    accounting: 'Accounting workspace',
     edir: 'EthioLife Edir workspace',
     insurance: 'Insurance information',
     marketplace: 'Marketplace',
@@ -2365,6 +2374,10 @@ function renderPanel() {
   $('#stat-grid').hidden = state.panel !== 'overview';
   if (state.panel === 'mfi') {
     $('#workspace').replaceChildren(createMfiWorkspace(api, state.user));
+    return;
+  }
+  if (state.panel === 'accounting') {
+    $('#workspace').replaceChildren(createAccountingWorkspace(api,state.user));
     return;
   }
   if (state.panel === 'edir') {

@@ -38,11 +38,17 @@ try {
   const identity = (await client.query(`
     SELECT current_database() AS database, current_user AS database_user,
            host(inet_server_addr()) AS address, inet_server_port() AS port,
-           (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS is_superuser
+           (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS is_superuser,
+           (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user) AS bypasses_rls
   `)).rows[0];
-  if (identity.database !== databaseName || identity.database_user !== 'postgres'
-    || !['127.0.0.1', '::1'].includes(identity.address) || Number(identity.port) !== 5433
-    || !identity.is_superuser) {
+  const allowedFixtureRole = disposableDatabaseUrl
+    && /^afrolife_test_[a-z0-9_-]+$/i.test(databaseName)
+    && /^afrolife_fixture_[a-z0-9_]+$/i.test(identity.database_user)
+    && !identity.is_superuser && identity.bypasses_rls;
+  const allowedExistingLocalSetup = !disposableDatabaseUrl && databaseName === 'afrolife'
+    && identity.database_user === 'postgres' && identity.is_superuser;
+  if (!['127.0.0.1', '::1'].includes(identity.address) || Number(identity.port) !== 5433
+    || (!allowedFixtureRole && !allowedExistingLocalSetup)) {
     throw new Error(`Refusing to seed users: unexpected local database identity ${JSON.stringify(identity)}.`);
   }
   const migration = await client.query("SELECT 1 FROM schema_migrations WHERE name = '020_mfi_control_hardening.sql'");

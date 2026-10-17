@@ -235,8 +235,9 @@ test('domain gateway signs the original path under a mounted service prefix', as
   }));
 
   const api = express();
-  api.use(express.json());
-  api.use((req, _res, next) => {
+  const versionedApi = express.Router();
+  versionedApi.use(express.json());
+  versionedApi.use((req, _res, next) => {
     req.user = {
       id: '3cd21265-95d9-40a4-9e68-95538d8d6650',
       role: 'field_agent',
@@ -244,13 +245,14 @@ test('domain gateway signs the original path under a mounted service prefix', as
     next();
   });
   const port = (serviceServer.address() as import('node:net').AddressInfo).port;
-  api.use('/workers', createServiceGateway({
+  versionedApi.use('/workers', createServiceGateway({
     baseUrl: `http://127.0.0.1:${port}`,
     secret,
     servicePath: '/api/v1',
     serviceName: 'Workforce Management service',
     includeBaseUrl: true,
   }));
+  api.use('/api/v1', versionedApi);
   const apiServer = api.listen(0, '127.0.0.1');
   await new Promise<void>((resolve) => apiServer.once('listening', resolve));
   context.after(() => new Promise<void>((resolve, reject) => {
@@ -258,7 +260,7 @@ test('domain gateway signs the original path under a mounted service prefix', as
   }));
 
   const apiPort = (apiServer.address() as import('node:net').AddressInfo).port;
-  const response = await fetch(`http://127.0.0.1:${apiPort}/workers/123?view=summary`, {
+  const response = await fetch(`http://127.0.0.1:${apiPort}/api/v1/workers/123?view=summary`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),

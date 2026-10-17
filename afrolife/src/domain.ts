@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { AuthUser, HttpError, isPlatformAdminRole } from './core.js';
 import { notify } from './notify.js';
+import { enqueueAccountingEvent } from './accounting-outbox.js';
 
 type Rules = Record<string, number>;
 
@@ -73,6 +74,7 @@ export const TRANSITIONS: Record<string, { from: string; to: string; roles: stri
 };
 
 export async function transition(c: PoolClient, user: AuthUser, contractId: string, action: string, body: unknown = {}) {
+  let accountingPaymentMakerId: string | undefined;
   if (action === 'cancel' || action === 'reject') {
     const b = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(body);
     if (action === 'reject' && user.role !== 'compliance') throw new HttpError(403, 'Only Compliance can reject a contract during KYC review');
@@ -128,19 +130,30 @@ export async function transition(c: PoolClient, user: AuthUser, contractId: stri
   }
   if (action === 'record_payment') {
     const p = PaymentIn.parse(body);
-    const inv = (await c.query("SELECT * FROM invoices WHERE contract_id = $1 AND status = 'pending' FOR UPDATE", [k.id])).rows[0];
+    const inv = (await c.query("SELECT * FROM invoices WHERE contract_id = $1 AND status IN ('pending','paid') FOR UPDATE", [k.id])).rows[0];
     if (!inv) throw new HttpError(409, 'No pending invoice for this contract');
     if (Math.round(p.amount * 100) !== Math.round(Number(inv.amount) * 100)) {
       throw new HttpError(422, `Payment must equal the invoice amount (${inv.amount})`);
     }
-    await c.query('INSERT INTO payments (invoice_id, amount, channel, reference, recorded_by) VALUES ($1,$2,$3,$4,$5)', [inv.id, p.amount, p.channel, p.reference, user.id]);
-    await c.query("UPDATE invoices SET status = 'paid' WHERE id = $1", [inv.id]);
+    if (inv.status === 'pending') {
+      await c.query('INSERT INTO payments (invoice_id, amount, channel, reference, recorded_by) VALUES ($1,$2,$3,$4,$5)', [inv.id, p.amount, p.channel, p.reference, user.id]);
+      await c.query("UPDATE invoices SET status = 'paid' WHERE id = $1", [inv.id]);
+    } else {
+      const providerPayment=(await c.query('SELECT id,amount,reference FROM payments WHERE invoice_id=$1 AND provider_event_id IS NOT NULL AND reconciled=false FOR UPDATE',[inv.id])).rows[0];
+      if(!providerPayment)throw new HttpError(409,'The invoice is already paid and has no unreconciled provider payment to record');
+      if(Math.round(Number(providerPayment.amount)*100)!==Math.round(p.amount*100))throw new HttpError(409,'Provider payment amount does not match the submitted payment');
+      if(providerPayment.reference!==p.reference)throw new HttpError(409,'Payment reference does not match the verified provider payment');
+      await c.query('UPDATE payments SET recorded_by=$2 WHERE id=$1',[providerPayment.id,user.id]);
+    }
   }
   if (action === 'reconcile') {
-    const pay = (await c.query('SELECT p.id, p.recorded_by FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.contract_id = $1', [k.id])).rows[0];
+    const pay = (await c.query('SELECT p.id, p.recorded_by FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.contract_id = $1 AND p.reconciled=false FOR UPDATE OF p', [k.id])).rows[0];
     if (!pay) throw new HttpError(409, 'No payment on record to reconcile');
+    if (!pay.recorded_by) throw new HttpError(409, 'A Finance user must record the payment before reconciliation');
     if (pay.recorded_by === user.id) throw new HttpError(403, 'A different finance user must reconcile this payment');
-    await c.query('UPDATE payments SET reconciled = true WHERE id = $1', [pay.id]);
+    const reconciledPayment=await c.query('UPDATE payments SET reconciled = true WHERE id = $1 AND reconciled=false RETURNING id',[pay.id]);
+    if(!reconciledPayment.rowCount)throw new HttpError(409,'Payment is already reconciled');
+    accountingPaymentMakerId = pay.recorded_by;
   }
 
   const sets: Record<string, unknown> = { state: t.to };
@@ -156,18 +169,30 @@ export async function transition(c: PoolClient, user: AuthUser, contractId: stri
   await audit(c, user.id, action, 'contract', contractId, { state: k.state }, { state: t.to });
   await notify(c, k.source_agent_id, 'contract_' + action, { contract_no: k.contract_no });
   const next = { ...k, ...sets };
-  if (action === 'reconcile') await onActivated(c, user, next);
+  if (action === 'reconcile') await onActivated(c, user, next, accountingPaymentMakerId);
   return next;
 }
 
 /** Posts revenue to the ledger, then creates a first-contract commission event if eligible. */
-async function onActivated(c: PoolClient, user: AuthUser, k: any) {
+async function onActivated(c: PoolClient, user: AuthUser, k: any, paymentMakerId?: string) {
   const rl = await loadRules(c);
   const { initial, guar, eligible, rate, amount } = commissionFor(k, rl);
   const heldAmount = Math.round(amount * (rl.commission_holdback_pct ?? 0)) / 100;
   const immediateAmount = Math.round((amount - heldAmount) * 100) / 100;
   const holdbackDays = Math.round(rl.commission_holdback_days ?? 0);
   await post(c, 'contract', k.id, [['Cash', initial, 0], ['Service Revenue', 0, initial - guar], ['Guarantee Liability', 0, guar]]);
+  if(paymentMakerId&&paymentMakerId!==user.id)await enqueueAccountingEvent(c,{
+    source_entity_id:k.source_agent_id,
+    entry_date:(await c.query('SELECT current_date::text AS entry_date')).rows[0].entry_date,
+    source_reference:`agency-contract:${k.id}`,
+    description:`Agency contract ${k.contract_no} activation payment`,
+    lines:[
+      {source_account_code:'Cash',debit:initial.toFixed(2),credit:'0.00'},
+      ...(initial-guar>0?[{source_account_code:'Service Revenue',debit:'0.00',credit:(initial-guar).toFixed(2)}]:[]),
+      ...(guar>0?[{source_account_code:'Guarantee Liability',debit:'0.00',credit:guar.toFixed(2)}]:[]),
+    ],maker_id:paymentMakerId,checker_id:user.id,
+    checker_reason:`Finance reconciliation approved activation of contract ${k.contract_no}`,
+  });
 
   if (k.is_renewal) return; // renewals earn no first-contract commission
   const prior = await c.query("SELECT 1 FROM commission_events WHERE lead_id = $1 AND rule = 'first_contract' AND status <> 'reversed'", [k.lead_id]);
@@ -189,5 +214,19 @@ async function onActivated(c: PoolClient, user: AuthUser, k: any) {
     ['Commission Payable', 0, immediateAmount],
     ['Commission Held Payable', 0, heldAmount],
   ]);
+  if (paymentMakerId && paymentMakerId !== user.id && amount > 0) await enqueueAccountingEvent(c, {
+    source_entity_id: k.source_agent_id,
+    entry_date: (await c.query('SELECT current_date::text AS entry_date')).rows[0].entry_date,
+    source_reference: `agency-commission-accrual:${id}`,
+    description: `Agency commission accrued for contract ${k.contract_no}`,
+    lines: [
+      { source_account_code: 'Commission Expense', debit: amount.toFixed(2), credit: '0.00' },
+      ...(immediateAmount > 0 ? [{ source_account_code: 'Commission Payable', debit: '0.00', credit: immediateAmount.toFixed(2) }] : []),
+      ...(heldAmount > 0 ? [{ source_account_code: 'Commission Held Payable', debit: '0.00', credit: heldAmount.toFixed(2) }] : []),
+    ],
+    maker_id: paymentMakerId,
+    checker_id: user.id,
+    checker_reason: `Finance reconciliation approved the contract that qualified commission ${id}`,
+  });
   await audit(c, user.id, 'commission_qualified', 'commission', id, null, { amount, eligible, rate, held_amount: heldAmount, holdback_release_days: holdbackDays });
 }

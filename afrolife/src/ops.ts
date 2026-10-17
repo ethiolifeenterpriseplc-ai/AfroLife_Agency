@@ -13,10 +13,33 @@ import { Phone } from './validators.js';
 import { legacyImmediateLeasesEnabled } from './runtime-config.js';
 import { toCsv } from './csv.js';
 import { PROPERTY_CHART_OF_ACCOUNTS, propertyPeriodCloseCheck } from './property-accounting.js';
+import { enqueueAccountingEvent } from './accounting-outbox.js';
+import { propertyVendorAccounting } from './property-vendor-accounting.js';
+import { staffingAccounting } from './staffing-accounting.js';
 
 export const ops = Router();
+ops.use(propertyVendorAccounting);
+ops.use(staffingAccounting);
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const AGENT = ['master_agent', 'field_agent'];
+
+ops.get('/accounting-event-outbox/status', requireRole('global_admin','super_admin','finance','finance_manager'), h(async(req,res)=>{
+  const rows=await withUser(req.user!,async(client)=>(await client.query(
+    `SELECT id,source_event_id,source_entity_id,status,attempts,next_attempt_at,delivered_at,last_error,created_at
+     FROM accounting_event_outbox ORDER BY created_at DESC LIMIT 200`,
+  )).rows);
+  res.json(rows);
+}));
+
+ops.post('/accounting-event-outbox/:id/retry', requireRole('global_admin','super_admin','finance_manager'), h(async(req,res)=>{
+  const id=z.string().uuid().parse(req.params.id);
+  const row=await withUser(req.user!,async(client)=>(await client.query(
+    `UPDATE accounting_event_outbox SET status='pending',attempts=0,next_attempt_at=now(),locked_until=NULL,last_error=NULL
+     WHERE id=$1 AND status='dead' RETURNING id,source_event_id,status`,[id],
+  )).rows[0]);
+  if(!row)throw new HttpError(404,'Dead Accounting event was not found');
+  res.json(row);
+}));
 
 ops.get('/owner/statements', requireRole('property_owner'), h(async (req, res) => {
   const format = z.enum(['json', 'csv']).default('json').parse(req.query.format ?? 'json');
@@ -97,6 +120,24 @@ ops.post('/disputes/:id/resolve', requireRole('super_admin', 'compliance'), h(as
       await post(c, 'dispute', d.id, b.refund_kind === 'guarantee'
         ? [['Guarantee Liability', b.refund_amount, 0], ['Cash', 0, b.refund_amount]]
         : [['Refunds', b.refund_amount, 0], ['Cash', 0, b.refund_amount]]);
+      await enqueueAccountingEvent(c, {
+        source_entity_id: k.source_agent_id,
+        entry_date: (await c.query('SELECT current_date::text AS entry_date')).rows[0].entry_date,
+        source_reference: `agency-dispute-refund:${d.id}`,
+        description: `Agency ${b.refund_kind} refund for contract ${k.contract_no}`,
+        lines: b.refund_kind === 'guarantee'
+          ? [
+            { source_account_code: 'Guarantee Liability', debit: b.refund_amount.toFixed(2), credit: '0.00' },
+            { source_account_code: 'Cash', debit: '0.00', credit: b.refund_amount.toFixed(2) },
+          ]
+          : [
+            { source_account_code: 'Refunds', debit: b.refund_amount.toFixed(2), credit: '0.00' },
+            { source_account_code: 'Cash', debit: '0.00', credit: b.refund_amount.toFixed(2) },
+          ],
+        maker_id: d.opened_by,
+        checker_id: req.user!.id,
+        checker_reason: `Dispute ${d.id} refund approved: ${b.resolution}`,
+      });
     }
     const r = await c.query("UPDATE disputes SET status = 'resolved', resolution = $2, refund_amount = $3, refund_kind = $4, resolved_by = $5, closed_at = now() WHERE id = $1 RETURNING *",
       [d.id, b.resolution, b.refund_amount, b.refund_amount > 0 ? b.refund_kind : null, req.user!.id]);
@@ -859,7 +900,25 @@ ops.post('/rent-transactions/:id/reconcile', requireActivity('rent.transactions.
       entry = [['Tenant Deposit Liability', Number(transaction.amount), 0], ['Cash', 0, Number(transaction.amount)]];
     }
     await post(c, 'rent_transaction', transaction.id, entry);
-    const reconciled = (await c.query("UPDATE rent_transactions SET status = 'reconciled', reconciled_by = $2, reconciled_at = now() WHERE id = $1 AND status = 'pending' RETURNING *", [transaction.id, req.user!.id])).rows[0];
+    const reconciled = (await c.query("UPDATE rent_transactions SET status = 'reconciled', reconciled_by = $2, reconciled_at = now() WHERE id = $1 AND status = 'pending' RETURNING *,reconciled_at::date::text AS accounting_entry_date", [transaction.id, req.user!.id])).rows[0];
+    const property = (await c.query(
+      `SELECT p.id FROM properties p JOIN property_units u ON u.property_id=p.id WHERE u.id=$1`, [lease.unit_id],
+    )).rows[0];
+    const accountLines = transaction.kind === 'rent'
+      ? [{ source_account_code: 'cash', debit: String(transaction.amount), credit: '0.00' }, { source_account_code: 'rental_revenue', debit: '0.00', credit: String(transaction.amount) }]
+      : transaction.kind === 'deposit'
+        ? [{ source_account_code: 'cash', debit: String(transaction.amount), credit: '0.00' }, { source_account_code: 'tenant_deposit_liability', debit: '0.00', credit: String(transaction.amount) }]
+        : [{ source_account_code: 'tenant_deposit_liability', debit: String(transaction.amount), credit: '0.00' }, { source_account_code: 'cash', debit: '0.00', credit: String(transaction.amount) }];
+    await enqueueAccountingEvent(c, {
+      source_entity_id: property.id,
+      entry_date: reconciled.accounting_entry_date,
+      source_reference: `rent:${transaction.reference}`,
+      description: `${transaction.kind.replace('_', ' ')} payment ${transaction.reference}`,
+      lines: accountLines,
+      maker_id: transaction.recorded_by,
+      checker_id: req.user!.id,
+      checker_reason: `Rent transaction ${transaction.id} reconciled after independent finance review`,
+    });
     await audit(c, req.user!.id, 'rent_transaction_reconciled', 'rent_transaction', transaction.id, { status: transaction.status }, { status: 'reconciled', kind: transaction.kind, amount: transaction.amount });
     return reconciled;
   }));
@@ -888,7 +947,7 @@ ops.get('/rent-transactions/pending', requireAnyActivity('rent.transactions.view
 }));
 
 // ================= Maintenance =================
-ops.post('/maintenance', requireRole(...AGENT, 'super_admin'), h(async (req, res) => {
+ops.post('/maintenance', requireActivity('property.maintenance.manage'), h(async (req, res) => {
   const b = z.object({ property_id: z.string().uuid(), unit_id: z.string().uuid().optional(), description: z.string().min(5), priority: z.enum(['low', 'normal', 'urgent']).default('normal') }).parse(req.body);
   const row = await withUser(req.user!, async (c) => {
     const p = (await c.query('SELECT source_agent_id FROM properties WHERE id = $1', [b.property_id])).rows[0];

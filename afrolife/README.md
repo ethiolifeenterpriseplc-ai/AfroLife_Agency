@@ -50,6 +50,14 @@ credential file when finished. SACCO/MFI roles are institution memberships,
 not separate login roles; provision those through an institution's staff
 workflow.
 
+For a disposable MFI E2E clone, set `MFI_E2E_DATABASE_URL` to a loopback
+`afrolife_test_*` database URL and `MFI_E2E_USERS_FILE` to a new temporary file,
+then run `npm run seed:mfi:e2e:local`. The seeder refuses other database names,
+hosts, ports, existing credential files, and non-superuser migration
+connections. Run the core API and MFI service against that same clone, then run
+`npm run test:mfi:e2e:local` with `MFI_E2E_USERS_FILE`, `MFI_E2E_DATABASE_URL`,
+and `API_URL` set. Remove the temporary credential file afterward.
+
 Before a shared or production launch, provision at least two Super Admin accounts with distinct names and phone numbers using the seed procedure. Repeat the seed command with the second administrator's details; the phone number must be unique. Account setup is deliberately four-eyes: a Super Admin cannot activate an account they created, and cannot reset their own password or MFA. Keep both sets of seed credentials outside the repository and remove them after use.
 
 Global Admin is a separate, non-provisionable role for system-wide configuration and cross-module oversight. An active, MFA-enabled Super Admin can nominate another active, MFA-enabled Super Admin; a second, different eligible Super Admin must approve the request with a reason. Request and decision events are recorded in the audit log. Global Admin access does not bypass financial maker-checker approvals, and ordinary Super Admins cannot directly create or alter Global Admin accounts.
@@ -137,6 +145,10 @@ accounting, and recovery/claims controls are defined and approved.
 The Edir financial ledger remains isolated from the Agency, SACCO/MFI, and
 insurance ledgers. Keep the mini-app disabled until the separate service is
 deployed, migrated, and reachable.
+
+## AfroLife Accounting standalone service
+
+Accounting is a separately deployable multi-entity accounting backend and web workspace with its own PostgreSQL database, user mode, entity memberships, chart of accounts, periods, journals, and consolidation totals. See [services/accounting/README.md](./services/accounting/README.md) for standalone and AfroLife-connected deployment, credentials, migrations, and source-event mapping. The Super App exposes Accounting as a finance mini-app when `ACCOUNTING_SERVICE_URL` and the matching gateway secret are configured. Transactional source publishers are wired for property rent/deposit receipts, Agency contract fees, commission accruals and payouts, dispute refunds, approved MFI loan disbursements/write-offs, Edir transactions, and approved Insurance journals. Marketplace has local sandbox checkout only; real payment posting still requires a provider and entity/account mappings. Configure Accounting entity and account mappings before enabling delivery; historical entries are not backfilled. The core catalog service entry can be assigned through service packages; commercial subscription/payment fulfillment remains outstanding.
 
 ## Property listings and secure uploads
 
@@ -357,6 +369,7 @@ scenarios, launch evidence, and pilot operations.
 - `npm run seed:admin` — create the first Super Admin from environment values
 - `npm run seed:local-test-users` — create synthetic test accounts in the isolated local database
 - `npm run test:unit` — run database-independent tests
+- `npm run seed:mfi:e2e:local` — create synthetic users in a disposable, loopback `afrolife_test_*` database
 - `npm run test:mfi:e2e:local` — exercise the SACCO/MFI API journey against the running local app and isolated QA database
 - `npm run test:ui:e2e:local` — headless Chrome smoke check for Super Admin login, SACCO forms, responsive layouts, and browser errors; requires local QA accounts and Chrome
 - `npm run test:integration` — run API/database tests against a running local instance
@@ -378,7 +391,9 @@ To generate local signing/encryption secrets in PowerShell:
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Integration tests need the API running at `http://localhost:3000` (or `API_URL`) and a database that can be safely written to. Set `TEST_DATABASE_URL` explicitly to a disposable database named `test_*` or `afrolife_test*` for fixture setup; the running API uses the restricted `DATABASE_URL` role. The local database setup intentionally does not set this variable because its `afrolife` database is persistent. Runtime commands load `%LOCALAPPDATA%\AfroLife\afrolife.env` when present, otherwise the project `.env`; never point integration tests at production or ordinary development data.
+Integration tests need a disposable database named `test_*` or `afrolife_test*`; never point them at production or ordinary development data. Run `npm run test:finance:e2e:local` to create a uniquely named temporary database on the isolated loopback PostgreSQL instance, apply migrations, create synthetic identities, and run the property-finance, staffing-accounting, and core HTTP integration suites. The runner uses the configured local migration administrator only to provision and migrate the disposable database, a non-superuser fixture role used only for test setup, and separate restricted application runtime roles for the core API and Staffing service. Both services use the same disposable database so test-created domain records are visible across the integration boundary, while role grants continue to enforce service-level access. The runner drops the database, roles, test credentials, and temporary file storage when finished. The local database setup intentionally does not set integration-test URLs because its `afrolife` database is persistent. Runtime commands load `%LOCALAPPDATA%\AfroLife\afrolife.env` when present, otherwise the project `.env`.
+
+For manual integration runs, start the API with the restricted `DATABASE_URL` role and set `TEST_DATABASE_URL` to a disposable local database used only for fixtures. The test-only role may need bypass-RLS permissions to create synthetic fixtures, but it must not be a PostgreSQL superuser; API requests must always run through the restricted runtime role so the suite exercises row-level security.
 
 ## MVP workflows
 

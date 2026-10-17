@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from 'express';
+import { z } from 'zod';
 import { withService } from './core.js';
-import { post } from './domain.js';
 
 export function paymentWebhook(secret: string): RequestHandler {
   return (req, res, next) => {
@@ -20,17 +20,19 @@ export function paymentWebhook(secret: string): RequestHandler {
       }
       let event: { event_id: string; invoice_id: string; amount: number; reference: string };
       try {
-        event = JSON.parse(req.body.toString('utf8'));
+        event = z.object({
+          event_id: z.string().trim().min(1).max(160),
+          invoice_id: z.string().uuid(),
+          amount: z.number().finite().positive().max(999_999_999_999.99).refine((amount) => Math.abs(amount * 100 - Math.round(amount * 100)) < 1e-7),
+          reference: z.string().trim().min(3).max(200),
+        }).strict().parse(JSON.parse(req.body.toString('utf8')));
       } catch {
-        res.status(400).json({ error: 'Invalid JSON payload' });
-        return;
-      }
-      if (!event.event_id || !event.invoice_id || !Number.isFinite(event.amount) || event.amount <= 0 || !event.reference) {
-        res.status(400).json({ error: 'Invalid payment event' });
+        res.status(400).json({ error: 'Invalid JSON payment event' });
         return;
       }
 
       const result = await withService('payment_webhook', async (c) => {
+        await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`payment-provider-event:${event.event_id}`]);
         const existing = await c.query('SELECT id FROM payments WHERE provider_event_id = $1', [event.event_id]);
         if (existing.rowCount) return { status: 200, body: { ok: true, duplicate: true } };
         const inv = (await c.query('SELECT * FROM invoices WHERE id = $1 FOR UPDATE', [event.invoice_id])).rows[0];
@@ -44,7 +46,6 @@ export function paymentWebhook(secret: string): RequestHandler {
           [event.invoice_id, event.amount, event.reference, event.event_id],
         );
         await c.query("UPDATE invoices SET status = 'paid' WHERE id = $1", [event.invoice_id]);
-        await post(c, 'invoice', inv.id, [['Cash', event.amount, 0], ['Accounts Receivable', 0, event.amount]]);
         return { status: 200, body: { ok: true } };
       });
       res.status(result.status).json(result.body);

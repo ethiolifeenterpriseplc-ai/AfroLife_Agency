@@ -13,6 +13,7 @@ if (!runtimeRole || !/^[a-z_][a-z0-9_]*$/i.test(runtimeRole)) {
 const migrations = [
   ['insurance-ledger-v1', '026_insurance_ledger.sql'],
   ['insurance-ledger-v2-hierarchical-edirs', '031_hierarchical_edir_insurance.sql'],
+  ['insurance-ledger-v3-accounting-outbox', '032_accounting_outbox.sql'],
 ];
 
 const client = new pg.Client({ connectionString: migrationUrl });
@@ -28,7 +29,10 @@ try {
   for (const [version, filename] of migrations) {
     const applied = await client.query('SELECT 1 FROM insurance_service_migrations WHERE version=$1', [version]);
     if (applied.rowCount) continue;
-    const source = await readFile(new URL(`../../../migrations/${filename}`, import.meta.url), 'utf8');
+    const migrationUrl = filename === '032_accounting_outbox.sql'
+      ? new URL(`../../../services/insurance-ledger/${filename}`, import.meta.url)
+      : new URL(`../../../migrations/${filename}`, import.meta.url);
+    const source = await readFile(migrationUrl, 'utf8');
     await client.query(buildInsuranceServiceMigration(source, runtimeRole));
     await client.query(
       'INSERT INTO insurance_service_migrations (version) VALUES ($1)',

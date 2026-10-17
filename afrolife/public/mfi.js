@@ -562,7 +562,7 @@ export function createMfiWorkspace(api, user) {
           : [{ value: 'share_contribution', label: 'Share contribution' }];
         const transactionType = select('Transaction', 'transaction_type', types);
         const amount = input('Amount (ETB)', 'amount', 'number', { min: '0.01', step: '0.01' });
-        const formNode = form('mfi-inline-form', transactionType.label, amount.label, submitButton('Post transaction'));
+        const formNode = form('mfi-inline-form', transactionType.label, amount.label, submitButton('Submit for approval'));
         formNode.dataset.mfiForm = 'account-transaction';
         formNode.dataset.accountId = account.id;
         const key = $('input');
@@ -655,7 +655,7 @@ export function createMfiWorkspace(api, user) {
 
       if (loan.status === 'disbursed' && hasRole('institution_admin', 'finance_manager', 'teller')) {
         const amount = input('Principal repayment (ETB)', 'amount', 'number', { min: '0.01', step: '0.01' });
-        const repay = form('mfi-inline-form', amount.label, submitButton('Post principal repayment'));
+        const repay = form('mfi-inline-form', amount.label, submitButton('Submit repayment for approval'));
         repay.dataset.mfiForm = 'repay-loan';
         repay.dataset.loanId = loan.id;
         const key = $('input');
@@ -975,22 +975,37 @@ export function createMfiWorkspace(api, user) {
   }
 
   function renderActivity() {
-    const area = section('Recent journal activity', 'Posted, balanced financial events from this institution; each shows the general-ledger lines and acting staff member.');
+    const area = section('Recent journal activity', 'Pending, posted, and rejected financial events; transactions post only after an independent finance review.');
     const list = $('div', undefined, 'mfi-record-list');
     for (const entry of state.transactions) {
       const row = $('article', undefined, 'panel mfi-record');
       const header = $('div', undefined, 'mfi-record-heading');
       const title = $('div', undefined, 'mfi-record-title');
       title.append($('h3', `${entry.transaction_type.replaceAll('_', ' ')} · ${money(entry.amount)}`),
-        $('p', `${new Date(entry.posted_at).toLocaleString(document.documentElement.lang)} · ${entry.posted_by}`));
-      header.append(title, $('span', 'Posted', 'mfi-status status-active'));
+        $('p', `${entry.posted_at ? new Date(entry.posted_at).toLocaleString(document.documentElement.lang) : (entry.status === 'rejected' ? 'Rejected after independent review' : 'Awaiting independent review')} · ${entry.posted_by}`));
+      const statusLabel = entry.status === 'draft' ? 'Awaiting approval' : entry.status === 'rejected' ? 'Rejected' : 'Posted';
+      const statusClass = entry.status === 'posted' ? 'status-active' : entry.status === 'rejected' ? 'status-rejected' : 'status-pending';
+      header.append(title, $('span', statusLabel, `mfi-status ${statusClass}`));
       row.append(header);
+      if (entry.status === 'rejected' && entry.approval_reason) row.append($('p', `Reviewer reason: ${entry.approval_reason}`, 'mfi-notice'));
       for (const line of entry.lines) {
         row.append($('p', `${line.account_code} ${line.account_name}${line.account_number ? ` · ${line.account_number}` : ''} · Dr ${money(line.debit)} · Cr ${money(line.credit)}`));
       }
       if (entry.reversal_of) row.append($('p', `Reversal of journal ${entry.reversal_of}${entry.reversal_reason ? ` · ${entry.reversal_reason}` : ''}`, 'mfi-notice'));
       if (entry.reversal_id) row.append($('p', `Reversed by journal ${entry.reversal_id}`, 'mfi-notice'));
-      if (!entry.reversal_of && !entry.reversal_id
+      if (entry.status === 'draft' && entry.requires_approval && entry.created_by !== state.userId
+          && hasRole('institution_admin', 'finance_manager')) {
+        const reason = input('Review reason', 'reason', 'text', { maxLength: 1000 });
+        reason.control.minLength = 10;
+        const decision = select('Decision', 'decision', [
+          { value: 'approve', label: 'Approve and post' }, { value: 'reject', label: 'Reject' },
+        ]);
+        const review = form('mfi-inline-form', decision.label, reason.label, submitButton('Record review'));
+        review.dataset.mfiForm = 'journal-decision';
+        review.dataset.journalId = entry.id;
+        row.append(review);
+      }
+      if (entry.status === 'posted' && !entry.reversal_of && !entry.reversal_id
           && hasRole('institution_admin', 'finance_manager')
           && entry.created_by !== state.userId) {
         const reason = input('Reason for full reversal', 'reason', 'text', { maxLength: 1000 });
@@ -1323,12 +1338,15 @@ export function createMfiWorkspace(api, user) {
       } else if (target.dataset.mfiForm === 'reverse-journal') {
         path = `/mfi/institutions/${id}/journals/${encodeURIComponent(target.dataset.journalId)}/reverse`;
         values.idempotency_key = target.elements.idempotency_key.value;
+      } else if (target.dataset.mfiForm === 'journal-decision') {
+        path = `/mfi/institutions/${id}/journals/${encodeURIComponent(target.dataset.journalId)}/decision`;
       }
       if (!path) return;
       const response = target.dataset.mfiForm === 'upload-member-document'
         ? await api(path,{method:'POST',body:target.elements.file.files[0]})
         : await api(path, { method, body: JSON.stringify(values) });
-      state.error = response?.replayed ? 'This request was already posted; the original financial event was returned.' : 'Saved successfully.';
+      state.error = response?.replayed ? (response.status === 'draft' ? 'This request is already awaiting independent approval.' : 'This request was already posted; the original financial event was returned.')
+        : response?.status === 'draft' ? 'Financial request submitted for independent approval.' : 'Saved successfully.';
       await load();
     } catch (error) {
       state.error = error.message;

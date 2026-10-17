@@ -143,10 +143,10 @@ export async function assertAgencyDomainDatabaseReady(domain: AgencyDomain | Leg
   const columns = await database.query(
     `SELECT requested.column_key,
             NOT EXISTS (
-              SELECT 1 FROM information_schema.columns actual
-              WHERE actual.table_schema='public'
-                AND actual.table_name=split_part(requested.column_key,'.',1)
-                AND actual.column_name=split_part(requested.column_key,'.',2)
+              SELECT 1 FROM pg_attribute actual
+              WHERE actual.attrelid=to_regclass(format('%I.%I','public',split_part(requested.column_key,'.',1)))
+                AND actual.attname=split_part(requested.column_key,'.',2)
+                AND actual.attnum>0 AND NOT actual.attisdropped
             ) AS missing
      FROM unnest($1::text[]) AS requested(column_key)`,
     [requirements.requiredColumns],

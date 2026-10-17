@@ -1,0 +1,43 @@
+{
+  "description": "Synthetic Accounting connector events for local integration rehearsal. IDs and amounts are fictional; map each source entity and account before delivery.",
+  "source_entity_id": "local-e2e-mfi",
+  "events": [
+    {
+      "source": "afrolife_core",
+      "source_reference": "mfi:savings_deposit:LOCAL-E2E-001",
+      "description": "Synthetic MFI savings deposit",
+      "lines": [
+        { "source_account_code": "1000", "debit": "250.00", "credit": "0.00" },
+        { "source_account_code": "2100", "debit": "0.00", "credit": "250.00" }
+      ]
+    },
+    {
+      "source": "afrolife_core",
+      "source_reference": "mfi:loan_repayment:LOCAL-E2E-002",
+      "description": "Synthetic MFI loan repayment",
+      "lines": [
+        { "source_account_code": "1000", "debit": "300.00", "credit": "0.00" },
+        { "source_account_code": "1300", "debit": "0.00", "credit": "260.00" },
+        { "source_account_code": "4100", "debit": "0.00", "credit": "40.00" }
+      ]
+    },
+    {
+      "source": "afrolife_core",
+      "source_reference": "mfi:reversal:LOCAL-E2E-003",
+      "description": "Synthetic reversal of a savings withdrawal",
+      "lines": [
+        { "source_account_code": "2100", "debit": "75.00", "credit": "0.00" },
+        { "source_account_code": "1000", "debit": "0.00", "credit": "75.00" }
+      ]
+    },
+    {
+      "source": "afrolife_core",
+      "source_reference": "mfi:loan_writeoff:LOCAL-E2E-004",
+      "description": "Synthetic approved MFI loan write-off",
+      "lines": [
+        { "source_account_code": "5100", "debit": "125.00", "credit": "0.00" },
+        { "source_account_code": "1300", "debit": "0.00", "credit": "125.00" }
+      ]
+    }
+  ]
+}

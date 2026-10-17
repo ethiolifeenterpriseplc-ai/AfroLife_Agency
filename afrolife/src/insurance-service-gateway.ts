@@ -88,7 +88,14 @@ export function createServiceGateway(options: {
   }
 
   return (req, res, next) => {
-    const path = `${options.servicePath}${options.includeBaseUrl ? req.baseUrl : ''}${req.url}`;
+    const servicePath = options.servicePath.replace(/\/+$/, '');
+    let mountedPath = options.includeBaseUrl ? req.baseUrl : '';
+    if (mountedPath === servicePath) {
+      mountedPath = '';
+    } else if (mountedPath.startsWith(`${servicePath}/`)) {
+      mountedPath = mountedPath.slice(servicePath.length);
+    }
+    const path = `${servicePath}${mountedPath}${req.url}`;
     const idempotencyKey = req.get('idempotency-key') ?? null;
     if (idempotencyKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
       next(new HttpError(400, 'Idempotency-Key must be a UUID'));
@@ -142,6 +149,14 @@ export function createInsuranceServiceGateway(options: { baseUrl: string; secret
     ...options,
     servicePath: '/api/v1/insurance/ledger',
     serviceName: 'Insurance ledger service',
+  });
+}
+
+export function createAccountingServiceGateway(options: { baseUrl: string; secret: string }): RequestHandler {
+  return createServiceGateway({
+    ...options,
+    servicePath: '/api/v1/accounting',
+    serviceName: 'Accounting service',
   });
 }
 

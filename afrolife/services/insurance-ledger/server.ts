@@ -7,6 +7,7 @@ import { correlationIdMiddleware, getCorrelationId } from '../../src/request-con
 import { pool, withUser, assertServiceDatabaseSafety } from './db.js';
 import { identityPool, withIdentityUser, assertIdentityDatabaseSafety } from './identity-db.js';
 import { authenticateGateway } from './auth.js';
+import { dispatchAccountingEvents } from '../../src/accounting-outbox.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
@@ -46,6 +47,21 @@ await Promise.all([assertServiceDatabaseSafety(), assertIdentityDatabaseSafety()
 const server = app.listen(port, process.env.HOST ?? '0.0.0.0', () => {
   console.log(`Insurance ledger service listening on ${port}`);
 });
+
+let accountingDispatching = false;
+if (process.env.ACCOUNTING_SERVICE_URL && process.env.ACCOUNTING_INGEST_SECRET) {
+  setInterval(async () => {
+    if (accountingDispatching) return;
+    accountingDispatching = true;
+    try {
+      await dispatchAccountingEvents(pool, process.env.ACCOUNTING_SERVICE_URL!, process.env.ACCOUNTING_INGEST_SECRET!, 'afrolife_core', 'super_admin');
+    } catch (error) {
+      console.error('Insurance accounting event dispatch failed', error instanceof Error ? error.message : error);
+    } finally {
+      accountingDispatching = false;
+    }
+  }, 5_000).unref();
+}
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => server.close(() => Promise.all([pool.end(), identityPool.end()]).finally(() => process.exit(0))));

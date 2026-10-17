@@ -80,7 +80,8 @@ test('role activity migration hardens the SQL policy layer for service permissio
 test('SQL role activity defaults match the application catalog and preserve override precedence', async () => {
   const defaultsMigration = await readFile(new URL('../migrations/057_role_activity_defaults.sql', import.meta.url), 'utf8');
   const lifecycleMigration = await readFile(new URL('../migrations/060_lease_lifecycle.sql', import.meta.url), 'utf8');
-  const migration = `${defaultsMigration}\n${lifecycleMigration}`;
+  const propertyOwnerMaintenanceMigration = await readFile(new URL('../migrations/076_property_owner_maintenance_access.sql', import.meta.url), 'utf8');
+  const migration = `${defaultsMigration}\n${lifecycleMigration}\n${propertyOwnerMaintenanceMigration}`;
   const seededDefaults = new Set(
     [...migration.matchAll(/\('([a-z_]+)','([a-z_.]+)',true\)/g)]
       .map((match) => `${match[1]}:${match[2]}`),

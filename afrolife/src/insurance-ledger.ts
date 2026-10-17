@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { AuthUser } from './auth-types.js';
 import { HttpError } from './http-error.js';
 import { InsuranceJournalLineInput, validateInsuranceJournalLines } from './insurance-ledger-validation.js';
+import { enqueueAccountingEvent } from './accounting-outbox.js';
 
 type WithUser = <T>(user: AuthUser, fn: (client: PoolClient) => Promise<T>) => Promise<T>;
 export function createInsuranceLedgerRouter(withUser: WithUser) {
@@ -72,6 +73,31 @@ async function requireInsuranceMaster(req: Request) {
     throw new HttpError(403, 'Insurance umbrella administration access is required');
   }
 }
+
+insuranceLedgerRouter.get('/accounting-event-outbox/status', h(async (req, res) => {
+  await requireRole(req, ['finance_manager']);
+  const rows = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,source_event_id,source_entity_id,status,attempts,next_attempt_at,delivered_at,last_error,created_at
+     FROM accounting_event_outbox ORDER BY created_at DESC LIMIT 200`,
+  )).rows);
+  res.json(rows);
+}));
+
+insuranceLedgerRouter.post('/accounting-event-outbox/:id/retry', h(async (req, res) => {
+  await requireRole(req, ['finance_manager']);
+  const id = z.string().uuid().parse(req.params.id);
+  const row = await withUser(req.user!, async (client) => {
+    const retried = (await client.query(
+      `UPDATE accounting_event_outbox SET status='pending',attempts=0,next_attempt_at=now(),locked_until=NULL,last_error=NULL
+       WHERE id=$1 AND status='dead' RETURNING id,source_event_id,source_entity_id,status`, [id],
+    )).rows[0];
+    if (!retried) throw new HttpError(404, 'Dead Accounting event was not found for this Insurance organization');
+    await audit(client, req.user!.id, 'accounting_event_retry_requested', 'accounting_event_outbox', id,
+      { source_event_id: retried.source_event_id });
+    return retried;
+  });
+  res.json(row);
+}));
 
 insuranceLedgerRouter.get('/organizations', h(async (req, res) => {
   const rows = await withUser(req.user!, async (client) => (await client.query(
@@ -293,9 +319,28 @@ insuranceLedgerRouter.post('/journals/:journalId/decision', h(async (req, res) =
       `UPDATE insurance_ledger_journals
        SET status = $2, approved_by = $3, approval_reason = $4, approved_at = now(),
            posted_at = CASE WHEN $2 = 'posted' THEN now() ELSE NULL END
-       WHERE id = $1 RETURNING *`,
+       WHERE id = $1 RETURNING *,posted_at::date::text AS posted_date`,
       [current.id, posted ? 'posted' : 'rejected', req.user!.id, body.reason],
     )).rows[0];
+    if (posted) {
+      const lines = (await client.query(
+        `SELECT a.account_code, l.debit::text, l.credit::text
+         FROM insurance_ledger_lines l
+         JOIN insurance_ledger_accounts a ON a.id=l.account_id AND a.organization_id=l.organization_id
+         WHERE l.journal_id=$1 AND l.organization_id=$2 ORDER BY l.line_no`,
+        [current.id, result.organization_id],
+      )).rows;
+      await enqueueAccountingEvent(client, {
+        source_entity_id: result.organization_id,
+        entry_date: result.posted_date,
+        source_reference: `insurance:${current.id}`,
+        description: current.description,
+        lines: lines.map((line) => ({ source_account_code: line.account_code, debit: line.debit, credit: line.credit })),
+        maker_id: current.created_by,
+        checker_id: req.user!.id,
+        checker_reason: body.reason,
+      });
+    }
     await audit(client, req.user!.id, posted ? 'insurance_ledger_journal_posted' : 'insurance_ledger_journal_rejected',
       'insurance_ledger_journal', current.id, { old_status: current.status, new_status: result.status, reason: body.reason });
     return result;

@@ -6,10 +6,12 @@ import type { AuthUser } from '../../src/auth-types.js';
 import { HttpError } from '../../src/http-error.js';
 import { withUser } from './db.js';
 import { edirCashPostings, formatEdirMoney, parseEdirMoney } from './money.js';
+import { enqueueAccountingEvent } from '../../src/accounting-outbox.js';
 
 const platformAdmin = (user: AuthUser) => user.role === 'global_admin' || user.role === 'super_admin';
 const makerRoles = ['edir_admin', 'finance_manager', 'treasurer'];
 const readerRoles = [...makerRoles, 'credit_officer', 'credit_manager', 'compliance', 'auditor'];
+export const edirFinanceRouter = Router();
 
 async function hasStaffRole(user: AuthUser, roles: string[], client?: PoolClient) {
   if (platformAdmin(user)) return true;
@@ -50,6 +52,29 @@ async function audit(
   );
 }
 
+edirFinanceRouter.get('/accounting-event-outbox/status', requireStaffRole(readerRoles, 'Edir financial registry access is required'), h(async (req, res) => {
+  const rows = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,source_event_id,source_entity_id,status,attempts,next_attempt_at,delivered_at,last_error,created_at
+     FROM accounting_event_outbox ORDER BY created_at DESC LIMIT 200`,
+  )).rows);
+  res.json(rows);
+}));
+
+edirFinanceRouter.post('/accounting-event-outbox/:id/retry', requireStaffRole(makerRoles, 'Edir financial approval access is required'), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const row = await withUser(req.user!, async (client) => {
+    const retried = (await client.query(
+      `UPDATE accounting_event_outbox SET status='pending',attempts=0,next_attempt_at=now(),locked_until=NULL,last_error=NULL
+       WHERE id=$1 AND status='dead' RETURNING id,source_event_id,status`, [id],
+    )).rows[0];
+    if (!retried) throw new HttpError(404, 'Dead Accounting event was not found');
+    await audit(client, req.user!.id, 'accounting_event_retry_requested', 'accounting_event_outbox', id,
+      null, { source_event_id: retried.source_event_id });
+    return retried;
+  });
+  res.json(row);
+}));
+
 const moneyText = z.string().regex(/^(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?$/);
 const positiveMoneyText = moneyText.refine((value) => {
   const [whole, fraction = ''] = value.split('.');
@@ -68,8 +93,6 @@ async function transactionRow(client: PoolClient, id: string) {
     [id],
   )).rows[0];
 }
-
-export const edirFinanceRouter = Router();
 
 edirFinanceRouter.get('/me', h(async (req, res) => {
   const result = await withUser(req.user!, async (client) => {
@@ -420,10 +443,13 @@ edirFinanceRouter.post('/transactions/:id/decision', requireStaffRole(makerRoles
     let journalId: string | null = null;
     if (body.decision === 'approved') {
       const mapping = (await client.query(
-        `SELECT p.ledger_account_id AS member_ledger_account_id, cash.id AS cash_ledger_account_id
+        `SELECT p.ledger_account_id AS member_ledger_account_id, member.code AS member_account_code,
+                cash.id AS cash_ledger_account_id, o.id AS organization_id
          FROM edir_member_accounts ma
          JOIN edir_financial_products p ON p.id=ma.product_id
-         JOIN edir_ledger_accounts cash ON cash.code='1000' AND cash.active
+         JOIN edir_ledger_accounts member ON member.id=p.ledger_account_id AND member.organization_id=p.organization_id
+         JOIN edir_organizations o ON o.id=ma.organization_id
+         JOIN edir_ledger_accounts cash ON cash.code='1000' AND cash.active AND cash.organization_id=ma.organization_id
          WHERE ma.id=$1`,
         [updated.member_account_id],
       )).rows[0];
@@ -453,10 +479,19 @@ edirFinanceRouter.post('/transactions/:id/decision', requireStaffRole(makerRoles
             line.debit, line.credit],
         );
       }
-      await client.query(
-        `UPDATE edir_financial_journals SET status='posted', posted_by=$2, posted_at=now() WHERE id=$1`,
+      const postedJournal=await client.query(
+        `UPDATE edir_financial_journals SET status='posted', posted_by=$2, posted_at=now() WHERE id=$1 RETURNING posted_at::date::text AS posted_date`,
         [journalId, req.user!.id],
       );
+      const transactionLines=edirCashPostings(postingDirection,updated.amount);
+      await enqueueAccountingEvent(client,{
+        source_entity_id:mapping.organization_id,
+        entry_date:postedJournal.rows[0].posted_date,
+        source_reference:`edir:${id}`,
+        description:`Edir ${postingDirection} transaction ${id}`,
+        lines:transactionLines.map(line=>({source_account_code:line.account==='cash'?'1000':mapping.member_account_code,debit:line.debit,credit:line.credit})),
+        maker_id:current.created_by,checker_id:req.user!.id,checker_reason:body.reason,
+      });
     }
     await audit(client, req.user!.id, `edir_financial_transaction_${body.decision}`, 'edir_financial_transaction', id,
       { status: current.status }, { status: updated.status, reason: body.reason, journal_id: journalId });

@@ -19,7 +19,7 @@ function databaseFor(
         return { rows: [privileges] };
       }
       const required = values[0] as string[];
-      if (sql.includes('information_schema.columns')) {
+      if (sql.includes('pg_attribute')) {
         return {
           rows: required.map((column_key) => ({ column_key, missing: !columns.includes(column_key) })),
         };

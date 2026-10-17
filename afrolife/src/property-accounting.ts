@@ -5,13 +5,15 @@ export const PROPERTY_CHART_OF_ACCOUNTS = {
   accounts: [
     { code: '1000', name: 'Cash', type: 'asset', normal_balance: 'debit', posting_key: 'cash' },
     { code: '1200', name: 'Rent Receivable', type: 'asset', normal_balance: 'debit', posting_key: 'rent_receivable' },
+    { code: '2100', name: 'Accounts Payable', type: 'liability', normal_balance: 'credit', posting_key: 'accounts_payable' },
     { code: '2200', name: 'Tenant Deposit Liability', type: 'liability', normal_balance: 'credit', posting_key: 'tenant_deposit_liability' },
     { code: '2300', name: 'Owner Funds Payable', type: 'liability', normal_balance: 'credit', posting_key: 'owner_funds_payable' },
     { code: '4000', name: 'Rental Revenue', type: 'income', normal_balance: 'credit', posting_key: 'rental_revenue' },
+    { code: '6100', name: 'Maintenance Expense', type: 'expense', normal_balance: 'debit', posting_key: 'maintenance_expense' },
   ],
   notes: [
     'Proposed mapping only; Finance must approve the legal entity, account codes and recognition policy before production use.',
-    'Existing rental receipt posting remains unchanged. This template does not establish accrual recognition, custody, tax or owner remittance policy.',
+    'Approved vendor invoices accrue Maintenance Expense and Accounts Payable; reconciled payments clear the payable against Cash. This template does not establish custody, tax or owner remittance policy.',
     'Assess lessor accounting under IFRS 16 where applicable; assess property-management service fees under IFRS 15 where applicable.',
   ],
 } as const;

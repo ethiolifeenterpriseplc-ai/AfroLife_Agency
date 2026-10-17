@@ -15,7 +15,7 @@ import { createMfiRouter } from './mfi.js';
 import { createInsuranceLedgerRouter } from './insurance-ledger.js';
 import { createInsuranceRequestsRouter } from './insurance-requests.js';
 import { createInsuranceBrokerageSandboxRouter, isInsuranceBrokerageSandboxEnabled } from './insurance-brokerage-sandbox.js';
-import { createInsuranceRequestsServiceGateway, createInsuranceServiceGateway, createMfiServiceGateway, createPublicServiceGateway, createServiceGateway } from './insurance-service-gateway.js';
+import { createAccountingServiceGateway, createInsuranceRequestsServiceGateway, createInsuranceServiceGateway, createMfiServiceGateway, createPublicServiceGateway, createServiceGateway } from './insurance-service-gateway.js';
 import { loginRouter, adminRouter } from './admin.js';
 import { ops } from './ops.js';
 import { learningRouter } from './learning.js';
@@ -23,6 +23,7 @@ import { privacy } from './privacy.js';
 import { notify } from './notify.js';
 import { paymentWebhook } from './webhooks.js';
 import { dispatchOnce } from './dispatch.js';
+import { dispatchAccountingEvents, enqueueAccountingEvent } from './accounting-outbox.js';
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
@@ -114,6 +115,7 @@ api.use((req, _res, next) => {
 api.get('/features', (_req, res) => res.json({
   mfiPilotEnabled: runtimeConfig.mfiPilotEnabled,
   edirEnabled: Boolean(process.env.EDIR_SERVICE_URL),
+  accountingEnabled: Boolean(process.env.ACCOUNTING_SERVICE_URL),
   insuranceBrokerageSandboxEnabled: isInsuranceBrokerageSandboxEnabled(),
 }));
 api.use(adminRouter);
@@ -163,10 +165,13 @@ api.post('/workers/:id/documents/upload', express.raw({ type: () => true, limit:
 api.post('/properties/:id/photos/upload', express.raw({ type: () => true, limit: '100mb' }));
 api.post('/marketplace/listings/:id/media/upload', express.raw({ type: () => true, limit: '100mb' }));
 api.use(['/workers', '/documents'], workerManagementGateway);
-api.use(['/requests', '/matches'], staffingGateway);
+api.use(['/requests', '/matches', '/staffing-engagements', '/staffing-work-periods', '/staffing-settlements'], staffingGateway);
 api.use('/properties', propertyManagementGateway);
 api.use('/marketplace', marketplaceGateway);
 api.use(supply);
+api.use('/accounting', process.env.ACCOUNTING_SERVICE_URL
+  ? createAccountingServiceGateway({ baseUrl: process.env.ACCOUNTING_SERVICE_URL, secret: process.env.ACCOUNTING_GATEWAY_SECRET ?? '' })
+  : (_req,res) => res.status(503).json({ error: 'Standalone Accounting service is not configured' }));
 api.use('/insurance/requests', process.env.INSURANCE_SERVICE_URL
   ? createInsuranceRequestsServiceGateway({
     baseUrl: process.env.INSURANCE_SERVICE_URL,
@@ -404,8 +409,22 @@ api.post('/commissions/:id/pay', requireRole('super_admin'), h(async (req, res) 
     const k = (await c.query('SELECT * FROM commission_events WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!k) throw new HttpError(404, 'Commission not found');
     if (k.status !== 'approved') throw new HttpError(409, `Commission is ${k.status}; approve it first`);
+    if (!k.approved_by || k.approved_by === req.user!.id) throw new HttpError(409, 'Commission payout requires a different finance approver');
     const amt = Math.round((Number(k.amount) - Number(k.held_amount ?? 0)) * 100) / 100;
     if (amt > 0) await post(c, 'commission', k.id, [['Commission Payable', amt, 0], ['Cash', 0, amt]]);
+    if (amt > 0) await enqueueAccountingEvent(c, {
+      source_entity_id: k.agent_id,
+      entry_date: (await c.query('SELECT current_date::text AS entry_date')).rows[0].entry_date,
+      source_reference: `agency-commission-payment:${k.id}`,
+      description: `Agency commission payment for contract ${k.contract_id}`,
+      lines: [
+        { source_account_code: 'Commission Payable', debit: amt.toFixed(2), credit: '0.00' },
+        { source_account_code: 'Cash', debit: '0.00', credit: amt.toFixed(2) },
+      ],
+      maker_id: req.user!.id,
+      checker_id: k.approved_by,
+      checker_reason: `Commission payment approved by finance; payment reference ${b.reference}`,
+    });
     const r = await c.query("UPDATE commission_events SET status='paid', paid_ref=$2 WHERE id=$1 RETURNING *", [k.id, amt > 0 ? b.reference : null]);
     await audit(c, req.user!.id, 'commission_paid', 'commission', k.id, null, { reference: amt > 0 ? b.reference : null, amount: amt, held_amount: k.held_amount ?? 0 });
     await notify(c, k.agent_id, 'commission_paid', { amount: amt });
@@ -422,8 +441,22 @@ api.post('/commissions/:id/release-held', requireRole('super_admin'), h(async (r
     if (k.holdback_release_on > new Date().toISOString().slice(0, 10)) throw new HttpError(409, `The held commission is available after ${k.holdback_release_on}.`);
     if (k.status === 'approved' && Number(k.amount) > Number(k.held_amount)) throw new HttpError(409, 'Pay the approved commission installment before releasing the holdback.');
     if (!['approved', 'paid'].includes(k.status)) throw new HttpError(409, `Commission is ${k.status}; approve it first.`);
+    if (!k.approved_by || k.approved_by === req.user!.id) throw new HttpError(409, 'Holdback payout requires a different finance approver');
     const amount = Number(k.held_amount);
     await post(c, 'commission_holdback', k.id, [['Commission Held Payable', amount, 0], ['Cash', 0, amount]]);
+    await enqueueAccountingEvent(c, {
+      source_entity_id: k.agent_id,
+      entry_date: (await c.query('SELECT current_date::text AS entry_date')).rows[0].entry_date,
+      source_reference: `agency-commission-holdback-payment:${k.id}`,
+      description: `Agency commission holdback payment for contract ${k.contract_id}`,
+      lines: [
+        { source_account_code: 'Commission Held Payable', debit: amount.toFixed(2), credit: '0.00' },
+        { source_account_code: 'Cash', debit: '0.00', credit: amount.toFixed(2) },
+      ],
+      maker_id: req.user!.id,
+      checker_id: k.approved_by,
+      checker_reason: `Commission holdback release approved by finance; payment reference ${b.reference}`,
+    });
     const result = await c.query("UPDATE commission_events SET held_status='released', held_paid_ref=$2, status='paid' WHERE id=$1 RETURNING *", [k.id, b.reference]);
     await audit(c, req.user!.id, 'commission_holdback_released', 'commission', k.id, { held_status: k.held_status, amount }, { held_status: 'released', reference: b.reference });
     await notify(c, k.agent_id, 'commission_paid', { amount });
@@ -457,6 +490,20 @@ if (process.env.NOTIFY_WEBHOOK_URL && process.env.NOTIFY_WEBHOOK_SECRET) {
     catch (e: any) { console.error('dispatch failed', e.message); }
     finally { dispatching = false; }
   }, 30_000).unref();
+}
+
+// Deliver finalized, independently reconciled rent transactions to the separately deployed Accounting service.
+let accountingDispatching = false;
+if (process.env.ACCOUNTING_SERVICE_URL && process.env.ACCOUNTING_INGEST_SECRET) {
+  setInterval(async () => {
+    if (accountingDispatching) return;
+    accountingDispatching = true;
+    try {
+      await dispatchAccountingEvents(pool, process.env.ACCOUNTING_SERVICE_URL!, process.env.ACCOUNTING_INGEST_SECRET!, 'afrolife_core');
+    } catch (error) {
+      console.error('accounting outbox dispatch failed', error instanceof Error ? error.message : error);
+    } finally { accountingDispatching = false; }
+  }, 5_000).unref();
 }
 
 const onListening = () => console.log('API listening');

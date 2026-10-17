@@ -10,10 +10,12 @@ import { matchingTuningFromRules, scoreMatch, weightsFromRules } from '../../src
 import { Phone } from '../../src/validators.js';
 import { h, AGENT, num, requireListingPlan } from '../../src/supply-common.js';
 import { ConfigScope, validateMarketplaceConfig, loadMarketplaceConfig } from '../../src/marketplace-config.js';
+import { nonProductionMockEnabled } from '../../src/mock-provider-config.js';
 
 export const router = Router();
 router.get('/marketplace/config', h(async (req, res) => {
-  res.json(await withUser(req.user!, loadMarketplaceConfig));
+  const config=await withUser(req.user!, loadMarketplaceConfig);
+  res.json({...config,sandbox_checkout_available:nonProductionMockEnabled(process.env,'MARKETPLACE_PAYMENT_MODE')});
 }));
 
 router.patch('/marketplace/config', requireRole('super_admin','corporate_business_manager'), h(async (req, res) => {
@@ -69,6 +71,36 @@ router.get('/marketplace/listings', h(async (req, res) => {
      ORDER BY CASE WHEN l.status='published' THEN 0 ELSE 1 END,l.created_at DESC LIMIT 300`,
   )).rows);
   res.json(rows);
+}));
+
+const sandboxPaymentsEnabled = () => nonProductionMockEnabled(process.env,'MARKETPLACE_PAYMENT_MODE');
+router.post('/marketplace/listings/:id/sandbox-orders', requireRole('customer'), h(async (req,res) => {
+  if(process.env.NODE_ENV==='production')throw new HttpError(404,'Marketplace sandbox orders are disabled in production.');
+  const listingId=z.string().uuid().parse(req.params.id);
+  const body=z.object({quantity:z.number().int().min(1).max(1000),idempotency_key:z.string().trim().min(8).max(120)}).strict().parse(req.body);
+  const order=await withUser(req.user!,async c=>{
+    const listing=(await c.query("SELECT id,seller_user_id,price FROM marketplace_listings WHERE id=$1 AND status='published' AND transaction_mode='sale' AND price IS NOT NULL",[listingId])).rows[0];
+    if(!listing)throw new HttpError(404,'Published fixed-price sale listing not found.');
+    const created=(await c.query(`INSERT INTO marketplace_sandbox_orders(buyer_user_id,listing_id,seller_user_id,quantity,unit_price,idempotency_key)
+      VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(buyer_user_id,idempotency_key) DO NOTHING RETURNING *`,[req.user!.id,listing.id,listing.seller_user_id,body.quantity,listing.price,body.idempotency_key])).rows[0];
+    if(created)return created;
+    const existing=(await c.query('SELECT * FROM marketplace_sandbox_orders WHERE buyer_user_id=$1 AND idempotency_key=$2',[req.user!.id,body.idempotency_key])).rows[0];
+    if(!existing||existing.listing_id!==listing.id||existing.quantity!==body.quantity)throw new HttpError(409,'Idempotency key was already used for a different order.');
+    return existing;
+  });
+  res.status(201).json({...order,notice:'Sandbox order only. No real payment was taken and no accounting event was created.'});
+}));
+router.post('/marketplace/sandbox-orders/:id/mock-payment', requireRole('customer'), h(async(req,res)=>{
+  if(!sandboxPaymentsEnabled())throw new HttpError(404,'Marketplace mock payments are disabled.');
+  const orderId=z.string().uuid().parse(req.params.id);
+  const result=await withUser(req.user!,async c=>{
+    const order=(await c.query('SELECT * FROM marketplace_sandbox_orders WHERE id=$1 AND buyer_user_id=$2 FOR UPDATE',[orderId,req.user!.id])).rows[0];
+    if(!order)throw new HttpError(404,'Sandbox order not found.');
+    if(order.status==='sandbox_paid')return order;
+    if(order.status!=='pending_sandbox_payment')throw new HttpError(409,'Order is not awaiting sandbox payment.');
+    return (await c.query("UPDATE marketplace_sandbox_orders SET status='sandbox_paid',payment_reference=$2,paid_at=now() WHERE id=$1 RETURNING *",[orderId,`MOCK-${orderId}`])).rows[0];
+  });
+  res.json({...result,notice:'SIMULATED PAYMENT: no charge was made. This sandbox transaction is not a real sale and was not posted to Accounting.'});
 }));
 
 router.post('/marketplace/listings', requireRole(...AGENT,'property_owner','super_admin','corporate_business_manager'), h(async (req, res) => {

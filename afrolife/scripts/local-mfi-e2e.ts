@@ -18,7 +18,7 @@ assert.ok(
   apiBase.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(apiBase.hostname),
   'Local SACCO E2E refuses non-local API hosts',
 );
-const fixtureDbUrl = new URL(process.env.MIGRATION_DATABASE_URL ?? '');
+const fixtureDbUrl = new URL(process.env.MFI_E2E_DATABASE_URL ?? process.env.MIGRATION_DATABASE_URL ?? '');
 const fixtureDatabase = decodeURIComponent(fixtureDbUrl.pathname.replace(/^\/+/, ''));
 assert.ok(['127.0.0.1','localhost','::1'].includes(fixtureDbUrl.hostname) && fixtureDbUrl.port === '5433'
   && (fixtureDatabase === 'afrolife' || /^afrolife_test_[a-z0-9_-]+$/i.test(fixtureDatabase)),
@@ -143,9 +143,12 @@ const loanProduct = products.find((item) => item.product_code === 'LON-GEN')!;
 assert.ok(savings && loanProduct);
 const account = await call<{ id: string }>(admin, 'POST', `${base}/members/${member.id}/accounts`, { product_id: savings.id }, 201);
 const depositKey = randomUUID();
-await call(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
+const deposit = await call<{ id:string; status:string }>(admin2, 'POST', `${base}/accounts/${account.id}/transactions`, {
   transaction_type: 'savings_deposit', amount: '5000.00', idempotency_key: depositKey,
 }, 201);
+assert.equal(deposit.status,'draft');
+await call(admin2,'POST',`${base}/journals/${deposit.id}/decision`,{decision:'approve',reason:'Maker cannot approve their own synthetic deposit'},409);
+await call(admin,'POST',`${base}/journals/${deposit.id}/decision`,{decision:'approve',reason:'Independent approval of synthetic savings deposit'});
 const replay = await call<{ replayed: boolean }>(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
   transaction_type: 'savings_deposit', amount: '5000.00', idempotency_key: depositKey,
 });
@@ -153,9 +156,16 @@ assert.equal(replay.replayed, true);
 await call(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
   transaction_type: 'savings_deposit', amount: '6000.00', idempotency_key: depositKey,
 }, 409);
-const withdrawal = await call<{ id: string }>(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
+const rejectedDeposit=await call<{id:string;status:string}>(teller,'POST',`${base}/accounts/${account.id}/transactions`,{
+  transaction_type:'savings_deposit',amount:'1.00',idempotency_key:randomUUID(),
+},201);
+await call(admin,'POST',`${base}/journals/${rejectedDeposit.id}/decision`,{decision:'reject',reason:'Reject synthetic deposit to verify the balance stays unchanged'});
+assert.equal((await call<Array<{id:string;balance:string}>>(admin,'GET',`${base}/accounts`)).find((row)=>row.id===account.id)?.balance,'5000.00');
+const withdrawal = await call<{ id: string; status:string }>(teller, 'POST', `${base}/accounts/${account.id}/transactions`, {
   transaction_type: 'savings_withdrawal', amount: '100.00', idempotency_key: randomUUID(),
 }, 201);
+assert.equal(withdrawal.status,'draft');
+await call(admin,'POST',`${base}/journals/${withdrawal.id}/decision`,{decision:'approve',reason:'Independent approval of synthetic savings withdrawal'});
 await call(admin, 'POST', `${base}/journals/${withdrawal.id}/reverse`, {
   idempotency_key: randomUUID(), reason: 'Reverse QA withdrawal transaction',
 }, 201);
@@ -220,9 +230,13 @@ await call(creditManager, 'GET', `/mfi/institutions/${otherInstitution.id}/repor
 const installments = await call<Array<{ id: string; status: string; principal_due: string }>>(admin, 'GET', `${base}/loans/${loan.id}/installments`);
 assert.equal(installments.length, 6);
 assert.equal(installments.reduce((sum, row) => sum + Math.round(Number(row.principal_due) * 100), 0), 100000);
-const partialRepayment = await call<{ id: string }>(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
+const partialRepayment = await call<{ id: string; status:string }>(admin2, 'POST', `${base}/loans/${loan.id}/repay`, {
   amount: '100.00', idempotency_key: randomUUID(),
 }, 201);
+assert.equal(partialRepayment.status,'draft');
+await call(admin2,'POST',`${base}/journals/${partialRepayment.id}/decision`,{decision:'approve',reason:'Maker cannot approve their own synthetic repayment'},409);
+await call(teller,'POST',`${base}/loans/${loan.id}/repay`,{amount:'50.00',idempotency_key:randomUUID()},409);
+await call(admin,'POST',`${base}/journals/${partialRepayment.id}/decision`,{decision:'approve',reason:'Independent approval of synthetic partial loan repayment'});
 await call(admin, 'POST', `${base}/journals/${partialRepayment.id}/reverse`, {
   idempotency_key: randomUUID(), reason: 'Reverse QA partial loan repayment',
 }, 201);
@@ -265,9 +279,11 @@ assert.equal(collectionList.find((row) => row.id === collection.id)?.events.leng
 await call(admin2, 'POST', `${base}/collections/${collection.id}/close`, {
   status: 'resolved', reason: 'Resolve local QA case before closing repayment test',
 }, 200);
-await call(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
+const finalRepayment=await call<{id:string;status:string}>(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
   amount: '1000.00', idempotency_key: randomUUID(),
 }, 201);
+assert.equal(finalRepayment.status,'draft');
+await call(admin,'POST',`${base}/journals/${finalRepayment.id}/decision`,{decision:'approve',reason:'Independent approval of synthetic final loan repayment'});
 await call(teller, 'POST', `${base}/loans/${loan.id}/repay`, {
   amount: '0.01', idempotency_key: randomUUID(),
 }, 409);

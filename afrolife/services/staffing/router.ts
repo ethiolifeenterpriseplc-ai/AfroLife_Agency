@@ -9,8 +9,10 @@ import { audit, loadRules } from '../../src/domain.js';
 import { matchingTuningFromRules, scoreMatch, weightsFromRules } from '../../src/matching.js';
 import { Phone } from '../../src/validators.js';
 import { h, AGENT, num, requireListingPlan } from '../../src/supply-common.js';
+import { staffingAccounting } from '../../src/staffing-accounting.js';
 
 export const router = Router();
+router.use(staffingAccounting);
 // ================= Job requests and matching =================
 const ReqIn = z.object({
   lead_id: z.string().uuid(), sector: z.string().min(2), skills_required: z.array(z.string()).default([]),

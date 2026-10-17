@@ -7,6 +7,10 @@ import { MFI_SANDBOX_SIMULATIONS, runMfiSandboxSimulation } from '../src/mfi-san
 const sharedPortals = readFileSync(new URL('../migrations/050_shared_mini_app_portals.sql', import.meta.url), 'utf8');
 const mfiRouter = readFileSync(new URL('../src/mfi.ts', import.meta.url), 'utf8');
 const mfiUi = readFileSync(new URL('../public/mfi.js', import.meta.url), 'utf8');
+const mfiApprovalMigration = readFileSync(new URL('../migrations/073_mfi_journal_maker_checker.sql', import.meta.url), 'utf8');
+const accountingMock = JSON.parse(readFileSync(new URL('./fixtures/accounting-source-events.json', import.meta.url), 'utf8')) as {
+  events:Array<{source_reference:string;lines:Array<{debit:string;credit:string}>}>;
+};
 const insuranceRequests = readFileSync(new URL('../src/insurance-requests.ts', import.meta.url), 'utf8');
 
 test('MFI amounts preserve decimal cents without floating-point rounding', () => {
@@ -21,6 +25,23 @@ test('MFI amounts reject zero, excess precision, negatives and exponent notation
     assert.throws(() => parseMfiAmount(value));
   }
   assert.throws(() => decimalToCents('1.001'), TypeError);
+});
+
+test('synthetic MFI financial events balance and MFI savings/repayments require an independent checker', () => {
+  assert.equal(accountingMock.events.length,4);
+  assert.equal(new Set(accountingMock.events.map((event)=>event.source_reference)).size,accountingMock.events.length);
+  for(const event of accountingMock.events){
+    const debit=event.lines.reduce((sum,line)=>sum+decimalToCents(line.debit),0n);
+    const credit=event.lines.reduce((sum,line)=>sum+decimalToCents(line.credit),0n);
+    assert.ok(debit>0n);
+    assert.equal(debit,credit,event.source_reference);
+  }
+  assert.match(mfiApprovalMigration,/requires_approval boolean NOT NULL DEFAULT false/);
+  assert.match(mfiApprovalMigration,/MFI journal requires an independent reviewer and reason/);
+  assert.match(mfiRouter,/requiresApproval: true/);
+  assert.match(mfiRouter,/The financial request maker cannot review their own request/);
+  assert.match(mfiRouter,/enqueueAccountingEvent\(client/);
+  assert.match(mfiUi,/journal-decision/);
 });
 
 test('shared mini-app member portals require consent and isolate member financial records', () => {

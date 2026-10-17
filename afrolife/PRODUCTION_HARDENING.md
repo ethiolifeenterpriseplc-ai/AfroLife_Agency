@@ -16,6 +16,36 @@ only for a time-bounded compatibility exception approved by the product and
 risk owners, and record its expiry and affected clients. Both Linux and Windows
 production environment templates keep this unsafe legacy path disabled.
 
+## Production feature gates and current status
+
+The production environment files are templates, not the environment of a
+verified live deployment. This workspace has no production host credentials or
+provider credentials, and no production deployment was changed during this
+review. Keep these gates closed until the listed evidence exists:
+
+| Feature | Current production gate | Evidence required to enable |
+| --- | --- | --- |
+| Marketplace checkout | Real checkout is not implemented; sandbox orders and mock payment are blocked in production. | Selected payment provider, signed webhook verification, idempotent payment/refund lifecycle, fraud and reconciliation controls, Accounting mappings, and end-to-end staging evidence. |
+| Tax submission simulation | Mock tax provider is blocked in production. The ordinary workflow records an authority reference only. | For simulation, an isolated non-production database/environment. For real filing, a tax-authority integration, credentials, filing acknowledgements, retry/reconciliation, and legal review. |
+| Accounting paid activation | Mock billing provider is blocked in production; a trial record is not a paid entitlement. | Billing provider, signed event/webhook verification, renewal/cancellation/refund lifecycle, entitlement policy, and reconciliation. |
+| SACCO/MFI workspace | `MFI_PILOT_ENABLED=0` in production templates; gateway/service URL and secret are required when enabled. | Approved supervised pilot, separately deployed service, verified route/data isolation and backups, institution policy/accounting mapping, legal/regulatory and independent financial review. |
+| Extracted agency/Insurance services | Service URLs and readiness flags are unset or `0` in templates; production startup refuses missing Insurance cutover. | Migration and data parity, authorization tests, backup/restore, rollback rehearsal, monitored staging evidence, and service-specific readiness sign-off. |
+| Legacy immediate lease activation | `LEGACY_IMMEDIATE_LEASES_ENABLED=0`. | Time-bounded compatibility exception approved by product and risk owners; prefer the independent approval workflow. |
+| Accounting ledger | The separate Accounting service and local QA sandbox are not a production ledger. | Deploy the private gateway-authenticated service and restricted runtime DB role, apply all four migrations through a controlled migration job, configure independent gateway/ingest secrets, approve the legal entity/chart/source-account mappings and opening balances, then pass backup/restore and staging replay/reconciliation gates. |
+
+Do not enable a mock financial provider in a production database: simulated
+orders, tax submissions, or subscription activations would become indistinguishable
+from real business records despite their labels. Regression tests enforce this
+boundary. Enabling a real provider is a separate integration and deployment
+task; setting an environment flag alone cannot complete it.
+
+The local Accounting QA sandbox is accepted as functional test evidence only.
+Its synthetic vendor invoice/payment entries and resulting cash balance must
+not be promoted, cloned, or used as production opening balances. Previous
+`afrolife_test_accounting_*` databases were disposable and removed. Production
+configuration examples under `deploy/` are templates; no production endpoint,
+credentials, entity mapping, or opening balance is configured by this repository.
+
 ## Self-hosting on Windows Server or Windows 11
 
 Use a supported Windows Server release or Windows 11 Pro for the self-hosted
