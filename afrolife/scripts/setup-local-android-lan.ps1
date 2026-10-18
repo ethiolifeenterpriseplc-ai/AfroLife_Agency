@@ -6,7 +6,7 @@ $artifactRoot = Join-Path $projectRoot 'artifacts'
 $stateRoot = Join-Path $env:LOCALAPPDATA 'AfroLife\android-lan-preview'
 $ruleName = 'EthioLife Android LAN preview HTTPS'
 $port = 8443
-$upstreamPort = 3000
+$upstreamPort = 3001
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)

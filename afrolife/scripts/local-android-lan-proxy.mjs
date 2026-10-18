@@ -56,7 +56,7 @@ const proxy = createServer({
     port: upstreamPort,
     method: request.method,
     path,
-    headers: { ...request.headers, host: '127.0.0.1:3000' },
+    headers: { ...request.headers, host: `127.0.0.1:${upstreamPort}` },
   }, (upstreamResponse) => {
     response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
     upstreamResponse.pipe(response);

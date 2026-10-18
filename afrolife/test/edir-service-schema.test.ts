@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { buildEdirServiceMigration } from '../services/afrolife-edir/schema.js';
 
 const schema = await readFile(new URL('../services/afrolife-edir/001_schema.sql', import.meta.url), 'utf8');
 const staffMigration = await readFile(new URL('../services/afrolife-edir/002_staff_and_lifecycle.sql', import.meta.url), 'utf8');
@@ -32,6 +33,15 @@ const creditApplicationRoute = creditRouter.split("edirCreditRouter.post('/appli
 const loanDocumentUploadRoute = creditRouter.split("edirCreditRouter.post('/documents/:documentType'")[1]?.split("edirCreditRouter.get('/documents/me'")[0] ?? '';
 const router = await readFile(new URL('../services/afrolife-edir/router.ts', import.meta.url), 'utf8');
 const migrationRunner = await readFile(new URL('../services/afrolife-edir/migrate.ts', import.meta.url), 'utf8');
+
+test('Edir migration builder permits policy-only migrations and safely substitutes runtime roles', () => {
+  assert.equal(buildEdirServiceMigration('CREATE POLICY staff_policy;', 'edir_runtime'), 'CREATE POLICY staff_policy;');
+  assert.equal(
+    buildEdirServiceMigration('GRANT SELECT ON ledger TO "{{role}}";', 'edir_runtime'),
+    'GRANT SELECT ON ledger TO "edir_runtime";',
+  );
+  assert.throws(() => buildEdirServiceMigration('SELECT 1;', 'edir_runtime; DROP ROLE edir_runtime;'));
+});
 
 test('Edir is isolated behind role-scoped RLS and an independent staff hierarchy', () => {
   assert.match(schema, /CREATE TABLE edir_staff/);
