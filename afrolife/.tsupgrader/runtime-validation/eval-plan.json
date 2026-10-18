@@ -14,10 +14,55 @@
       "timeoutSeconds": 180
     },
     {
+      "name": "accounting-builds",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build:accounting"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
       "name": "global-bi-builds",
       "kind": "process",
       "command": "npm",
       "args": ["run", "build:global-bi"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "agency-domain-builds",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build:agency-domains"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "insurance-builds",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build:insurance"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "edir-builds",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build:edir"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "mfi-builds",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build:mfi"],
       "verificationMethod": "exit-code",
       "expected": "0",
       "timeoutSeconds": 180

@@ -1,8 +1,8 @@
 {
-  "planHash": "8e515920063c12138c742207bf9037cd41d7195112bf33b99e5d95e5deecc468",
+  "planHash": "c4ffe4db569324d69d51da5bb615684da8ca626640b94fdd49efeeead50f3ed0",
   "phase": "standalone",
-  "recordedAtUtc": "2026-10-18T14:20:53.6348805Z",
-  "retryCount": 0,
+  "recordedAtUtc": "2026-10-18T14:35:31.8341998Z",
+  "retryCount": 1,
   "resetBaseline": false,
   "complete": true,
   "result": {
@@ -20,7 +20,19 @@
         "skippedReason": null,
         "exitCode": 0,
         "outputSample": "\r\n\u003E afrolife-agency@1.0.0 build\r\n\u003E tsc -p tsconfig.json\r\n\r\n",
-        "durationMs": 23249
+        "durationMs": 60631
+      },
+      {
+        "name": "accounting-builds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E afrolife-agency@1.0.0 build:accounting\r\n\u003E tsc -p services/accounting/tsconfig.json \u0026\u0026 node scripts/copy-accounting-assets.mjs\r\n\r\n",
+        "durationMs": 13985
       },
       {
         "name": "global-bi-builds",
@@ -32,7 +44,55 @@
         "skippedReason": null,
         "exitCode": 0,
         "outputSample": "\r\n\u003E afrolife-agency@1.0.0 build:global-bi\r\n\u003E tsc -p services/global-bi/tsconfig.json\r\n\r\n",
-        "durationMs": 11642
+        "durationMs": 14003
+      },
+      {
+        "name": "agency-domain-builds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E afrolife-agency@1.0.0 build:agency-domains\r\n\u003E npm run build:workforce-management \u0026\u0026 npm run build:staffing \u0026\u0026 npm run build:property-management \u0026\u0026 npm run build:marketplace\r\n\r\n\r\n\u003E afrolife-agency@1.0.0 build:workforce-management\r\n\u003E tsc -p services/workforce-management/tsconfig.json\r\n\r\n\r\n\u003E afrolife-agency@1.0.0 build:staffing\r\n\u003E tsc -p services/staffing/tsconfig.json\r\n\r\n\r\n\u003E afrolife-agency@1.0.0 build:property-management\r\n\u003E tsc -p services/property-management/tsconfig.json\r\n\r\n\r\n\u003E afrolife-agency@1.0.0 build:marketplace\r\n\u003E tsc -p services/marketplace/tsconfig.json\r\n\r\n",
+        "durationMs": 75914
+      },
+      {
+        "name": "insurance-builds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E afrolife-agency@1.0.0 build:insurance\r\n\u003E tsc -p services/insurance-ledger/tsconfig.json\r\n\r\n",
+        "durationMs": 10746
+      },
+      {
+        "name": "edir-builds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E afrolife-agency@1.0.0 build:edir\r\n\u003E tsc -p services/afrolife-edir/tsconfig.json\r\n\r\n",
+        "durationMs": 16432
+      },
+      {
+        "name": "mfi-builds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E afrolife-agency@1.0.0 build:mfi\r\n\u003E tsc -p services/sacco-mfi/tsconfig.json\r\n\r\n",
+        "durationMs": 13818
       },
       {
         "name": "tests-pass",
@@ -43,8 +103,8 @@
         "skipped": false,
         "skippedReason": null,
         "exitCode": 0,
-        "outputSample": "\r\n\u003E afrolife-agency@1.0.0 test:unit\r\n\u003E tsx --test test/phone.test.ts test/domain.test.ts test/matching.test.ts test/rent-refunds.test.ts test/security.test.ts test/totp.test.ts test/csv.test.ts test/property-accounting.test.ts test/mfi.test.ts test/mfi-credit.test.ts test/lending-products.test.ts test/insurance-ledger.test.ts test/insurance-brokerage-sandbox.test.ts test/insurance-service-gateway.test.ts test/insurance-service-schema.test.ts test/edir-service-schema.test.ts test/edir-money.test.ts test/edir-credit.test.ts test/auth-role.test.ts test/mini-app-access.test.ts test/global-bi.test.ts test/api-errors.test.ts test/privacy-access.test.ts test/insurance-global-admin-access.test.ts test/rate-limit-store.test.ts test/runtime-config.test.ts test/mock-provider-config.test.ts test/agency-accounting.test.ts test/accounting-controls.test.ts test/migration-security.test.ts test/service-worker.test.ts test/mini-app-registry.test.ts test/supply-service-boundaries.test.ts test/domain-database-readiness.test.ts test/platform-tenant-control-plane.test.ts test/workspace-shell.test.mjs\r\n\r\nTAP version 13\r\n# Subtest: journal validation balances exact cents and rejects invalid or oversized entries\r\nok 1 - journal validation balances exact cents and rejects invalid or oversized entries\r\n  ---\r\n  duration_ms: 7.4244\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: accounting database migration protects unique transaction references and review controls\r\nok 2 - accounting database migration protects unique transaction references and review controls\r\n  ---\r\n  duration_ms: 89.5614\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: accounting production image packages every migration required by the migrator\r\nok 3 - accounting production image packages every migration required by the migrator\r\n  ---\r\n  duration_ms: 2.6065\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: Agency contract, commission, payout and refund journals enqueue balanced Accounting events in their source transaction\r\nok 4 - Agency contract, commission, payout and refund journals enqueue balanced Accounting events in their source transaction\r\n  ---\r\n  duration_ms: 71.4815\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: optional API reads fall back only for forbidden or unavailable endpoints\r\nok 5 - optional API reads fall back only for forbidden or unavailable endpoints\r\n  ---\r\n  duration_ms: 18.9185\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: optional API reads surface server, authentication, and network failures\r\nok 6 - optional API reads surface server, authentication, and network failures\r\n  ---\r\n  duration_ms: 3.2907\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: Global Admin and Super Admin share platform-administration classification\r\nok 7 - Global Admin and Super Admin share platform-administration classification\r\n  ---\r\n  duration_ms: 6.4294\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: Global Admin role migration preserves separate promotion and operational roles\r\nok 8 - Global Admin role migration preserves separate promotion and operational roles\r\n  ---\r\n  duration_ms: 87.4746\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: Global Admin promotion table is accessible to the restricted runtime under admin-only RLS\r\nok 9 - Global Admin promotion table is accessible to the restricted runtime under admin-only RLS\r\n  ---\r\n  duration_ms: 15.7018\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: role activity catalog grants default access and respects explicit overrides\r\nok 10 - role activity catalog grants default access and respects explicit overrides\r\n  ---\r\n  duration_ms: 3.2327\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: role activity overrides are validated before use and the catalog stays complete\r\nok 11 - role activity overrides are validated before use and the catalog stays complete\r\n  ---\r\n  duration_ms: 1.4775\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: admin and learning routers expose the role-access and content-management endpoints\r\nok 12 - admin and learning routers expose the role-access and content-management endpoints\r\n  ---\r\n  duration_ms: 0.9855\r\n  type: \u0027test\u0027\r\n  ...\r\n# Subtest: role activity migration hardens the SQL policy layer for service permissions\r\nok 13 - role activit\n\u2026[truncated]",
-        "durationMs": 26821,
+        "outputSample": "\r\n\u003E afrolife-agency@1.0.0 test:unit\r\n\u003E tsx --test --test-reporter=spec test/phone.test.ts test/domain.test.ts test/matching.test.ts test/rent-refunds.test.ts test/security.test.ts test/totp.test.ts test/csv.test.ts test/property-accounting.test.ts test/mfi.test.ts test/mfi-credit.test.ts test/lending-products.test.ts test/insurance-ledger.test.ts test/insurance-brokerage-sandbox.test.ts test/insurance-service-gateway.test.ts test/insurance-service-schema.test.ts test/edir-service-schema.test.ts test/edir-money.test.ts test/edir-credit.test.ts test/auth-role.test.ts test/mini-app-access.test.ts test/global-bi.test.ts test/api-errors.test.ts test/privacy-access.test.ts test/insurance-global-admin-access.test.ts test/rate-limit-store.test.ts test/runtime-config.test.ts test/mock-provider-config.test.ts test/agency-accounting.test.ts test/accounting-controls.test.ts test/migration-security.test.ts test/service-worker.test.ts test/mini-app-registry.test.ts test/supply-service-boundaries.test.ts test/domain-database-readiness.test.ts test/platform-tenant-control-plane.test.ts test/workspace-shell.test.mjs\r\n\r\n\u2714 journal validation balances exact cents and rejects invalid or oversized entries (6.6888ms)\r\n\u2714 accounting database migration protects unique transaction references and review controls (203.2373ms)\r\n\u2714 accounting production image packages every migration required by the migrator (5.4685ms)\r\n\u2714 Agency contract, commission, payout and refund journals enqueue balanced Accounting events in their source transaction (114.4688ms)\r\n\u2714 optional API reads fall back only for forbidden or unavailable endpoints (12.0915ms)\r\n\u2714 optional API reads surface server, authentication, and network failures (1.9166ms)\r\n\u2714 Global Admin and Super Admin share platform-administration classification (12.7496ms)\r\n\u2714 Global Admin role migration preserves separate promotion and operational roles (33.9061ms)\r\n\u2714 Global Admin promotion table is accessible to the restricted runtime under admin-only RLS (19.6819ms)\r\n\u2714 role activity catalog grants default access and respects explicit overrides (3.6211ms)\r\n\u2714 role activity overrides are validated before use and the catalog stays complete (1.1621ms)\r\n\u2714 admin and learning routers expose the role-access and content-management endpoints (0.9551ms)\r\n\u2714 role activity migration hardens the SQL policy layer for service permissions (13.7786ms)\r\n\u2714 SQL role activity defaults match the application catalog and preserve override precedence (26.8229ms)\r\n\u2714 plain values, commas, quotes and line breaks are escaped (6.6852ms)\r\n\u2714 numbers (including negatives) and dates are written as they are (3.4746ms)\r\n\u2714 spreadsheet formulas are neutralised (1.0479ms)\r\n\u2714 empty values are blank and an empty table still has its header (0.6228ms)\r\n\u2714 workforce-management database readiness accepts its required tables and RLS policies (6.3604ms)\r\n\u2714 staffing database readiness accepts its required tables and RLS policies (0.8571ms)\r\n\u2714 property-management database readiness accepts its required tables and RLS policies (49.3578ms)\r\n\u2714 marketplace database readiness accepts its required tables and RLS policies (3.6481ms)\r\n\u2714 database readiness rejects missing service tables (3.9044ms)\r\n\u2714 database readiness rejects missing row-level security (1.0951ms)\r\n\u2714 database readiness rejects an incomplete service schema column set (1.9442ms)\r\n\u2714 database readiness rejects service roles with access to authentication secrets (2.6082ms)\r\n\u2714 database readiness rejects service roles with access to schema creation (4.7477ms)\r\n\u2714 database readiness rejects service roles with access to financial data (2.1349ms)\r\n\u2714 Track A stores onboarding, guarantee and monthly fee separately (6.7143ms)\r\n\u2714 Track B splits 10% employer \u002B 10% other party (1.2576ms)\r\n\u2714 Track A commission excludes the guarantee by default (3.1016ms)\r\n\u2714 Track A commission includes the guarantee only when configured (0.8679ms)\r\n\u2714 Track B commission is 50% of total agency revenue (1.2053ms)\r\n\u2714 rounds to cents (0.8118ms)\r\n\u2714 lead ownership protection accepts configured bounds and rejects invalid periods (4.5472ms)\r\n\u2714 Edir cre\n\u2026[truncated]",
+        "durationMs": 28455,
         "testResults": {
           "testFramework": "unknown",
           "runnerDetectedFrom": "none",
@@ -65,7 +125,7 @@
         "skippedReason": null,
         "exitCode": null,
         "outputSample": "HTTP 200\n{\u0022ok\u0022:true,\u0022database\u0022:\u0022connected\u0022}",
-        "durationMs": 293
+        "durationMs": 183
       },
       {
         "name": "workspace-home-200",
@@ -77,7 +137,7 @@
         "skippedReason": null,
         "exitCode": null,
         "outputSample": "HTTP 200\n\u003C!doctype html\u003E\r\n\u003Chtml lang=\u0022en\u0022\u003E\r\n  \u003Chead\u003E\r\n    \u003Cmeta charset=\u0022utf-8\u0022\u003E\r\n    \u003Cmeta name=\u0022viewport\u0022 content=\u0022width=device-width, initial-scale=1, viewport-fit=cover\u0022\u003E\r\n    \u003Cmeta name=\u0022theme-color\u0022 content=\u0022#174b3d\u0022\u003E\r\n    \u003Cmeta name=\u0022mobile-web-app-capable\u0022 content=\u0022yes\u0022\u003E\r\n    \u003Cmeta name=\u0022apple-mobile-web-app-capable\u0022 content=\u0022yes\u0022\u003E\r\n    \u003Cmeta name=\u0022apple-mobile-web-app-status-bar-style\u0022 content=\u0022default\u0022\u003E\r\n    \u003Cmeta name=\u0022description\u0022 content=\u0022EthioLife connects people with services for work, homes, business, and community.\u0022\u003E\r\n    \u003Clink rel=\u0022manifest\u0022 href=\u0022/manifest.webmanifest\u0022\u003E\r\n    \u003Clink rel=\u0022icon\u0022 href=\u0022/icon.svg?v=3\u0022 type=\u0022image/svg\u002Bxml\u0022\u003E\r\n    \u003Clink rel=\u0022icon\u0022 href=\u0022/icons/ethio-life-icon-192.png\u0022 type=\u0022image/png\u0022 sizes=\u0022192x192\u0022\u003E\r\n    \u003Clink rel=\u0022apple-touch-icon\u0022 href=\u0022/icons/ethio-life-icon-192.png\u0022\u003E\r\n    \u003Clink rel=\u0022stylesheet\u0022 href=\u0022/styles.css\u0022\u003E\r\n    \u003Clink rel=\u0022stylesheet\u0022 href=\u0022/financial-workspaces.css\u0022\u003E\r\n    \u003Ctitle\u003EEthioLife Agency | \u12A2\u1275\u12EE-\u120B\u12ED\u134D \u12A4\u1300\u1295\u1232\u003C/title\u003E\r\n  \u003C/head\u003E\r\n  \u003Cbody\u003E\r\n    \u003Ca class=\u0022skip-link\u0022 href=\u0022#main-content\u0022\u003ESkip to content\u003C/a\u003E\r\n    \u003Cheader class=\u0022topbar\u0022\u003E\r\n      \u003Ca class=\u0022brand\u0022 href=\u0022/\u0022 aria-label=\u0022\u12A2\u1275\u12EE-\u120B\u12ED\u134D \u12A4\u1300\u1295\u1232 / EthioLife Agency\u0022\u003E\r\n        \u003Cimg src=\u0022/icon.svg?v=3\u0022 alt=\u0022\u0022 width=\u002238\u0022 height=\u002238\u0022\u003E\r\n        \u003Cspan class=\u0022brand-copy\u0022\u003E\u003Cspan class=\u0022brand-name\u0022\u003EEthioLife \u003Cspan class=\u0022brand-agency\u0022\u003EAgency\u003C/span\u003E\u003C/span\u003E\u003Csmall\u003EPEOPLE \u00B7 SERVICES \u00B7 OPPORTUNITY\u003C/small\u003E\u003C/span\u003E\r\n      \u003C/a\u003E\r\n      \u003Clabel class=\u0022language-picker\u0022\u003E\r\n        \u003Cspan class=\u0022visually-hidden\u0022\u003ELanguage\u003C/span\u003E\r\n        \u003Cselect id=\u0022language-select\u0022 aria-label=\u0022Language\u0022\u003E\r\n          \u003Coption value=\u0022en\u0022\u003EEnglish\u003C/option\u003E\r\n          \u003Coption value=\u0022am\u0022\u003E\u12A0\u121B\u122D\u129B\u003C/option\u003E\r\n          \u003Coption value=\u0022om\u0022\u003EAfaan Oromoo\u003C/option\u003E\r\n          \u003Coption value=\u0022ti\u0022\u003E\u1275\u130D\u122D\u129B\u003C/option\u003E\r\n          \u003Coption value=\u0022so\u0022\u003ESoomaali\u003C/option\u003E\r\n          \u003Coption value=\u0022ar\u0022\u003E\u0627\u0644\u0639\u0631\u0628\u064A\u0629\u003C/option\u003E\r\n          \u003Coption value=\u0022sw\u0022\u003EKiswahili\u003C/option\u003E\r\n        \u003C/select\u003E\r\n      \u003C/label\u003E\r\n      \u003Cbutton id=\u0022install-app\u0022 class=\u0022button button-outline install-app\u0022 type=\u0022button\u0022 hidden\u003EInstall app\u003C/button\u003E\r\n      \u003Cdiv id=\u0022account-tools\u0022 class=\u0022account-tools\u0022 hidden\u003E\r\n        \u003Cspan id=\u0022account-name\u0022 class=\u0022account-name\u0022\u003E\u003C/span\u003E\r\n        \u003Cbutton id=\u0022logout\u0022 class=\u0022button button-quiet\u0022 type=\u0022button\u0022\u003ESign out\u003C/button\u003E\r\n      \u003C/div\u003E\r\n    \u003C/header\u003E\r\n\r\n    \u003Cmain id=\u0022main-content\u0022\u003E\r\n      \u003Csection id=\u0022login-view\u0022 class=\u0022login-layout\u0022\u003E\r\n        \u003Cdiv class=\u0022welcome-panel\u0022\u003E\r\n          \u003Cp class=\u0022eyebrow\u0022\u003EPEOPLE \u00B7 SERVICES \u00B7 OPPORTUNITY\u003C/p\u003E\r\n          \u003Ch1\u003EOne trusted place to get work moving.\u003C/h1\u003E\r\n          \u003Cp\u003ECoordinate leads, verified workers and service requests with clear ownership at every step.\u003C/p\u003E\r\n          \u003Cfigure class=\u0022brand-illustration\u0022\u003E\r\n            \u003Cimg src=\u0022/brand/ethiolife-service-network.svg\u0022 alt=\u0022A worker, home, job opportunity and community connected through EthioLife\u0022 width=\u0022640\u0022 height=\u0022340\u0022\u003E\r\n          \u003C/figure\u003E\r\n          \u003Cdiv class=\u0022trust-points\u0022\u003E\r\n            \u003Cspan\u003E\u003Ci\u003E\u003C/i\u003E Verified workforce\u003C/span\u003E\r\n            \u003Cspan\u003E\u003Ci\u003E\u003C/i\u003E Accountable agent network\u003C/span\u003E\r\n            \u003Cspan\u003E\u003Ci\u003E\u003C/i\u003E Central matching oversight\u003C/span\u003E\r\n          \u003C/div\u003E\r\n        \u003C/div\u003E\r\n        \u003Cform id=\u0022login-form\u0022 class=\u0022panel login-card\u0022\u003E\r\n          \u003Cp class=\u0022eyebrow\u0022\u003ESECURE WORKSPACE\u003C/p\u003E\r\n          \u003Ch2\u003EWelcome back\u003C/h2\u003E\r\n          \u003Cp class=\u0022muted\u0022\u003ESign in with your registered Ethiopian phone number.\u003C/p\u003E\r\n          \u003Clabel\u003EPhone number\u003Cinput name=\u0022phone\u0022 type=\u0022tel\u0022 autocomplete=\u0022username\u0022 placeholder=\u0022\u002B251 9\u2026\u0022 required minlength=\u00228\u0022\u003E\u003C/label\u003E\r\n          \u003Clabel\u003EPassword\u003Cinput name=\u0022password\u0022 type=\u0022password\u0022 autocomplete=\u0022current-password\u0022 required maxlength=\u0022200\u0022\u003E\u003C/label\u003E\r\n          \u003Clabel id=\u0022mfa-field\u0022 hidden\u003EAuthenticator code\u003Cinput name=\u0022code\u0022 type=\u0022text\u0022 inputmode=\u0022numeric\u0022 autocomplete=\u0022one-time-code\u0022 pattern=\u0022[0-9]{6}\u0022 maxlength=\u00226\u0022\u003E\u003C/label\u003E\r\n          \u003Cp id=\u0022login-error\u0022 class=\u0022form-error\u0022 role=\u0022alert\u0022\u003E\u003C/p\u003E\r\n          \u003Cbutton id=\u0022retry-session\u0022 class=\u0022button button-outline button-wide\u0022 type=\u0022button\u0022 hidden\u003ERetry workspace connection\u003C/button\u003E\r\n          \u003Cbutton class=\u0022button button-primary button-wide\u0022 type=\n\u2026[truncated]",
-        "durationMs": 87
+        "durationMs": 80
       }
     ],
     "executions": [
@@ -94,11 +154,71 @@
         "platform": "win32"
       },
       {
+        "source": "accounting-builds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "build:accounting"
+        ],
+        "cwd": "C:\\Users\\Dawit.DAWITA\\Documents\\AfroLife_Agency\\afrolife",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
         "source": "global-bi-builds",
         "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
         "args": [
           "run",
           "build:global-bi"
+        ],
+        "cwd": "C:\\Users\\Dawit.DAWITA\\Documents\\AfroLife_Agency\\afrolife",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "agency-domain-builds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "build:agency-domains"
+        ],
+        "cwd": "C:\\Users\\Dawit.DAWITA\\Documents\\AfroLife_Agency\\afrolife",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "insurance-builds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "build:insurance"
+        ],
+        "cwd": "C:\\Users\\Dawit.DAWITA\\Documents\\AfroLife_Agency\\afrolife",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "edir-builds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "build:edir"
+        ],
+        "cwd": "C:\\Users\\Dawit.DAWITA\\Documents\\AfroLife_Agency\\afrolife",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "mfi-builds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "run",
+          "build:mfi"
         ],
         "cwd": "C:\\Users\\Dawit.DAWITA\\Documents\\AfroLife_Agency\\afrolife",
         "env": {},
