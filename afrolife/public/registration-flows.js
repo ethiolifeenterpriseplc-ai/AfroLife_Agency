@@ -5,6 +5,10 @@ export const EDIR_APPLICATION_DOCUMENTS = Object.freeze([
 
 export const DEFAULT_NATIVE_API_ORIGIN = 'https://integrating-devices-executive-springs.trycloudflare.com';
 
+export function nativeApiOrigin(savedOrigin) {
+  return savedOrigin?.trim() || DEFAULT_NATIVE_API_ORIGIN;
+}
+
 export function signupRequiredDocuments(signupOptions, accountType) {
   const requirements = signupOptions?.kyc_requirements;
   if (!requirements || !Object.hasOwn(requirements, accountType) || !Array.isArray(requirements[accountType])) {

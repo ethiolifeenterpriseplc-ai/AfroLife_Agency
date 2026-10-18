@@ -9,7 +9,7 @@ import { createMiniAppAccessEditor } from './mini-app-access.js';
 import { miniAppByPanel } from './mini-apps/registry.js';
 import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from './workspace-navigation.js';
 import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from './workspace-search.js';
-import { DEFAULT_NATIVE_API_ORIGIN, EDIR_APPLICATION_DOCUMENTS, canChangeServer, edirApplicationDocumentPath, missingSignupDocuments, signupRequiredDocuments } from './registration-flows.js';
+import { EDIR_APPLICATION_DOCUMENTS, canChangeServer, edirApplicationDocumentPath, missingSignupDocuments, nativeApiOrigin, signupRequiredDocuments } from './registration-flows.js';
 import { propertyDashboardMetrics, staffingDashboardMetrics, workforceDashboardMetrics } from './dashboard-metrics.js';
 import { normalizeMySubscriptions, normalizeSubscriptionCatalog, PUBLIC_SUBSCRIPTION_SERVICES, subscriptionRequestPayload } from './subscriptions.js';
 
@@ -466,7 +466,7 @@ async function uploadSignupReplacement() {
 
 function initializeNativeServer() {
   if (!isNativeApp) return;
-  const saved = localStorage.getItem(API_URL_KEY) ?? DEFAULT_NATIVE_API_ORIGIN;
+  const saved = nativeApiOrigin(localStorage.getItem(API_URL_KEY));
   localStorage.setItem(API_URL_KEY, saved);
   $('#api-server-url').value = saved;
   $('#server-setup').hidden = Boolean(saved);

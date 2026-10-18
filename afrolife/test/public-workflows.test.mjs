@@ -10,6 +10,7 @@ import {
   DEFAULT_NATIVE_API_ORIGIN,
   edirApplicationDocumentPath,
   missingSignupDocuments,
+  nativeApiOrigin,
   signupRequiredDocuments,
 } from '../public/registration-flows.js';
 import {
@@ -28,6 +29,9 @@ test('signup uploads enforce configured KYC documents and limit server changes t
   assert.equal(canChangeServer('super_admin'), true);
   assert.equal(canChangeServer('finance'), false);
   assert.equal(DEFAULT_NATIVE_API_ORIGIN, 'https://integrating-devices-executive-springs.trycloudflare.com');
+  assert.equal(nativeApiOrigin(null), DEFAULT_NATIVE_API_ORIGIN);
+  assert.equal(nativeApiOrigin(' https://api.example.com '), 'https://api.example.com');
+  assert.equal(nativeApiOrigin(' '), DEFAULT_NATIVE_API_ORIGIN);
   assert.equal(edirApplicationDocumentPath('application/1', 'legal_registration'),
     '/edir/public/registration-applications/application%2F1/documents/legal_registration');
 });
