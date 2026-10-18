@@ -75,9 +75,10 @@ try {
       })();
       const roleGuardedPaths = new Set([
         '/workers', '/requests', '/leases', '/tenants', '/rent-transactions/pending',
-        '/insurance/requests', '/insurance/requests/agent-referrals/me', '/insurance/requests/agent-referrals/agents',
+        '/leads', '/commissions', '/insurance/requests',
+        '/insurance/requests/agent-referrals/me', '/insurance/requests/agent-referrals/agents',
       ]);
-      const sessionGuardedPaths = new Set(['/marketplace/config', '/marketplace/listings', '/learning/content']);
+      const sessionGuardedPaths = new Set(['/marketplace/config', '/marketplace/listings', '/learning/content', '/system/status']);
       const expectedRoleDenial = entry.text.includes('403 (Forbidden)') && roleGuardedPaths.has(deniedPath);
       const expectedSessionDenial = entry.text.includes('401 (Unauthorized)')
         && (sessionGuardedPaths.has(deniedPath) || deniedPath === '/rent-transactions/pending');
@@ -132,7 +133,12 @@ try {
       const responseReady = code
         ? "document.querySelector('#app-view')?.hidden === false || !!document.querySelector('#login-error')?.textContent?.trim()"
         : "document.querySelector('#app-view')?.hidden === false || document.querySelector('#mfa-field')?.hidden === false || !!document.querySelector('#login-error')?.textContent?.trim()";
-      await waitFor(responseReady, `${role} login response`);
+      try {
+        await waitFor(responseReady, `${role} login response`, 150);
+      } catch {
+        const snapshot = await evaluate(`({ appVisible: document.querySelector('#app-view')?.hidden === false, mfaVisible: document.querySelector('#mfa-field')?.hidden === false, loginError: document.querySelector('#login-error')?.textContent?.trim() || '' })`);
+        throw new Error(`${role} login response timed out: ${JSON.stringify({ ...snapshot, inFlightRequests: [...inFlightRequests.values()] })}`);
+      }
       const result = await evaluate(`({ appVisible: document.querySelector('#app-view')?.hidden === false, mfaVisible: document.querySelector('#mfa-field')?.hidden === false, error: document.querySelector('#login-error')?.textContent?.trim() || '' })`);
       if (result.appVisible || (!code && result.mfaVisible)) return result;
       const retry = result.error.match(/try again in (\d+) seconds?/i);
@@ -455,8 +461,7 @@ try {
     ]);
     if (browser.exitCode === null) {
       if (process.platform === 'win32') {
-        spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-          `Stop-Process -Id ${browser.pid} -Force -ErrorAction SilentlyContinue`], { stdio: 'ignore' });
+        spawnSync('taskkill.exe', ['/PID', String(browser.pid), '/T', '/F'], { stdio: 'ignore' });
       } else {
         browser.kill('SIGTERM');
       }
