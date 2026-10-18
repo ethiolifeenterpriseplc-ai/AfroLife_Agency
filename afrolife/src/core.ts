@@ -6,6 +6,7 @@ import { isPlatformAdminRole, type AuthUser } from './auth-types.js';
 import { HttpError } from './http-error.js';
 import { sessionIdleTimeoutMinutes } from './runtime-config.js';
 import { hasRoleActivityAccess, isRoleActivityOverrides, type RoleActivityKey, type RoleActivityOverrides } from './role-activities.js';
+import { isMiniAppKeys, type MiniAppAccessMode, type MiniAppKey } from './mini-app-access.js';
 export { HttpError } from './http-error.js';
 
 export { isPlatformAdminRole } from './auth-types.js';
@@ -81,6 +82,8 @@ const stateCache = new Map<string, {
   phone?: string;
   email?: string | null;
   kyc_status?: string;
+  mini_app_access_mode?: MiniAppAccessMode;
+  mini_app_grants?: MiniAppKey[];
 }>();
 const SESSION_IDLE_TIMEOUT_MINUTES = sessionIdleTimeoutMinutes(process.env);
 
@@ -95,10 +98,25 @@ async function currentState(id: string) {
          SELECT jsonb_object_agg(p.activity_key, p.enabled)
          FROM role_activity_permissions p
          WHERE p.role_name = u.role
-       ), '{}'::jsonb) AS role_permissions
+       ), '{}'::jsonb) AS role_permissions,
+       coalesce((
+         SELECT p.mode FROM user_app_access_profiles p WHERE p.user_id = u.id
+       ), 'role_default') AS mini_app_access_mode,
+       coalesce((
+         SELECT jsonb_agg(g.module_key ORDER BY g.module_key)
+         FROM user_app_access_grants g WHERE g.user_id = u.id
+       ), '[]'::jsonb) AS mini_app_grants
      FROM users u WHERE u.id = $1`,
     [id],
   )).rows[0];
+  const miniAppAccessMode = (r?.mini_app_access_mode ?? 'role_default') as MiniAppAccessMode;
+  const miniAppGrants: unknown = r?.mini_app_grants ?? [];
+  if (!['role_default', 'custom'].includes(miniAppAccessMode)) {
+    throw new Error('Stored mini-app access mode is invalid');
+  }
+  if (!isMiniAppKeys(miniAppGrants)) {
+    throw new Error('Stored mini-app access grants are invalid');
+  }
   const row = {
     at: Date.now(),
     active: r?.active === true,
@@ -108,6 +126,8 @@ async function currentState(id: string) {
     email: r?.email as string | null | undefined,
     kyc_status: r?.kyc_status as string | undefined,
     role_permissions: r?.role_permissions as RoleActivityOverrides | undefined,
+    mini_app_access_mode: miniAppAccessMode,
+    mini_app_grants: miniAppGrants,
   };
   if (row.role_permissions && !isRoleActivityOverrides(row.role_permissions)) {
     throw new Error('Stored role activity permissions are invalid');
@@ -152,6 +172,8 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
         email: s.email,
         kyc_status: s.kyc_status,
         rolePermissions: s.role_permissions,
+        miniAppAccessMode: s.mini_app_access_mode,
+        miniAppGrants: s.mini_app_grants,
       }; // Identity fields and role come from the database, not the token.
       next();
     },

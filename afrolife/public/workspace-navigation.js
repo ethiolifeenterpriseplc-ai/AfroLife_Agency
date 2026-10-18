@@ -16,3 +16,7 @@ export function panelUrl(url, panel) {
 export function isPanelEnabled(panel, enabledModules) {
   return REQUIRED_PANELS.has(panel) || enabledModules.includes(panel);
 }
+
+export function isMiniAppAllowed(panel, allowedModules) {
+  return Array.isArray(allowedModules) && allowedModules.includes(panel);
+}

@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkWorkspaceServices, createApiMetrics } from '../src/workspace-status.ts';
-import { isPanelEnabled, panelFromUrl, panelUrl } from '../public/workspace-navigation.js';
+import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from '../public/workspace-navigation.js';
 import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from '../public/workspace-search.js';
+import { normalizeGlobalBiDashboard } from '../public/global-bi.js';
+import { buildMiniAppAccessPayload } from '../public/mini-app-access.js';
+import { normalizeAccountingTrendRows } from '../public/accounting-dashboard.js';
 
 test('workspace deep links retain the current URL and only resolve visible panels', () => {
   assert.equal(panelFromUrl('https://agency.test/?panel=rent', new Set(['overview', 'rent'])), 'rent');
@@ -12,6 +15,47 @@ test('workspace deep links retain the current URL and only resolve visible panel
   assert.equal(panelUrl('/agency?panel=rent#main', 'overview'), '/agency#main');
   assert.equal(isPanelEnabled('admin', []), true);
   assert.equal(isPanelEnabled('rent', ['leads']), false);
+  assert.equal(isMiniAppAllowed('accounting', ['accounting']), true);
+  assert.equal(isMiniAppAllowed('global-bi', []), false);
+  assert.equal(isMiniAppAllowed('global-bi', undefined), false);
+});
+
+test('Global BI normalization preserves real empty-state values without filling sample metrics', () => {
+  assert.deepEqual(normalizeGlobalBiDashboard({
+    asOf: null,
+    reportingTenants: 0,
+    metrics: [],
+    series: [],
+  }), { asOf: null, reportingTenants: 0, metrics: [], series: [] });
+  assert.deepEqual(normalizeGlobalBiDashboard({
+    asOf: '2026-10-18T10:00:00Z',
+    reportingTenants: null,
+    metrics: [{ key: 'posted_volume', value: '12.50', unit: 'ETB' }, { key: 5, value: 1, unit: 'count' }],
+    series: [{ period: '2026-10', metric: 'posted_volume', value: '12.50' }, { period: 1, metric: 'ignored', value: 3 }],
+  }), {
+    asOf: '2026-10-18T10:00:00Z',
+    reportingTenants: null,
+    metrics: [{ key: 'posted_volume', value: '12.50', unit: 'ETB' }],
+    series: [{ period: '2026-10', metric: 'posted_volume', value: '12.50' }],
+  });
+});
+
+test('mini-app access payload reset clears custom modules and custom grants are deduplicated', () => {
+  assert.deepEqual(buildMiniAppAccessPayload('role_default', ['accounting']), { mode: 'role_default', modules: [] });
+  assert.deepEqual(buildMiniAppAccessPayload('custom', ['accounting', 'accounting', 'global-bi']), {
+    mode: 'custom',
+    modules: ['accounting', 'global-bi'],
+  });
+});
+
+test('accounting chart accepts only returned monthly rows and does not synthesize values', () => {
+  const monthly = [
+    { month: '2026-10-01', posted_journals: 4, posted_volume: '950.00' },
+    { posted_journals: 3, posted_volume: '500.00' },
+    null,
+  ];
+  assert.deepEqual(normalizeAccountingTrendRows(monthly), [monthly[0]]);
+  assert.deepEqual(normalizeAccountingTrendRows(undefined), []);
 });
 
 test('global workspace search matches literal input and normalized phone digits', () => {

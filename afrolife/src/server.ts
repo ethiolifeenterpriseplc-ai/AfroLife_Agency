@@ -28,6 +28,7 @@ import { dispatchAccountingEvents, enqueueAccountingEvent } from './accounting-o
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
+import { allowedMiniApps, requireMiniAppAccess } from './mini-app-access.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
@@ -91,6 +92,21 @@ api.post('/edir/public/registration-applications', process.env.EDIR_SERVICE_URL
   : (_req, res) => res.status(503).json({ error: 'AfroLife Edir service is not configured' }));
 
 api.use(authenticate);
+api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
+api.use(['/requests', '/matches', '/staffing-engagements', '/staffing-work-periods', '/staffing-settlements'], requireMiniAppAccess('requests'));
+api.use(['/properties'], requireMiniAppAccess('properties'));
+api.use('/marketplace', requireMiniAppAccess('marketplace'));
+api.use('/accounting', requireMiniAppAccess('accounting'));
+api.use('/edir', requireMiniAppAccess('edir'));
+api.use('/insurance', requireMiniAppAccess('insurance'));
+api.use('/mfi', requireMiniAppAccess('mfi'));
+api.use(['/leads'], requireMiniAppAccess('leads'));
+api.use(['/contracts', '/contract-documents'], requireMiniAppAccess('contracts'));
+api.use('/commissions', requireMiniAppAccess('commissions'));
+api.use('/agents', requireMiniAppAccess('agents'));
+api.use('/learning', requireMiniAppAccess('learning'));
+api.use('/rent', requireMiniAppAccess('rent'));
+api.use('/global-bi', requireMiniAppAccess('global-bi'));
 api.use((req, _res, next) => {
   const organizationId = req.get('x-afrolife-edir-id');
   if (organizationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) {
@@ -118,8 +134,11 @@ api.get('/features', (_req, res) => res.json({
   mfiPilotEnabled: runtimeConfig.mfiPilotEnabled,
   edirEnabled: Boolean(process.env.EDIR_SERVICE_URL),
   accountingEnabled: Boolean(process.env.ACCOUNTING_SERVICE_URL),
+  globalBiEnabled: Boolean(process.env.GLOBAL_BI_SERVICE_URL),
   insuranceBrokerageSandboxEnabled: isInsuranceBrokerageSandboxEnabled(),
   enabledModules: runtimeConfig.enabledModules,
+  allowedModules: allowedMiniApps(_req.user!, runtimeConfig.enabledModules.filter((module) =>
+    module !== 'global-bi' || Boolean(process.env.GLOBAL_BI_SERVICE_URL))),
 }));
 api.get('/system/status', h(async (_req, res) => {
   const services = await checkWorkspaceServices([
@@ -136,6 +155,7 @@ api.get('/system/status', h(async (_req, res) => {
     { id: 'marketplace', name: 'Marketplace', enabled: true, url: process.env.MARKETPLACE_SERVICE_URL, withoutUrl: 'integrated' },
     { id: 'edir', name: 'AfroLife Edir', enabled: Boolean(process.env.EDIR_SERVICE_URL), url: process.env.EDIR_SERVICE_URL, withoutUrl: 'disabled' },
     { id: 'accounting', name: 'Accounting', enabled: Boolean(process.env.ACCOUNTING_SERVICE_URL), url: process.env.ACCOUNTING_SERVICE_URL, withoutUrl: 'disabled' },
+    { id: 'global-bi', name: 'Global BI', enabled: Boolean(process.env.GLOBAL_BI_SERVICE_URL), url: process.env.GLOBAL_BI_SERVICE_URL, withoutUrl: 'disabled' },
     { id: 'insurance', name: 'Insurance ledger', enabled: Boolean(process.env.INSURANCE_SERVICE_URL), url: process.env.INSURANCE_SERVICE_URL, withoutUrl: 'integrated' },
     { id: 'mfi', name: 'SACCO / MFI', enabled: runtimeConfig.mfiPilotEnabled, url: process.env.MFI_SERVICE_URL, withoutUrl: 'disabled' },
   ]);
@@ -198,6 +218,15 @@ api.use(supply);
 api.use('/accounting', process.env.ACCOUNTING_SERVICE_URL
   ? createAccountingServiceGateway({ baseUrl: process.env.ACCOUNTING_SERVICE_URL, secret: process.env.ACCOUNTING_GATEWAY_SECRET ?? '' })
   : (_req,res) => res.status(503).json({ error: 'Standalone Accounting service is not configured' }));
+api.use('/global-bi', process.env.GLOBAL_BI_SERVICE_URL
+  ? createServiceGateway({
+    baseUrl: process.env.GLOBAL_BI_SERVICE_URL,
+    secret: process.env.GLOBAL_BI_GATEWAY_SECRET ?? '',
+    servicePath: '/api/v1/global-bi',
+    serviceName: 'Global BI',
+    includeBaseUrl: true,
+  })
+  : (_req, res) => res.status(503).json({ error: 'Global BI projection service is not configured' }));
 api.use('/insurance/requests', process.env.INSURANCE_SERVICE_URL
   ? createInsuranceRequestsServiceGateway({
     baseUrl: process.env.INSURANCE_SERVICE_URL,
@@ -271,7 +300,7 @@ api.get('/leads/:id/attribution-history', h(async (req, res) => {
   res.json(events);
 }));
 
-api.post('/admin/leads/:id/reassign', requireRole('global_admin','super_admin'), h(async (req, res) => {
+api.post('/admin/leads/:id/reassign', requireMiniAppAccess('leads'), requireRole('global_admin','super_admin'), h(async (req, res) => {
   const body = z.object({ target_agent_id: z.string().uuid(), reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
   const lead = await withUser(req.user!, async (c) => {
     const current = (await c.query('SELECT * FROM leads WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
@@ -397,7 +426,7 @@ api.post('/contracts/:id/renew', requireRole('super_admin'), h(async (req, res) 
 }));
 
 // ---- Invoices (staff only) ----
-api.get('/invoices', requireRole(...STAFF), h(async (_req, res) => {
+api.get('/invoices', requireMiniAppAccess('commissions'), requireRole(...STAFF), h(async (_req, res) => {
   res.json(await withUser(_req.user!, async (c) => (await c.query('SELECT * FROM invoices ORDER BY due_on DESC LIMIT 200')).rows));
 }));
 

@@ -1,4 +1,5 @@
 import type { RoleActivityOverrides } from './role-activities.js';
+import type { MiniAppAccessMode, MiniAppKey } from './mini-app-access.js';
 
 export interface AuthUser {
   id: string;
@@ -11,6 +12,8 @@ export interface AuthUser {
   kyc_status?: string;
   edir_id?: string;
   rolePermissions?: RoleActivityOverrides;
+  miniAppAccessMode?: MiniAppAccessMode;
+  miniAppGrants?: MiniAppKey[];
 }
 
 export function isPlatformAdminRole(role: string): boolean {

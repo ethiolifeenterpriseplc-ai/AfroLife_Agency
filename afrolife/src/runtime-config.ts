@@ -13,7 +13,7 @@ type Environment = Record<string, string | undefined>;
 export const WORKSPACE_MODULES = [
   'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace',
   'contracts', 'commissions', 'agents', 'rent', 'mfi', 'accounting',
-  'edir', 'insurance', 'privacy',
+  'edir', 'insurance', 'privacy', 'global-bi',
 ] as const;
 export type WorkspaceModule = typeof WORKSPACE_MODULES[number];
 
@@ -88,6 +88,12 @@ const agencyServiceCutovers = [
     url: 'MARKETPLACE_SERVICE_URL',
     secret: 'MARKETPLACE_GATEWAY_SECRET',
     readiness: 'MARKETPLACE_SERVICE_CUTOVER_READY',
+  },
+  {
+    label: 'Global BI',
+    url: 'GLOBAL_BI_SERVICE_URL',
+    secret: 'GLOBAL_BI_GATEWAY_SECRET',
+    readiness: 'GLOBAL_BI_SERVICE_CUTOVER_READY',
   },
 ] as const;
 

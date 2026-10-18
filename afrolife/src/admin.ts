@@ -16,6 +16,8 @@ import { getFile, putFile } from './storage.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
 import { sessionIdleTimeoutMinutes } from './runtime-config.js';
 import { ROLE_ACTIVITIES, ROLE_NAMES, getRoleActivity, hasRoleActivityAccess, type RoleName } from './role-activities.js';
+import { MINI_APP_LABELS } from './mini-app-access.js';
+import { WORKSPACE_MODULES } from './runtime-config.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
@@ -772,6 +774,99 @@ adminRouter.get('/users/:id/access-history', requireRole('super_admin', 'global_
     };
   });
   res.json(result);
+}));
+
+const miniAppAccessUpdate = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('role_default'),
+    modules: z.array(z.enum(WORKSPACE_MODULES)).max(WORKSPACE_MODULES.length).default([]),
+  }).strict(),
+  z.object({
+    mode: z.literal('custom'),
+    modules: z.array(z.enum(WORKSPACE_MODULES)).max(WORKSPACE_MODULES.length),
+  }).strict(),
+]).superRefine((body, context) => {
+  if (new Set(body.modules).size !== body.modules.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Mini-app modules must not be duplicated' });
+  }
+  if (body.mode === 'role_default' && body.modules.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Role-default access cannot include explicit modules' });
+  }
+});
+
+adminRouter.get('/users/:id/mini-app-access', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+  const userId = z.string().uuid().parse(req.params.id);
+  const result = await withUser(req.user!, async (client) => {
+    if (!(await client.query('SELECT 1 FROM users WHERE id=$1', [userId])).rowCount) {
+      throw new HttpError(404, 'User not found');
+    }
+    const profile = (await client.query(
+      `SELECT mode FROM user_app_access_profiles WHERE user_id=$1`,
+      [userId],
+    )).rows[0];
+    const modules = (await client.query(
+      `SELECT module_key FROM user_app_access_grants WHERE user_id=$1 ORDER BY module_key`,
+      [userId],
+    )).rows.map((row) => row.module_key);
+    return { mode: profile?.mode ?? 'role_default', modules };
+  });
+  res.json({
+    ...result,
+    availableModules: WORKSPACE_MODULES.map((id) => ({ id, label: MINI_APP_LABELS[id] })),
+  });
+}));
+
+adminRouter.put('/users/:id/mini-app-access', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+  const userId = z.string().uuid().parse(req.params.id);
+  const body = miniAppAccessUpdate.parse(req.body);
+  if (userId === req.user!.id) {
+    throw new HttpError(409, 'Use another platform administrator to change your own mini-app assignments.');
+  }
+  const modules = [...body.modules].sort();
+  const saved = await withUser(req.user!, async (client) => {
+    const target = (await client.query('SELECT id, role FROM users WHERE id=$1 FOR UPDATE', [userId])).rows[0];
+    if (!target) throw new HttpError(404, 'User not found');
+    if (target.role === 'global_admin' && req.user!.role !== 'global_admin') {
+      throw new HttpError(403, 'Only a Global Admin can change a Global Admin mini-app assignment.');
+    }
+    const previousMode = (await client.query(
+      'SELECT mode FROM user_app_access_profiles WHERE user_id=$1 FOR UPDATE',
+      [userId],
+    )).rows[0]?.mode ?? 'role_default';
+    const previousModules = (await client.query(
+      'SELECT module_key FROM user_app_access_grants WHERE user_id=$1 ORDER BY module_key',
+      [userId],
+    )).rows.map((row) => row.module_key as string);
+
+    if (body.mode === 'custom') {
+      await client.query(
+        `INSERT INTO user_app_access_profiles(user_id,mode,updated_by)
+         VALUES($1,'custom',$2)
+         ON CONFLICT(user_id) DO UPDATE SET mode='custom',updated_by=EXCLUDED.updated_by,updated_at=now()`,
+        [userId, req.user!.id],
+      );
+      await client.query('DELETE FROM user_app_access_grants WHERE user_id=$1', [userId]);
+      for (const module of modules) {
+        await client.query(
+          'INSERT INTO user_app_access_grants(user_id,module_key,assigned_by) VALUES($1,$2,$3)',
+          [userId, module, req.user!.id],
+        );
+      }
+    } else {
+      await client.query('DELETE FROM user_app_access_grants WHERE user_id=$1', [userId]);
+      await client.query('DELETE FROM user_app_access_profiles WHERE user_id=$1', [userId]);
+    }
+
+    await client.query(
+      `INSERT INTO user_app_access_audit
+         (target_user_id,actor_id,previous_mode,new_mode,previous_modules,new_modules)
+       VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb)`,
+      [userId, req.user!.id, previousMode, body.mode, JSON.stringify(previousModules), JSON.stringify(modules)],
+    );
+    return { mode: body.mode, modules: body.mode === 'custom' ? modules : [] };
+  });
+  invalidateUser(userId);
+  res.json(saved);
 }));
 
 adminRouter.patch('/role-access', requireExactSuperAdmin, h(async (req, res) => {

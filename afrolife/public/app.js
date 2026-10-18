@@ -4,8 +4,10 @@ import { createMfiWorkspace } from './mfi.js';
 import { createAccountingWorkspace } from './accounting.js';
 import { createEdirWorkspace } from './edir.js';
 import { createPrivacyWorkspace } from './privacy.js';
+import { createGlobalBiWorkspace } from './global-bi.js';
+import { createMiniAppAccessEditor } from './mini-app-access.js';
 import { miniAppByPanel } from './mini-apps/registry.js';
-import { isPanelEnabled, panelFromUrl, panelUrl } from './workspace-navigation.js';
+import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from './workspace-navigation.js';
 import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from './workspace-search.js';
 
 const WEB_API_ROOT = '/api/v1';
@@ -20,10 +22,15 @@ const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', '
 const KNOWN_PANELS = new Set([
   'overview', 'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace',
   'contracts', 'commissions', 'agents', 'rent', 'mfi', 'accounting', 'edir',
-  'insurance', 'privacy', 'security', 'admin', 'status', 'password',
+  'insurance', 'privacy', 'global-bi', 'security', 'admin', 'status', 'password',
+]);
+const MINI_APP_PANELS = new Set([
+  'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace',
+  'contracts', 'commissions', 'agents', 'rent', 'mfi', 'accounting', 'edir',
+  'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [] };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
@@ -574,7 +581,7 @@ function signOut({ revoke = true, message = '' } = {}) {
 async function loadWorkspace() {
   state.user = await api('/auth/me');
   startSessionActivity(state.user.session_idle_timeout_minutes ?? 30);
-  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] });
+  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] });
   state.edirMe = null;
   $('#login-view').hidden = true;
   $('#public-hub').hidden = true;
@@ -603,6 +610,7 @@ async function loadWorkspace() {
   $('#mfi-tab').hidden = !state.features.mfiPilotEnabled;
   const accountingRole = ['global_admin','super_admin','finance','finance_manager','compliance','corporate_business_manager','master_agent','field_agent','property_owner','insurance_agent','insurance_broker'].includes(state.user.role);
   $('#accounting-tab').hidden = !state.features.accountingEnabled || !accountingRole;
+  $('#global-bi-tab').hidden = state.features.globalBiEnabled !== true;
   $('#edir-tab').hidden = !state.features.edirEnabled;
   if ($('#mfi-tab').hidden && state.panel === 'mfi') state.panel = 'overview';
   if ($('#accounting-tab').hidden && state.panel === 'accounting') state.panel = 'overview';
@@ -648,6 +656,9 @@ async function loadWorkspace() {
     : [...KNOWN_PANELS];
   for (const tab of document.querySelectorAll('.tab[data-panel]')) {
     if (!isPanelEnabled(tab.dataset.panel, enabledModules)) tab.hidden = true;
+    if (MINI_APP_PANELS.has(tab.dataset.panel)
+        && Array.isArray(state.features.allowedModules)
+        && !isMiniAppAllowed(tab.dataset.panel, state.features.allowedModules)) tab.hidden = true;
   }
   $('#status-tab').hidden = false;
   if (state.panel === 'password' || state.mfaRequired) {
@@ -2394,6 +2405,7 @@ function renderAdmin() {
   const isGlobalAdmin = state.user.role === 'global_admin';
   const isBusinessManager=state.user.role==='corporate_business_manager';
   wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global administration' : 'Administration' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Manage system-wide configuration and review cross-module operations.' : 'Provision accounts and review the operational summary.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
+  if (isAdmin) wrap.append(createMiniAppAccessEditor(api, state.user, state.users));
   if (state.user.role === 'super_admin') wrap.append(renderRoleAccess());
   const columns = node('div', undefined, 'columns');
   if (isGlobalAdmin) wrap.append(renderBusinessRules());
@@ -2589,7 +2601,8 @@ function renderPanel() {
     admin: 'Admin workspace',
     learning: 'Training & support',
     mfi: 'SACCO / MFI workspace',
-    accounting: 'Accounting workspace',
+    accounting: 'Financial Services',
+    'global-bi': 'Global BI',
     edir: 'EthioLife Edir workspace',
     insurance: 'Insurance information',
     marketplace: 'Marketplace',
@@ -2621,6 +2634,10 @@ function renderPanel() {
   }
   if (state.panel === 'accounting') {
     $('#workspace').replaceChildren(createAccountingWorkspace(api,state.user));
+    return;
+  }
+  if (state.panel === 'global-bi') {
+    $('#workspace').replaceChildren(createGlobalBiWorkspace(api));
     return;
   }
   if (state.panel === 'edir') {
