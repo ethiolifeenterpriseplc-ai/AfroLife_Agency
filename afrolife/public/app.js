@@ -5,6 +5,8 @@ import { createAccountingWorkspace } from './accounting.js';
 import { createEdirWorkspace } from './edir.js';
 import { createPrivacyWorkspace } from './privacy.js';
 import { miniAppByPanel } from './mini-apps/registry.js';
+import { isPanelEnabled, panelFromUrl, panelUrl } from './workspace-navigation.js';
+import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from './workspace-search.js';
 
 const WEB_API_ROOT = '/api/v1';
 let API_ROOT = WEB_API_ROOT;
@@ -15,8 +17,15 @@ const SIGNUP_DONE_KEY = 'afrolife.signup-upload-complete';
 const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
+const KNOWN_PANELS = new Set([
+  'overview', 'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace',
+  'contracts', 'commissions', 'agents', 'rent', 'mfi', 'accounting', 'edir',
+  'insurance', 'privacy', 'security', 'admin', 'status', 'password',
+]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: 'overview', mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [] };
+const loadedPanels = new Set();
+let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
 const propertyPhotoUrls = new Set();
 let sessionIdleTimer = null;
@@ -156,7 +165,7 @@ async function login(event) {
       setLocalizedText(error, 'Enter the six-digit code from your authenticator app.');
       return;
     }
-    state.panel = 'overview';
+    state.panel = panelFromUrl(window.location.href, KNOWN_PANELS);
     sessionStorage.setItem(TOKEN_KEY, result.token);
     state.mfaRequired = result.restrict === 'mfa';
     await loadWorkspace();
@@ -529,6 +538,8 @@ function signOut({ revoke = true, message = '' } = {}) {
   sessionStorage.removeItem(TOKEN_KEY);
   state.user = null;
   state.panel = 'overview';
+  workspaceSearchSequence += 1;
+  loadedPanels.clear();
   Object.assign(state, {
     leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [],
     commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
@@ -539,8 +550,14 @@ function signOut({ revoke = true, message = '' } = {}) {
     edirMe: null, mfaSetup: null,
     serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null,
     insuranceSandboxStatus: null, insuranceSandboxCases: [],
+    serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '',
+    workspaceDataErrors: [],
   });
-  state.features = { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false };
+  state.features = { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] };
+  $('#workspace-search-input').value = '';
+  $('#workspace-search-results').replaceChildren();
+  $('#workspace-search-results').hidden = true;
+  history.replaceState(null, '', panelUrl(window.location.href, 'overview'));
   $('#app-view').hidden = true;
   $('#mobile-workspace-nav').hidden = true;
   if ($('#workspace-more-dialog').open) $('#workspace-more-dialog').close();
@@ -557,9 +574,8 @@ function signOut({ revoke = true, message = '' } = {}) {
 async function loadWorkspace() {
   state.user = await api('/auth/me');
   startSessionActivity(state.user.session_idle_timeout_minutes ?? 30);
-  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false });
-  state.edirMe = state.features.edirEnabled && state.user.kyc_status === 'verified'
-    ? await getOptional('/edir/me', null) : null;
+  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] });
+  state.edirMe = null;
   $('#login-view').hidden = true;
   $('#public-hub').hidden = true;
   $('#app-view').hidden = false;
@@ -627,9 +643,24 @@ async function loadWorkspace() {
       if (tab) tab.hidden = false;
     }
   }
+  const enabledModules = Array.isArray(state.features.enabledModules) && state.features.enabledModules.length
+    ? state.features.enabledModules
+    : [...KNOWN_PANELS];
+  for (const tab of document.querySelectorAll('.tab[data-panel]')) {
+    if (!isPanelEnabled(tab.dataset.panel, enabledModules)) tab.hidden = true;
+  }
+  $('#status-tab').hidden = false;
+  if (state.panel === 'password' || state.mfaRequired) {
+    state.panel = state.user.must_change_password ? 'password' : 'security';
+    history.replaceState(null, '', panelUrl(window.location.href, state.panel));
+  } else if (document.querySelector(`.tab[data-panel="${CSS.escape(state.panel)}"]`)?.hidden) {
+    state.panel = 'overview';
+    history.replaceState(null, '', panelUrl(window.location.href, state.panel));
+  }
   renderMobileWorkspaceNav();
   if (state.user.must_change_password) {
     state.panel = 'password';
+    history.replaceState(null, '', panelUrl(window.location.href, state.panel));
     renderPanel();
     return;
   }
@@ -650,85 +681,237 @@ async function getOptional(path, fallback) {
   }
 }
 
-async function refresh() {
+async function loadPanelData(panel) {
+  state.workspaceDataErrors = [];
+  const safeGet = async (path, fallback) => {
+    try {
+      return await getOptional(path, fallback);
+    } catch (error) {
+      console.error(`Workspace panel ${panel} could not load ${path}.`, error);
+      state.workspaceDataErrors.push(path);
+      return fallback;
+    }
+  };
+  const load = async (key, path, fallback = []) => { state[key] = await safeGet(path, fallback); };
+  switch (panel) {
+    case 'overview':
+      [state.leads, state.workers, state.requests, state.commissions] = await Promise.all([
+        safeGet('/leads', []), safeGet('/workers', []), safeGet('/requests', []), safeGet('/commissions', []),
+      ]);
+      state.serviceStatus = await safeGet('/system/status', null);
+      state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
+        ? await safeGet('/reports/summary', null)
+        : state.user.enterprise_features_enabled ? await safeGet('/reports/me', null) : null;
+      break;
+    case 'leads':
+      await load('leads', '/leads');
+      state.team = ['global_admin', 'super_admin', 'master_agent'].includes(state.user.role)
+        ? await safeGet('/agents/team', []) : [];
+      break;
+    case 'workers':
+      [state.workers, state.territories] = await Promise.all([safeGet('/workers', []), safeGet('/territories', [])]);
+      break;
+    case 'requests':
+      [state.requests, state.leads, state.territories] = await Promise.all([
+        safeGet('/requests', []), safeGet('/leads', []), safeGet('/territories', []),
+      ]);
+      break;
+    case 'learning':
+      state.learningContent = hasActivity('learning.content.view') || hasActivity('learning.content.manage')
+        ? await safeGet('/learning/content', []) : [];
+      break;
+    case 'properties':
+      [state.marketplaceConfig, state.territories] = await Promise.all([
+        safeGet('/marketplace/config', {}), safeGet('/territories', []),
+      ]);
+      state.marketplaceSellers = ['global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)
+        ? await safeGet('/marketplace/sellers', []) : [];
+      if (hasActivity('property.listings.view')) state.properties = await safeGet('/properties', []);
+      state.ownerStatements = state.user.role === 'property_owner'
+        ? (await safeGet('/owner/statements', { statements: [] })).statements ?? [] : [];
+      break;
+    case 'marketplace':
+      [state.marketplaceConfig, state.marketplaceListings, state.territories] = await Promise.all([
+        safeGet('/marketplace/config', {}), safeGet('/marketplace/listings', []), safeGet('/territories', []),
+      ]);
+      state.marketplaceSellers = ['global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)
+        ? await safeGet('/marketplace/sellers', []) : [];
+      break;
+    case 'contracts':
+      [state.leads, state.contracts] = await Promise.all([safeGet('/leads', []), safeGet('/contracts', [])]);
+      break;
+    case 'commissions':
+      await load('commissions', '/commissions');
+      break;
+    case 'agents':
+      await load('team', '/agents/team');
+      break;
+    case 'rent':
+      [state.propertyAccountingTemplate, state.properties, state.tenants, state.pendingRent, state.leases] = await Promise.all([
+        ['global_admin', 'super_admin', 'finance', 'finance_manager'].includes(state.user.role)
+          ? safeGet('/finance/property-chart-of-accounts-template', null) : null,
+        hasActivity('property.listings.view') ? safeGet('/properties', []) : [],
+        safeGet('/tenants', []), safeGet('/rent-transactions/pending', []), safeGet('/leases', []),
+      ]);
+      break;
+    case 'insurance':
+      [state.insuranceRequests, state.insuranceStaffRequests, state.insuranceAgentReferrals, state.insuranceEligibleAgents] = await Promise.all([
+        safeGet('/insurance/requests/me', []), safeGet('/insurance/requests', []),
+        safeGet('/insurance/requests/agent-referrals/me', []), safeGet('/insurance/requests/agent-referrals/agents', []),
+      ]);
+      if (state.features.insuranceBrokerageSandboxEnabled) {
+        [state.insuranceSandboxStatus, state.insuranceSandboxCases] = await Promise.all([
+          safeGet('/insurance/brokerage-sandbox/status', null), safeGet('/insurance/brokerage-sandbox/cases/mine', []),
+        ]);
+      } else {
+        state.insuranceSandboxStatus = null;
+        state.insuranceSandboxCases = [];
+      }
+      break;
+    case 'edir':
+      state.edirMe = state.features.edirEnabled && state.user.kyc_status === 'verified'
+        ? await safeGet('/edir/me', null) : null;
+      break;
+    case 'admin':
+      state.users = ['global_admin', 'super_admin', 'compliance'].includes(state.user.role)
+        ? await safeGet('/users', []) : [];
+      [state.territories, state.serviceIdentities, state.readinessEvidence, state.globalAdminPromotions] = await Promise.all([
+        safeGet('/territories', []),
+        isPlatformAdmin() ? safeGet('/service-identities', []) : [],
+        isPlatformAdmin() ? safeGet('/readiness-evidence', []) : [],
+        isPlatformAdmin() ? safeGet('/global-admin-promotions', []) : [],
+      ]);
+      state.businessRules = state.user.role === 'global_admin' ? await safeGet('/business-rules', []) : [];
+      state.roleAccess = state.user.role === 'super_admin' ? await safeGet('/role-access', null) : null;
+      state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
+        ? await safeGet('/reports/summary', null) : null;
+      if (['global_admin', 'super_admin', 'finance', 'finance_manager'].includes(state.user.role)) {
+        state.propertyAccountingTemplate = await safeGet('/finance/property-chart-of-accounts-template', null);
+      }
+      if (state.user.role === 'global_admin') {
+        [state.platformServices, state.platformServicePackages, state.platformTenants, state.platformCatalogProducts] = await Promise.all([
+          safeGet('/platform/services', []), safeGet('/platform/service-packages', []),
+          safeGet('/platform/tenants', []), safeGet('/platform/catalog-products', []),
+        ]);
+      }
+      break;
+    case 'status':
+      state.serviceStatus = await safeGet('/system/status', null);
+      state.serviceMetrics = isPlatformAdmin()
+        ? await safeGet('/system/metrics', { routes: [] }) : null;
+      break;
+    default:
+      break;
+  }
+  loadedPanels.add(panel);
+}
+
+async function refresh(force = true) {
   showAlert('');
   try {
+    if (force) loadedPanels.delete(state.panel);
+    const panel = state.panel;
     for (const url of propertyPhotoUrls) URL.revokeObjectURL(url);
     propertyPhotoUrls.clear();
-    const [leads, workers, requests, territories, commissions, contracts, leases, tenants, pendingRent] = await Promise.all([
-      getOptional('/leads', []), getOptional('/workers', []), getOptional('/requests', []),
-      getOptional('/territories', []), getOptional('/commissions', []), getOptional('/contracts', []),
-      getOptional('/leases', []), getOptional('/tenants', []), getOptional('/rent-transactions/pending', []),
-    ]);
-    state.leads = leads;
-    state.workers = workers;
-    state.requests = requests;
-    const canUseListings = hasActivity('property.listings.view');
-    state.properties = canUseListings
-      ? await api('/properties')
-      : [];
-    state.ownerStatements = state.user.role === 'property_owner'
-      ? (await getOptional('/owner/statements', { statements: [] })).statements ?? []
-      : [];
-    state.territories = territories;
-    state.commissions = commissions;
-    state.contracts = contracts;
-    state.leases = leases;
-    state.tenants = tenants;
-    state.pendingRent = pendingRent;
-    state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
-      ? await getOptional('/reports/summary', null)
-      : state.user.enterprise_features_enabled ? await getOptional('/reports/me', null) : null;
-    state.users = ['global_admin', 'super_admin', 'compliance'].includes(state.user.role) ? await getOptional('/users', []) : [];
-    state.team = ['global_admin', 'super_admin', 'master_agent'].includes(state.user.role) ? await getOptional('/agents/team', []) : [];
-    state.businessRules = state.user.role === 'global_admin' ? await api('/business-rules') : [];
-    state.globalAdminPromotions = isPlatformAdmin() ? await api('/global-admin-promotions') : [];
-    state.serviceIdentities = isPlatformAdmin() ? await api('/service-identities') : [];
-    state.readinessEvidence = isPlatformAdmin() ? await api('/readiness-evidence') : [];
-    if (state.user.role === 'global_admin') {
-      [state.platformServices, state.platformServicePackages, state.platformTenants, state.platformCatalogProducts] = await Promise.all([
-        api('/platform/services'),
-        api('/platform/service-packages'),
-        api('/platform/tenants'),
-        api('/platform/catalog-products'),
-      ]);
-    } else {
-      state.platformServices = [];
-      state.platformServicePackages = [];
-      state.platformTenants = [];
-      state.platformCatalogProducts = [];
-    }
-    state.propertyAccountingTemplate = ['global_admin','super_admin','finance','finance_manager'].includes(state.user.role)
-      ? await api('/finance/property-chart-of-accounts-template') : null;
-    state.roleAccess = state.user.role === 'super_admin' ? await api('/role-access') : null;
-    state.learningContent = hasActivity('learning.content.view') || hasActivity('learning.content.manage')
-      ? await api('/learning/content')
-      : [];
-    [state.marketplaceConfig, state.marketplaceListings] = await Promise.all([
-      getOptional('/marketplace/config', {}), getOptional('/marketplace/listings', []),
-    ]);
-    state.marketplaceSellers = ['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)
-      ? await getOptional('/marketplace/sellers', []) : [];
-    state.insuranceRequests = await getOptional('/insurance/requests/me', []);
-    state.insuranceStaffRequests = await getOptional('/insurance/requests', []);
-    [state.insuranceAgentReferrals, state.insuranceEligibleAgents] = await Promise.all([
-      getOptional('/insurance/requests/agent-referrals/me', []),
-      getOptional('/insurance/requests/agent-referrals/agents', []),
-    ]);
-    if (state.features.insuranceBrokerageSandboxEnabled) {
-      [state.insuranceSandboxStatus, state.insuranceSandboxCases] = await Promise.all([
-        getOptional('/insurance/brokerage-sandbox/status', null),
-        getOptional('/insurance/brokerage-sandbox/cases/mine', []),
-      ]);
-    } else {
-      state.insuranceSandboxStatus = null;
-      state.insuranceSandboxCases = [];
-    }
+    if (!loadedPanels.has(panel)) await loadPanelData(panel);
+    if (panel !== state.panel) return;
     if (state.panel === 'password') state.panel = 'overview';
+    if (state.workspaceDataErrors.length) {
+      showAlert('Some workspace information could not be loaded. Select Refresh to retry: {{items}}', true, {
+        items: state.workspaceDataErrors.join(', '),
+      });
+    }
     renderStats();
     renderPanel();
   } catch (error) {
     showAlert(error.message, true);
+  }
+}
+
+function visiblePanelNames() {
+  return new Set([...document.querySelectorAll('.tab[data-panel]:not([hidden])')].map((tab) => tab.dataset.panel));
+}
+
+function panelLabel(panel) {
+  return document.querySelector(`.tab[data-panel="${CSS.escape(panel)}"]`)?.textContent.trim() ?? panel;
+}
+
+function workspaceRecords(panel, rows) {
+  const descriptors = {
+    leads: { type: 'Lead', title: (r) => r.name, subtitle: (r) => [r.phone, r.status].filter(Boolean).join(' · '), searchable: (r) => [r.name], phones: (r) => [r.phone] },
+    workers: { type: 'Worker', title: (r) => r.name, subtitle: (r) => [r.sector, r.verification].filter(Boolean).join(' · '), searchable: (r) => [r.name, r.sector], phones: (r) => [r.phone] },
+    requests: { type: 'Request', title: (r) => r.sector ?? r.title ?? `Request ${String(r.id ?? '').slice(0, 8)}`, subtitle: (r) => [r.status, r.territory_name].filter(Boolean).join(' · '), searchable: (r) => [r.sector, r.title, r.status], phones: () => [] },
+    properties: { type: 'Property', title: (r) => r.address, subtitle: (r) => [r.ptype, r.status].filter(Boolean).join(' · '), searchable: (r) => [r.address, r.ptype], phones: () => [] },
+    marketplace: { type: 'Listing', title: (r) => r.title, subtitle: (r) => [r.kind, r.status].filter(Boolean).join(' · '), searchable: (r) => [r.title, r.kind, r.description], phones: () => [] },
+    contracts: { type: 'Contract', title: (r) => r.contract_no, subtitle: (r) => r.state ?? r.status ?? '', searchable: (r) => [r.contract_no], phones: () => [] },
+    commissions: { type: 'Commission', title: (r) => `Commission ${String(r.id ?? '').slice(0, 8)}`, subtitle: (r) => [r.status, r.amount ? `ETB ${r.amount}` : ''].filter(Boolean).join(' · '), searchable: (r) => [r.id, r.status], phones: () => [] },
+    rent: { type: 'Tenant', title: (r) => r.name, subtitle: (r) => r.phone ?? '', searchable: (r) => [r.name], phones: (r) => [r.phone] },
+    admin: { type: 'Person', title: (r) => r.legal_name, subtitle: (r) => [r.role, r.phone].filter(Boolean).join(' · '), searchable: (r) => [r.legal_name], phones: (r) => [r.phone] },
+  };
+  const descriptor = descriptors[panel];
+  return descriptor && Array.isArray(rows) ? rows.map((row) => ({
+    panel,
+    type: descriptor.type,
+    id: row.id,
+    title: String(descriptor.title(row) ?? ''),
+    subtitle: String(descriptor.subtitle(row) ?? ''),
+    searchable: descriptor.searchable(row),
+    phones: descriptor.phones(row),
+  })).filter((record) => record.title) : [];
+}
+
+async function searchWorkspace(query) {
+  const sequence = ++workspaceSearchSequence;
+  const term = String(query ?? '').trim();
+  const resultBox = $('#workspace-search-results');
+  resultBox.hidden = false;
+  resultBox.replaceChildren();
+  if (term.length < MIN_SEARCH_QUERY_LENGTH) {
+    resultBox.append(node('p', t('Enter at least {{count}} characters to search.', { count: MIN_SEARCH_QUERY_LENGTH })));
+    return;
+  }
+
+  const resources = [
+    ['leads', '/leads'], ['workers', '/workers'], ['requests', '/requests'],
+    ['properties', '/properties'], ['marketplace', '/marketplace/listings'],
+    ['contracts', '/contracts'], ['commissions', '/commissions'], ['rent', '/tenants'],
+    ...(visiblePanelNames().has('admin') && ['global_admin', 'super_admin', 'compliance'].includes(state.user.role)
+      ? [['admin', '/users']] : []),
+  ].filter(([panel]) => visiblePanelNames().has(panel));
+  const unavailable = [];
+  const batches = await Promise.all(resources.map(async ([panel, path]) => {
+    try {
+      const records = await api(path);
+      return workspaceRecords(panel, records);
+    } catch (error) {
+      console.error(`Workspace search could not query ${panelLabel(panel)}.`, error);
+      unavailable.push(panel);
+      return [];
+    }
+  }));
+  if (sequence !== workspaceSearchSequence) return;
+  state.searchQuery = term;
+  state.searchUnavailable = unavailable;
+  state.searchResults = searchWorkspaceRecords(term, batches.flat());
+  renderWorkspaceSearchResults();
+}
+
+function renderWorkspaceSearchResults() {
+  const resultBox = $('#workspace-search-results');
+  resultBox.replaceChildren();
+  const summary = state.searchUnavailable.length
+    ? t('Some areas could not be searched. Results may be partial.')
+    : t('{{count}} matching result(s).', { count: state.searchResults.length });
+  resultBox.append(node('p', summary));
+  if (!state.searchResults.length && !state.searchUnavailable.length) {
+    resultBox.append(node('p', 'No matching records were found in the areas available to your role.'));
+  }
+  for (const record of state.searchResults) {
+    const row = node('article', undefined, 'workspace-search-result');
+    const copy = node('div');
+    copy.append(node('h3', record.title), node('p', `${record.type} · ${panelLabel(record.panel)}${record.subtitle ? ` · ${record.subtitle}` : ''}`));
+    row.append(copy, button('Open area', 'open-panel', 'button button-outline', { panel: record.panel }));
+    resultBox.append(row);
   }
 }
 
@@ -762,14 +945,23 @@ function card(title, details, status) {
 function renderOverview() {
   const wrap = node('div');
   wrap.append(sectionHeading('Your activity', 'Your latest records and work in progress.'));
+  const unavailableServices = state.serviceStatus?.services?.filter((service) => service.status === 'unavailable') ?? [];
+  if (unavailableServices.length) {
+    const notice = node('section', undefined, 'alert error');
+    notice.setAttribute('role', 'status');
+    notice.append(node('strong', 'Some services are temporarily unavailable: '));
+    notice.append(node('span', unavailableServices.map((service) => service.name).join(', ')));
+    notice.append(button('View service status', 'open-panel', 'button button-outline', { panel: 'status' }));
+    wrap.append(notice);
+  }
   wrap.append(renderServiceLauncher());
-  if (state.user.kyc_status === 'verified' && state.features.edirEnabled && !state.edirMe?.membership) {
+  if (loadedPanels.has('edir') && state.user.kyc_status === 'verified' && state.features.edirEnabled && !state.edirMe?.membership) {
     const offer = node('section', undefined, 'panel form-card edir-offer');
     offer.append(node('p', 'ETHIOLIFE EDIR · MEMBERSHIP OFFER', 'eyebrow'));
     offer.append(node('h2', 'Explore Edir membership and available benefits'));
     offer.append(node('p', 'Open to verified EthioLife users across worker, employer, landlord, tenant, seller, and buyer services. Review active community, savings, share, and contribution options before requesting membership. Lending, insurance, and benefit payouts are not live in this pilot.'));
     const action = button('View Edir offer', 'open-edir-offer', 'button button-primary');
-    action.addEventListener('click', () => { state.panel = 'edir'; renderPanel(); });
+    action.addEventListener('click', () => navigateToPanel('edir'));
     offer.append(action);
     wrap.append(offer);
   }
@@ -800,6 +992,46 @@ function renderOverview() {
   if (!items.length) recent.append(empty('No activity yet. Start by registering a lead or worker.'));
   else recent.append(...items);
   wrap.append(recent);
+  return wrap;
+}
+
+function renderServiceStatus() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Service status', 'Availability of this deployment’s application services. Health status does not confirm financial readiness.'));
+  if (!state.serviceStatus) {
+    wrap.append(empty('Service status has not been loaded.'));
+    return wrap;
+  }
+  wrap.append(node('p', `Checked ${new Date(state.serviceStatus.checked_at).toLocaleString(document.documentElement.lang)}`, 'muted'));
+  const list = node('div', undefined, 'service-health-list');
+  for (const service of state.serviceStatus.services) {
+    const item = node('article', undefined, 'service-health-row');
+    item.dataset.status = service.status;
+    const name = node('div');
+    name.append(node('strong', service.name));
+    const latency = service.latency_ms === null ? '' : ` · ${service.latency_ms} ms`;
+    name.append(node('small', `${service.status.replaceAll('_', ' ')}${latency}`));
+    item.append(name);
+    list.append(item);
+  }
+  wrap.append(list);
+  if (isPlatformAdmin() && state.serviceMetrics) {
+    const metrics = node('section', undefined, 'panel form-card service-metrics');
+    metrics.append(node('h3', 'API request metrics'));
+    metrics.append(node('p', 'In-memory aggregate for this API process; counters reset when it restarts.'));
+    const metricList = node('div', undefined, 'service-health-list');
+    for (const metric of state.serviceMetrics.routes) {
+      const row = node('article', undefined, 'service-health-row');
+      const details = node('div');
+      details.append(node('strong', metric.route));
+      details.append(node('small', `${metric.requests} requests · ${metric.failures} failed · average ${metric.average_duration_ms} ms · max ${metric.max_duration_ms} ms`));
+      row.append(details);
+      metricList.append(row);
+    }
+    if (!state.serviceMetrics.routes.length) metricList.append(empty('No API requests have been recorded yet.'));
+    metrics.append(metricList);
+    wrap.append(metrics);
+  }
   return wrap;
 }
 
@@ -915,10 +1147,19 @@ function createWorkspaceNavLink(tab, className = 'workspace-nav-link') {
   link.type = 'button';
   link.dataset.panel = panel;
   link.setAttribute('aria-label', tab.textContent.trim());
+  const logoSource = miniAppLogo(panel);
   const icon = node('span', workspaceNavIcons[panel] ?? '•', 'workspace-nav-icon');
   icon.setAttribute('aria-hidden', 'true');
   const label = node('span', tab.textContent.trim(), 'workspace-nav-label');
   link.append(icon, label);
+  if (logoSource) {
+    const logo = node('img', undefined, 'workspace-nav-logo');
+    logo.src = logoSource;
+    logo.alt = '';
+    logo.setAttribute('aria-hidden', 'true');
+    icon.hidden = true;
+    link.insertBefore(logo, label);
+  }
   return link;
 }
 
@@ -2322,6 +2563,8 @@ function renderSecurity() {
 }
 
 function renderPanel() {
+  $('#workspace').dataset.panel = state.panel;
+  $('.page-heading').dataset.panel = state.panel;
   document.querySelectorAll('.tab').forEach((tab) => {
     const isCurrent = tab.dataset.panel === state.panel;
     tab.classList.toggle('active', isCurrent);
@@ -2396,6 +2639,7 @@ function renderPanel() {
   const renderer = {
     overview: renderOverview,
     insurance: renderInsurance,
+    status: renderServiceStatus,
     leads: renderLeads,
     workers: renderWorkers,
     requests: renderRequests,
@@ -2411,6 +2655,21 @@ function renderPanel() {
     security: renderSecurity,
   }[state.panel] ?? renderOverview;
   $('#workspace').replaceChildren(renderer());
+}
+
+function navigateToPanel(panel, { replace = false } = {}) {
+  const tab = document.querySelector(`.tab[data-panel="${CSS.escape(panel)}"]`);
+  if (!tab || tab.hidden || !KNOWN_PANELS.has(panel)) {
+    showAlert('This workspace is unavailable for your account or deployment.', true);
+    return;
+  }
+  if (panel === 'status') loadedPanels.delete(panel);
+  state.panel = panel;
+  const url = panelUrl(window.location.href, panel);
+  if (replace) history.replaceState(null, '', url);
+  else if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) history.pushState(null, '', url);
+  renderPanel();
+  void refresh(false);
 }
 
 async function submitForm(form) {
@@ -2602,6 +2861,7 @@ async function submitForm(form) {
       await loadWorkspace();
     } else {
       state.panel = 'overview';
+      history.replaceState(null, '', panelUrl(window.location.href, state.panel));
       await refresh();
     }
     showAlert('Password updated successfully.');
@@ -3091,9 +3351,8 @@ document.addEventListener('click', async (event) => {
   }
   const workspaceLink = event.target.closest('.workspace-nav-link[data-panel]');
   if (workspaceLink) {
-    state.panel = workspaceLink.dataset.panel;
     if ($('#workspace-more-dialog').open) $('#workspace-more-dialog').close();
-    renderPanel();
+    navigateToPanel(workspaceLink.dataset.panel);
     return;
   }
   if (event.target.closest('#mobile-workspace-more')) {
@@ -3103,7 +3362,7 @@ document.addEventListener('click', async (event) => {
     return;
   }
   const tab = event.target.closest('.tab[data-panel]');
-  if (tab) { state.panel = tab.dataset.panel; renderPanel(); return; }
+  if (tab) { navigateToPanel(tab.dataset.panel); return; }
   const action = event.target.closest('button[data-action]');
   if (!action) return;
   const { action: name, id } = action.dataset;
@@ -3158,8 +3417,7 @@ document.addEventListener('click', async (event) => {
     return;
   }
   if (name === 'open-panel') {
-    state.panel = action.dataset.panel;
-    renderPanel();
+    navigateToPanel(action.dataset.panel);
     return;
   }
   const container = action.closest('.list-card');
@@ -3771,6 +4029,30 @@ window.addEventListener('beforeinstallprompt', (event) => {
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
   $('#install-app').hidden = true;
+});
+
+$('#workspace-search-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submit = form.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  try {
+    await searchWorkspace($('#workspace-search-input').value);
+  } catch (error) {
+    console.error('Workspace search failed.', error);
+    $('#workspace-search-results').replaceChildren(node('p', 'Search could not be completed. Check your connection and try again.'));
+    $('#workspace-search-results').hidden = false;
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+window.addEventListener('popstate', () => {
+  if (!state.user) return;
+  const requested = panelFromUrl(window.location.href, KNOWN_PANELS);
+  const panel = visiblePanelNames().has(requested) ? requested : 'overview';
+  if (panel !== requested) history.replaceState(null, '', panelUrl(window.location.href, panel));
+  if (panel !== state.panel) navigateToPanel(panel, { replace: true });
 });
 
 initializeLocale(() => {

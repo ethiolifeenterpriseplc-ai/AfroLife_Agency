@@ -6,7 +6,9 @@ import { runInNewContext } from 'node:vm';
 const workerSource = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 
 test('changed brand assets advance the public shell cache version', () => {
-  assert.match(workerSource, /const CACHE = 'afrolife-shell-v22'/);
+  assert.match(workerSource, /const CACHE = 'afrolife-shell-v23'/);
+  assert.match(workerSource, /'\/workspace-navigation\.js'/);
+  assert.match(workerSource, /'\/workspace-search\.js'/);
   assert.match(workerSource, /'\/icon\.svg'/);
   assert.match(workerSource, /'\/icons\/icon-512\.png'/);
 });

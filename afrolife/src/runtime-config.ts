@@ -5,11 +5,34 @@ export interface RuntimeConfig {
   mfiPilotEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   legacyImmediateLeasesEnabled: boolean;
+  enabledModules: WorkspaceModule[];
 }
 
 type Environment = Record<string, string | undefined>;
 
+export const WORKSPACE_MODULES = [
+  'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace',
+  'contracts', 'commissions', 'agents', 'rent', 'mfi', 'accounting',
+  'edir', 'insurance', 'privacy',
+] as const;
+export type WorkspaceModule = typeof WORKSPACE_MODULES[number];
+
 const isPlaceholder = (value: string) => /^(replace|change|example|your[_-])/i.test(value);
+
+export function enabledWorkspaceModules(env: Environment): WorkspaceModule[] {
+  const configured = env.AFROLIFE_ENABLED_MODULES?.trim();
+  if (!configured) return [...WORKSPACE_MODULES];
+
+  const modules = configured.split(',').map((module) => module.trim()).filter(Boolean);
+  const unknown = modules.filter((module) => !WORKSPACE_MODULES.includes(module as WorkspaceModule));
+  if (unknown.length) {
+    throw new Error(`AFROLIFE_ENABLED_MODULES contains unknown module(s): ${unknown.join(', ')}`);
+  }
+  if (new Set(modules).size !== modules.length) {
+    throw new Error('AFROLIFE_ENABLED_MODULES must not contain duplicate modules');
+  }
+  return modules as WorkspaceModule[];
+}
 
 export function sessionIdleTimeoutMinutes(env: Environment): number {
   const timeout = Number(env.SESSION_IDLE_TIMEOUT_MINUTES ?? 30);
@@ -209,6 +232,7 @@ function productionConfig(env: Environment, idleTimeout: number): RuntimeConfig 
     mfiPilotEnabled,
     sessionIdleTimeoutMinutes: idleTimeout,
     legacyImmediateLeasesEnabled: allowLegacyImmediateLeases,
+    enabledModules: enabledWorkspaceModules(env),
   };
 }
 
@@ -222,5 +246,6 @@ export function loadRuntimeConfig(env: Environment): RuntimeConfig {
     mfiPilotEnabled: env.MFI_PILOT_ENABLED === undefined ? true : env.MFI_PILOT_ENABLED === '1',
     sessionIdleTimeoutMinutes: idleTimeout,
     legacyImmediateLeasesEnabled: legacyImmediateLeasesEnabled(env),
+    enabledModules: enabledWorkspaceModules(env),
   };
 }

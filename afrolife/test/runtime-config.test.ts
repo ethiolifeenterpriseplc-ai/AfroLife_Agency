@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { loadRuntimeConfig, sessionIdleTimeoutMinutes } from '../src/runtime-config.js';
+import { enabledWorkspaceModules, loadRuntimeConfig, sessionIdleTimeoutMinutes, WORKSPACE_MODULES } from '../src/runtime-config.js';
 
 const safeProductionEnvironment = {
   NODE_ENV: 'production',
@@ -43,6 +43,17 @@ test('production configuration disables the MFI pilot unless explicitly enabled'
   );
   assert.equal(loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: '0' }).mfiPilotEnabled, false);
   assert.equal(loadRuntimeConfig({ ...safeProductionEnvironment, MFI_PILOT_ENABLED: '1' }).mfiPilotEnabled, true);
+});
+
+test('workspace module visibility is an optional validated deployment allowlist', () => {
+  assert.deepEqual(enabledWorkspaceModules({}), [...WORKSPACE_MODULES]);
+  assert.deepEqual(enabledWorkspaceModules({ AFROLIFE_ENABLED_MODULES: 'leads,rent' }), ['leads', 'rent']);
+  assert.deepEqual(
+    loadRuntimeConfig({ ...safeProductionEnvironment, AFROLIFE_ENABLED_MODULES: 'leads,rent' }).enabledModules,
+    ['leads', 'rent'],
+  );
+  assert.throws(() => enabledWorkspaceModules({ AFROLIFE_ENABLED_MODULES: 'leads,unknown' }), /unknown module/);
+  assert.throws(() => enabledWorkspaceModules({ AFROLIFE_ENABLED_MODULES: 'leads,leads' }), /duplicate modules/);
 });
 
 test('production blocks legacy immediate lease activation unless explicitly enabled', () => {

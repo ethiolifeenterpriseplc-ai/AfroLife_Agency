@@ -65,6 +65,36 @@ Global Admin is a separate, non-provisionable role for system-wide configuration
 The initial database migration creates a starter Ethiopia → Addis Ababa → Bole territory path and default pricing/matching rules. Additional territories are managed through the API by a Super Admin.
 The `/healthz` endpoint checks PostgreSQL connectivity and returns HTTP 500 if the database is unavailable.
 
+## Workspace navigation, search, and service status
+
+After sign-in, the workspace loads data only for the selected panel. The Overview
+loads its own activity summary; opening another panel fetches that panel's
+authorized API data on demand. The workspace search is an explicit user action
+and queries only panels visible to the signed-in user, through the same
+role-checked endpoints used by those panels. Results are limited and may be
+partial when an authorized endpoint is unavailable. Search does not grant
+access, and opening a result still uses the ordinary panel and API permissions.
+
+Panel links use the `?panel=<panel-id>` query parameter and participate in
+browser Back/Forward navigation. A panel hidden by account permissions or
+deployment configuration resolves to Overview rather than bypassing access
+checks. `AFROLIFE_ENABLED_MODULES` optionally accepts a comma-separated list of
+module panel IDs (for example `leads,workers,requests,marketplace`). Omit it or
+leave it empty to show all modules. Overview, account security, and service
+status remain in the shell; Admin remains subject to its existing role policy.
+This deployment-level navigation switch is not an API authorization control.
+
+The authenticated Service status panel checks the core database-backed API and
+configured service health endpoints. The Overview flags unavailable services.
+An `integrated` service uses the central API process; `disabled` means it is not
+configured or enabled; `available` and `unavailable` report the latest health
+probe only. A healthy probe is not evidence of production, accounting, or
+financial readiness. Global and Super Admins can also view bounded aggregate
+API request/failure counts and response timings. Metrics are in-memory per
+process, reset on restart, and group route templates without query strings or
+record IDs; they are operational indicators, not durable monitoring or audit
+evidence.
+
 ## Languages and public registration
 
 - The sign-in page and implemented agent/admin workflows can be switched between English, Amharic, Afaan Oromo, and Tigrinya. The selected language is saved on the device.

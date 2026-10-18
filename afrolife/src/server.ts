@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { Phone } from './validators.js';
 import { pool, withUser, authenticate, requireRole, HttpError, JWT_SECRET, assertRuntimeDatabaseSafety } from './core.js';
 import { loadRuntimeConfig } from './runtime-config.js';
+import { apiMetricsMiddleware, checkWorkspaceServices, getApiMetrics } from './workspace-status.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
 import { audit, feeSnapshot, loadRules, post, transition } from './domain.js';
 import { supply } from './supply.js';
@@ -73,6 +74,7 @@ const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandle
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
 const AGENT = ['master_agent', 'field_agent'];
 const api = express.Router();
+app.use('/api/v1', apiMetricsMiddleware);
 
 // ---- Auth (login with lockout and optional 2FA lives in admin.ts) ----
 api.post('/auth/login', createApiRateLimiter('login', Number(process.env.LOGIN_RATE_LIMIT ?? 20)));
@@ -117,7 +119,31 @@ api.get('/features', (_req, res) => res.json({
   edirEnabled: Boolean(process.env.EDIR_SERVICE_URL),
   accountingEnabled: Boolean(process.env.ACCOUNTING_SERVICE_URL),
   insuranceBrokerageSandboxEnabled: isInsuranceBrokerageSandboxEnabled(),
+  enabledModules: runtimeConfig.enabledModules,
 }));
+api.get('/system/status', h(async (_req, res) => {
+  const services = await checkWorkspaceServices([
+    { id: 'core', name: 'AfroLife core', enabled: true, withoutUrl: 'integrated' },
+    {
+      id: 'workforce-management',
+      name: 'Workforce Management',
+      enabled: true,
+      url: process.env.WORKFORCE_MANAGEMENT_SERVICE_URL ?? process.env.WORKER_MANAGEMENT_SERVICE_URL,
+      withoutUrl: 'integrated',
+    },
+    { id: 'staffing', name: 'Staffing', enabled: true, url: process.env.STAFFING_SERVICE_URL, withoutUrl: 'integrated' },
+    { id: 'property-management', name: 'Property Management', enabled: true, url: process.env.PROPERTY_MANAGEMENT_SERVICE_URL, withoutUrl: 'integrated' },
+    { id: 'marketplace', name: 'Marketplace', enabled: true, url: process.env.MARKETPLACE_SERVICE_URL, withoutUrl: 'integrated' },
+    { id: 'edir', name: 'AfroLife Edir', enabled: Boolean(process.env.EDIR_SERVICE_URL), url: process.env.EDIR_SERVICE_URL, withoutUrl: 'disabled' },
+    { id: 'accounting', name: 'Accounting', enabled: Boolean(process.env.ACCOUNTING_SERVICE_URL), url: process.env.ACCOUNTING_SERVICE_URL, withoutUrl: 'disabled' },
+    { id: 'insurance', name: 'Insurance ledger', enabled: Boolean(process.env.INSURANCE_SERVICE_URL), url: process.env.INSURANCE_SERVICE_URL, withoutUrl: 'integrated' },
+    { id: 'mfi', name: 'SACCO / MFI', enabled: runtimeConfig.mfiPilotEnabled, url: process.env.MFI_SERVICE_URL, withoutUrl: 'disabled' },
+  ]);
+  res.json({ checked_at: new Date().toISOString(), services });
+}));
+api.get('/system/metrics', requireRole('global_admin', 'super_admin'), (_req, res) => {
+  res.json(getApiMetrics());
+});
 api.use(adminRouter);
 api.use(privacy);
 api.use(ops);

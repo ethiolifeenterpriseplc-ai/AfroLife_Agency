@@ -55,15 +55,6 @@
             <span><i></i> Accountable agent network</span>
             <span><i></i> Central matching oversight</span>
           </div>
-          <section class="member-benefits" aria-labelledby="member-benefits-title">
-            <p class="eyebrow">WORKER &amp; COMMUNITY BENEFITS</p>
-            <h2 id="member-benefits-title">Build security together</h2>
-            <div class="benefit-item"><strong>EthioLife Edir membership</strong><span>Available to registered EthioLife users after KYC review. Membership requests are reviewed before activation.</span></div>
-            <div class="benefit-item"><strong>Community groups</strong><span>Active members can be assigned to an Edir group by an administrator.</span></div>
-            <div class="benefit-item"><strong>Available products</strong><span>Approved savings, share, and contribution products appear in Edir when administrators activate them.</span></div>
-            <div class="benefit-item"><strong>More services</strong><span>Lending, insurance, and benefit payouts are not active in the current pilot.</span></div>
-            <p class="benefit-disclaimer">Membership requests do not collect money or guarantee access to a product. Product terms and availability are shown in the Edir workspace.</p>
-          </section>
         </div>
         <form id="login-form" class="panel login-card">
           <p class="eyebrow">SECURE WORKSPACE</p>
@@ -195,6 +186,22 @@
             <a class="service-card" href="#login-form"><span class="service-icon">▣</span><strong>Agent services</strong><span>Manage referrals, service requests, contracts, and team activity based on your role.</span><small>Agency mini app →</small></a>
           </div>
         </section>
+        <section class="hub-section community-benefits-section" aria-labelledby="member-benefits-title">
+          <section class="member-benefits" aria-labelledby="member-benefits-title">
+            <div class="member-benefits-intro">
+              <p class="eyebrow">WORKER &amp; COMMUNITY BENEFITS</p>
+              <h2 id="member-benefits-title">Build security together</h2>
+              <p>Community membership and savings options are managed through EthioLife Edir after review.</p>
+            </div>
+            <div class="member-benefits-list">
+              <div class="benefit-item"><strong>EthioLife Edir membership</strong><span>Available to registered EthioLife users after KYC review. Membership requests are reviewed before activation.</span></div>
+              <div class="benefit-item"><strong>Community groups</strong><span>Active members can be assigned to an Edir group by an administrator.</span></div>
+              <div class="benefit-item"><strong>Available products</strong><span>Approved savings, share, and contribution products appear in Edir when administrators activate them.</span></div>
+              <div class="benefit-item"><strong>More services</strong><span>Lending, insurance, and benefit payouts are not active in the current pilot.</span></div>
+            </div>
+            <p class="benefit-disclaimer">Membership requests do not collect money or guarantee access to a product. Product terms and availability are shown in the Edir workspace.</p>
+          </section>
+        </section>
         <section class="hub-section industry-news" aria-labelledby="industry-news-title">
           <div class="hub-section-heading"><div><p class="eyebrow">INDUSTRY NEWS</p><h2 id="industry-news-title">Follow the sectors around you</h2></div><span class="hub-caption">Opens current reporting from external publishers</span></div>
           <div class="news-grid">
@@ -231,6 +238,14 @@
           <button id="refresh" class="button button-outline" type="button">↻ <span>Refresh</span></button>
         </div>
         <div id="alert" class="alert" role="status" hidden></div>
+        <form id="workspace-search-form" class="workspace-search" role="search">
+          <label for="workspace-search-input">Search authorized workspace records</label>
+          <div class="workspace-search-controls">
+            <input id="workspace-search-input" type="search" maxlength="80" autocomplete="off" placeholder="Name, phone, contract, property or listing">
+            <button class="button button-primary" type="submit">Search</button>
+          </div>
+          <div id="workspace-search-results" class="workspace-search-results" role="status" aria-live="polite" hidden></div>
+        </form>
         <div id="stat-grid" class="stat-grid"></div>
         <nav class="tabs" aria-label="Workspace sections">
           <button class="tab active" data-panel="overview" type="button">Overview</button>
@@ -251,6 +266,7 @@
           <button id="privacy-tab" class="tab" data-panel="privacy" type="button">Privacy requests &amp; incidents</button>
           <button class="tab" data-panel="security" type="button">Security</button>
           <button id="admin-tab" class="tab" data-panel="admin" type="button" hidden>Admin & review</button>
+          <button id="status-tab" class="tab" data-panel="status" type="button">Service status</button>
         </nav>
         <section id="workspace" class="workspace" aria-labelledby="page-title"></section>
         <nav id="mobile-workspace-nav" class="mobile-workspace-nav" aria-label="Quick workspace navigation" hidden></nav>
