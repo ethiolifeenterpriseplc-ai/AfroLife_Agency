@@ -52,8 +52,42 @@ test('workspace module visibility is an optional validated deployment allowlist'
     loadRuntimeConfig({ ...safeProductionEnvironment, AFROLIFE_ENABLED_MODULES: 'leads,rent' }).enabledModules,
     ['leads', 'rent'],
   );
+  assert.deepEqual(enabledWorkspaceModules({ AFROLIFE_ENABLED_MODULES: 'global-bi' }), ['global-bi']);
   assert.throws(() => enabledWorkspaceModules({ AFROLIFE_ENABLED_MODULES: 'leads,unknown' }), /unknown module/);
   assert.throws(() => enabledWorkspaceModules({ AFROLIFE_ENABLED_MODULES: 'leads,leads' }), /duplicate modules/);
+});
+
+test('Global BI gateway requires an explicitly ready, unique service configuration', () => {
+  assert.throws(
+    () => loadRuntimeConfig({
+      ...safeProductionEnvironment,
+      GLOBAL_BI_SERVICE_URL: 'http://127.0.0.1:3310',
+    }),
+    /GLOBAL_BI_SERVICE_CUTOVER_READY=1/,
+  );
+  const configured = loadRuntimeConfig({
+    ...safeProductionEnvironment,
+    GLOBAL_BI_SERVICE_URL: 'http://127.0.0.1:3310',
+    GLOBAL_BI_GATEWAY_SECRET: 'b'.repeat(48),
+    GLOBAL_BI_SERVICE_CUTOVER_READY: '1',
+  });
+  assert.ok(configured.enabledModules.includes('global-bi'));
+  assert.throws(
+    () => loadRuntimeConfig({
+      ...safeProductionEnvironment,
+      GLOBAL_BI_SERVICE_URL: 'http://127.0.0.1:3310',
+      GLOBAL_BI_GATEWAY_SECRET: 'a'.repeat(48),
+      GLOBAL_BI_SERVICE_CUTOVER_READY: '1',
+    }),
+    /must be unique across enabled service gateways/,
+  );
+  assert.throws(
+    () => loadRuntimeConfig({
+      ...safeProductionEnvironment,
+      GLOBAL_BI_SERVICE_CUTOVER_READY: '1',
+    }),
+    /GLOBAL_BI_SERVICE_URL is required/,
+  );
 });
 
 test('production blocks legacy immediate lease activation unless explicitly enabled', () => {

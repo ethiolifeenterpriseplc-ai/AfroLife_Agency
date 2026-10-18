@@ -7,7 +7,10 @@ import {
   isGlobalBiMetricKey,
   isMonthlyWindow,
 } from '../services/global-bi/catalog.js';
-import { validateGlobalBiProjectionBatch } from '../services/global-bi/projection-contract.js';
+import {
+  assertProjectionTenant,
+  validateGlobalBiProjectionBatch,
+} from '../services/global-bi/projection-contract.js';
 
 const now = new Date('2026-10-14T12:00:00.000Z');
 const validBatch = {
@@ -41,7 +44,12 @@ test('Global BI catalog defines bounded aggregate metrics and monthly windows', 
 });
 
 test('Global BI accepts strict, aggregate-only monthly projections', () => {
-  assert.deepEqual(validateGlobalBiProjectionBatch(validBatch, now), validBatch);
+  const parsed = validateGlobalBiProjectionBatch(validBatch, now);
+  assert.deepEqual(parsed, validBatch);
+  assert.doesNotThrow(() => assertProjectionTenant(parsed, validBatch.tenantId));
+  assert.throws(() => assertProjectionTenant(parsed, '00000000-0000-4000-8000-000000000002'), /does not match/);
+  assert.throws(() => assertProjectionTenant(parsed, undefined), /GLOBAL_BI_PROJECTOR_TENANT_ID must be a valid UUID/);
+  assert.throws(() => assertProjectionTenant(parsed, 'not-a-uuid'), /GLOBAL_BI_PROJECTOR_TENANT_ID must be a valid UUID/);
   assert.throws(
     () => validateGlobalBiProjectionBatch({
       ...validBatch,

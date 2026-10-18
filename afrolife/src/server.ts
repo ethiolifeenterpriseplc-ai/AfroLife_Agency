@@ -28,7 +28,7 @@ import { dispatchAccountingEvents, enqueueAccountingEvent } from './accounting-o
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
-import { allowedMiniApps, requireMiniAppAccess } from './mini-app-access.js';
+import { allowedMiniApps, requireAnyMiniAppAccess, requireMiniAppAccess } from './mini-app-access.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
@@ -105,8 +105,14 @@ api.use(['/contracts', '/contract-documents'], requireMiniAppAccess('contracts')
 api.use('/commissions', requireMiniAppAccess('commissions'));
 api.use('/agents', requireMiniAppAccess('agents'));
 api.use('/learning', requireMiniAppAccess('learning'));
+api.use('/privacy', requireMiniAppAccess('privacy'));
 api.use('/rent', requireMiniAppAccess('rent'));
 api.use('/global-bi', requireMiniAppAccess('global-bi'));
+api.use(
+  ['/tenants', '/leases', '/lease-signature-documents', '/releases', '/rent-transactions'],
+  requireAnyMiniAppAccess('properties', 'rent'),
+);
+api.use(['/maintenance'], requireMiniAppAccess('properties'));
 api.use((req, _res, next) => {
   const organizationId = req.get('x-afrolife-edir-id');
   if (organizationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) {

@@ -9,7 +9,8 @@ test('each Agency mini-app declares a unique module, panel, and gateway API surf
   for (const miniApp of miniApps) {
     assert.ok(miniApp.id);
     assert.ok(miniApp.name);
-    assert.ok(miniApp.logo?.startsWith('/mini-apps/'), `${miniApp.id} must declare its branded logo asset`);
+    assert.ok(miniApp.logo?.startsWith('/mini-apps/') || miniApp.id === 'accounting' && miniApp.logo === '/icon.svg',
+      `${miniApp.id} must use a branded mini-app logo or the approved EthioLife mark`);
     const logo = readFileSync(new URL(`../public${miniApp.logo}`, import.meta.url), 'utf8');
     assert.match(logo, /<title/);
     assert.match(logo, /#174b3d/);
@@ -28,8 +29,12 @@ test('each Agency mini-app declares a unique module, panel, and gateway API surf
       assert.ok(endpoint.startsWith('/'), `${miniApp.id} API endpoints must be same-origin API paths`);
     }
   }
-  assert.deepEqual([...ids].sort(), ['marketplace', 'property-management', 'staffing', 'workforce-management']);
+  assert.deepEqual([...ids].sort(), ['accounting', 'marketplace', 'property-management', 'staffing', 'workforce-management']);
   assert.equal(miniApps.find((miniApp) => miniApp.id === 'workforce-management')?.name, 'Workforce Management');
+  assert.equal(miniAppByPanel.accounting?.id, 'accounting');
+  assert.equal(miniAppByPanel.accounting?.name, 'Financial Services');
+  assert.equal(miniAppByPanel.accounting?.logo, '/icon.svg');
+  assert.deepEqual(miniAppByPanel.accounting?.panels, ['accounting']);
 });
 
 test('integrated agency and community workspaces have branded logo assets', () => {

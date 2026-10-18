@@ -14,10 +14,9 @@ import { BUSINESS_RULES, validateBusinessRuleUpdates } from './business-rules.js
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
-import { sessionIdleTimeoutMinutes } from './runtime-config.js';
+import { sessionIdleTimeoutMinutes, WORKSPACE_MODULES } from './runtime-config.js';
 import { ROLE_ACTIVITIES, ROLE_NAMES, getRoleActivity, hasRoleActivityAccess, type RoleName } from './role-activities.js';
 import { MINI_APP_LABELS } from './mini-app-access.js';
-import { WORKSPACE_MODULES } from './runtime-config.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
@@ -814,6 +813,23 @@ adminRouter.get('/users/:id/mini-app-access', requireRole('super_admin', 'global
     ...result,
     availableModules: WORKSPACE_MODULES.map((id) => ({ id, label: MINI_APP_LABELS[id] })),
   });
+}));
+
+adminRouter.get('/users/:id/mini-app-access/history', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+  const userId = z.string().uuid().parse(req.params.id);
+  const limit = z.coerce.number().int().min(1).max(500).default(100).parse(req.query.limit);
+  const history = await withUser(req.user!, async (client) => {
+    if (!(await client.query('SELECT 1 FROM users WHERE id=$1', [userId])).rowCount) {
+      throw new HttpError(404, 'User not found');
+    }
+    return (await client.query(
+      `SELECT actor_id,previous_mode,new_mode,previous_modules,new_modules,changed_at
+       FROM user_app_access_audit WHERE target_user_id=$1
+       ORDER BY changed_at DESC,id DESC LIMIT $2`,
+      [userId, limit],
+    )).rows;
+  });
+  res.json({ history });
 }));
 
 adminRouter.put('/users/:id/mini-app-access', requireRole('super_admin', 'global_admin'), h(async (req, res) => {

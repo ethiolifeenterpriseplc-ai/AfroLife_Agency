@@ -11,14 +11,15 @@ export function normalizeAccountingTrendRows(monthly) {
 }
 
 function formatMonth(value) {
-  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  const source = /^\d{4}-\d{2}$/.test(value) ? `${value}-01` : value.slice(0, 10);
+  const date = new Date(`${source}T12:00:00`);
   return Number.isNaN(date.getTime())
     ? value
     : new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(date);
 }
 
 function renderMetricChart(rows, key, label, currencyCode) {
-  const values = rows.map((row) => ({ month: row.month, value: Number(row[key]) }))
+  const values = rows.map((row) => ({ month: row.month, rawValue: row[key], value: Number(row[key]) }))
     .filter((point) => Number.isFinite(point.value));
   if (!values.length) return null;
   const maxMagnitude = Math.max(1, ...values.map((point) => Math.abs(point.value)));
@@ -37,7 +38,7 @@ function renderMetricChart(rows, key, label, currencyCode) {
     row.append(
       el('span', formatMonth(point.month), 'finance-chart-period'),
       track,
-      el('span', key === 'posted_volume' ? `${currencyCode} ${point.value}` : String(point.value), 'finance-chart-value'),
+      el('span', key === 'posted_volume' ? `${currencyCode} ${point.rawValue}` : String(point.rawValue), 'finance-chart-value'),
     );
     bars.append(row);
   }

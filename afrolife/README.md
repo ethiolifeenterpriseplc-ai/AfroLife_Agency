@@ -84,6 +84,23 @@ leave it empty to show all modules. Overview, account security, and service
 status remain in the shell; Admin remains subject to its existing role policy.
 This deployment-level navigation switch is not an API authorization control.
 
+The Super App uses one authenticated user identity across its mini-apps and
+services. Platform Admins can keep a user's role-default app visibility or set
+an explicit per-user module allowlist. A custom assignment only narrows the
+user's existing role/activity permissions; it never grants role capabilities
+or bypasses service, entity-membership, ownership, or territory checks.
+Assignments are enforced on both shell visibility and matching API route
+families, and every change is retained in an append-only access audit.
+
+Global BI is a separate service and read-only analytics database. It exposes
+aggregate monthly performance totals to Global Admin, Super Admin, Finance, and
+Finance Manager; it does not expose tenant-level rows, identities, or
+transaction details. Its schema/import contract limits retention to 13 months.
+The gateway remains disabled until the separate database and verified source
+projectors are configured. Tenant-side aggregate extraction, hourly scheduling,
+and source reconciliation are not yet deployed, so no real global totals are
+available until that projection pipeline is completed.
+
 The authenticated Service status panel checks the core database-backed API and
 configured service health endpoints. The Overview flags unavailable services.
 An `integrated` service uses the central API process; `disabled` means it is not

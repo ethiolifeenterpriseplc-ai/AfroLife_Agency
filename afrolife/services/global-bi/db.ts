@@ -40,11 +40,17 @@ export async function assertReadOnlyDatabaseSafety(): Promise<void> {
               has_table_privilege(current_user,'public.global_bi_aggregates','SELECT') AS can_read,
               has_table_privilege(current_user,'public.global_bi_aggregates','INSERT') AS can_insert,
               has_table_privilege(current_user,'public.global_bi_aggregates','UPDATE') AS can_update,
-              has_table_privilege(current_user,'public.global_bi_aggregates','DELETE') AS can_delete
+              has_table_privilege(current_user,'public.global_bi_aggregates','DELETE') AS can_delete,
+              has_table_privilege(current_user,'public.global_bi_metric_catalog','INSERT') AS catalog_can_insert,
+              has_table_privilege(current_user,'public.global_bi_metric_catalog','UPDATE') AS catalog_can_update,
+              has_table_privilege(current_user,'public.global_bi_metric_catalog','DELETE') AS catalog_can_delete,
+              has_schema_privilege(current_user,'public','CREATE') AS can_create_in_public
        FROM pg_roles r WHERE r.rolname=current_user`,
     )).rows[0];
     if (!role || role.rolsuper || role.rolbypassrls || !role.can_read
-      || role.can_insert || role.can_update || role.can_delete) {
+      || role.can_insert || role.can_update || role.can_delete
+      || role.catalog_can_insert || role.catalog_can_update || role.catalog_can_delete
+      || role.can_create_in_public) {
       throw new Error('Global BI runtime role must be read-only, non-owner, and must not have BYPASSRLS');
     }
     const owned = (await client.query(

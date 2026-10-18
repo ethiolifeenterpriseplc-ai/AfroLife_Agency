@@ -30,6 +30,16 @@ const batchSchema = z.object({
 
 export type GlobalBiProjectionBatch = z.infer<typeof batchSchema>;
 
+export function assertProjectionTenant(batch: GlobalBiProjectionBatch, configuredTenantId: string | undefined): void {
+  const expectedTenantId = z.string().uuid().safeParse(configuredTenantId);
+  if (!expectedTenantId.success) {
+    throw new Error('GLOBAL_BI_PROJECTOR_TENANT_ID must be a valid UUID');
+  }
+  if (batch.tenantId !== expectedTenantId.data) {
+    throw new Error('Projection tenantId does not match this projector deployment');
+  }
+}
+
 export function validateGlobalBiProjectionBatch(value: unknown, now = new Date()): GlobalBiProjectionBatch {
   const batch = batchSchema.parse(value);
   const generatedAt = new Date(batch.generatedAt);

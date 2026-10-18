@@ -102,3 +102,10 @@ export function requireMiniAppAccess(module: MiniAppKey): RequestHandler {
     return next(new HttpError(403, 'This mini-app is not assigned to your account'));
   };
 }
+
+export function requireAnyMiniAppAccess(...modules: MiniAppKey[]): RequestHandler {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (modules.some((module) => hasMiniAppAccess(req.user!, module))) return next();
+    return next(new HttpError(403, 'This service is not assigned to your account'));
+  };
+}

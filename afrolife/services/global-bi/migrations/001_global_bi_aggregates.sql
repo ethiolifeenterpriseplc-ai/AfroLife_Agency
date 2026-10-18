@@ -62,6 +62,7 @@ CREATE INDEX global_bi_aggregates_projected_at
   ON global_bi_aggregates(projected_at);
 
 GRANT USAGE ON SCHEMA public TO "{{query_role}}","{{ingest_role}}";
+REVOKE ALL ON TABLE global_bi_aggregates,global_bi_metric_catalog FROM PUBLIC;
 GRANT SELECT ON TABLE global_bi_aggregates,global_bi_metric_catalog TO "{{query_role}}";
 GRANT SELECT ON TABLE global_bi_aggregates,global_bi_metric_catalog TO "{{ingest_role}}";
 GRANT INSERT,UPDATE,DELETE ON TABLE global_bi_aggregates TO "{{ingest_role}}";

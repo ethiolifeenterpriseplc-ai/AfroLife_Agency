@@ -36,6 +36,9 @@ export function createGlobalBiRouter() {
     const from = input.from ?? defaults.from;
     const to = input.to ?? defaults.to;
     if (from > to) throw new HttpError(400, 'Report start date must be on or before its end date');
+    if (!from.endsWith('-01')) {
+      throw new HttpError(400, 'Global BI reports use full calendar-month start dates');
+    }
     if (from < thirteenMonthsAgo()) throw new HttpError(400, 'Global BI reports are limited to the 13-month retention window');
 
     const result = await withUser(req.user! as AuthUser, async (client) => {
@@ -45,7 +48,8 @@ export function createGlobalBiRouter() {
                   a.currency, a.projected_at, c.temporal_aggregation
            FROM global_bi_aggregates a
            JOIN global_bi_metric_catalog c ON c.metric_key=a.metric_key
-           WHERE a.period_start >= $1::date AND a.period_end <= $2::date
+           WHERE a.period_start >= $1::date
+             AND a.period_start <= date_trunc('month',$2::date)::date
              AND (
                c.temporal_aggregation='flow'
                OR a.period_start=(
@@ -54,7 +58,8 @@ export function createGlobalBiRouter() {
                  WHERE latest.tenant_id=a.tenant_id
                    AND latest.metric_key=a.metric_key
                    AND coalesce(latest.currency,'')=coalesce(a.currency,'')
-                   AND latest.period_start >= $1::date AND latest.period_end <= $2::date
+                   AND latest.period_start >= $1::date
+                   AND latest.period_start <= date_trunc('month',$2::date)::date
                )
              )
          )
@@ -68,16 +73,22 @@ export function createGlobalBiRouter() {
         `SELECT a.period_start::text AS period, a.metric_key AS metric,
                 sum(a.metric_value)::text AS value, a.unit, a.currency
          FROM global_bi_aggregates a
-         WHERE a.period_start >= $1::date AND a.period_end <= $2::date
+         WHERE a.period_start >= $1::date
+           AND a.period_start <= date_trunc('month',$2::date)::date
          GROUP BY a.period_start, a.metric_key, a.unit, a.currency
          ORDER BY a.period_start, a.metric_key, a.currency`,
         [from, to],
       )).rows;
       const freshness = (await client.query(
-        `SELECT count(DISTINCT tenant_id)::int AS reporting_tenants,
-                min(projected_at) AS as_of
-         FROM global_bi_aggregates
-         WHERE period_start >= $1::date AND period_end <= $2::date`,
+        `WITH tenant_freshness AS (
+           SELECT tenant_id,max(projected_at) AS projected_at
+           FROM global_bi_aggregates
+           WHERE period_start >= $1::date
+             AND period_start <= date_trunc('month',$2::date)::date
+           GROUP BY tenant_id
+         )
+         SELECT count(*)::int AS reporting_tenants,min(projected_at) AS as_of
+         FROM tenant_freshness`,
         [from, to],
       )).rows[0];
       return {

@@ -43,7 +43,9 @@ separate BI database through the trusted projector role.
 
 The trusted tenant-side projector creates one JSON file per tenant/hour. The
 file is loaded only through `npm run import:global-bi -- <path-to-json>` using
-the projector database role. `tenantId` must come from that tenant's verified
+the projector database role and a deployment-scoped
+`GLOBAL_BI_PROJECTOR_TENANT_ID`. The importer rejects a batch whose tenant ID
+does not match that setting; the ID must come from the verified tenant
 deployment configuration, not user input.
 
 ```json

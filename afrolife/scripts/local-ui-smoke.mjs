@@ -113,12 +113,33 @@ try {
     }
     return response.result.value;
   };
-  const waitFor = async (expression, label) => {
-    for (let attempt = 0; attempt < 80; attempt++) {
+  const waitFor = async (expression, label, attempts = 80) => {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       if (await evaluate(expression)) return;
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     throw new Error(`Timed out waiting for ${label}`);
+  };
+  const submitLoginAndWait = async (role, code) => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (code) await new Promise((resolve) => setTimeout(resolve, 30_000 - (Date.now() % 30_000) + 1000));
+      await evaluate(`(() => {
+        const form = document.querySelector('#login-form');
+        ${code ? `form.elements.code.value = ${JSON.stringify(code)};` : ''}
+        form.requestSubmit();
+        return true;
+      })()`);
+      const responseReady = code
+        ? "document.querySelector('#app-view')?.hidden === false || !!document.querySelector('#login-error')?.textContent?.trim()"
+        : "document.querySelector('#app-view')?.hidden === false || document.querySelector('#mfa-field')?.hidden === false || !!document.querySelector('#login-error')?.textContent?.trim()";
+      await waitFor(responseReady, `${role} login response`);
+      const result = await evaluate(`({ appVisible: document.querySelector('#app-view')?.hidden === false, mfaVisible: document.querySelector('#mfa-field')?.hidden === false, error: document.querySelector('#login-error')?.textContent?.trim() || '' })`);
+      if (result.appVisible || (!code && result.mfaVisible)) return result;
+      const retry = result.error.match(/try again in (\d+) seconds?/i);
+      if (!retry || attempt === 3) throw new Error(`${role} sign-in failed: ${result.error || 'no response'}`);
+      await new Promise((resolve) => setTimeout(resolve, (Number(retry[1]) + 1) * 1000));
+    }
+    throw new Error(`${role} sign-in exceeded the retry limit`);
   };
 
   const totp = (secret) => {
@@ -239,15 +260,16 @@ try {
   await send('Log.enable');
   await waitFor("document.readyState === 'complete' && !!document.querySelector('#login-form')", 'login form');
   const accessibilityChecks = [await accessibilityAudit('login')];
-  await evaluate(`(() => {
-    const form = document.querySelector('#login-form');
-    form.elements.phone.value = ${JSON.stringify(phone)};
-    form.elements.password.value = ${JSON.stringify(password)};
-    form.requestSubmit();
-    return true;
-  })()`);
+  await evaluate(`(() => { const form = document.querySelector('#login-form'); form.elements.phone.value = ${JSON.stringify(phone)}; form.elements.password.value = ${JSON.stringify(password)}; return true; })()`);
+  const superAdminMfaSecret = credentialLines.find((line) => line.startsWith('super_admin |'))?.split('|')[3]?.trim();
   try {
-    await waitFor("document.querySelector('#app-view')?.hidden === false", 'successful Super Admin sign in');
+    const login = await submitLoginAndWait('Super Admin');
+    if (login.mfaVisible) {
+      assert.ok(superAdminMfaSecret, 'Super Admin authenticator challenge requires the isolated test account setup key');
+      const code = totp(superAdminMfaSecret);
+      const authenticated = await submitLoginAndWait('Super Admin authenticator', code);
+      assert.equal(authenticated.appVisible, true, 'Super Admin authenticator code should complete sign-in');
+    }
   } catch {
     throw new Error(`Super Admin sign-in did not complete: ${await evaluate("document.querySelector('#login-error')?.textContent || 'no form error shown'")}`);
   }
@@ -269,19 +291,31 @@ try {
   }
   accessibilityChecks.push(await accessibilityAudit('Super Admin overview'));
   const mfiEnabled = await evaluate("document.querySelector('#mfi-tab')?.hidden === false");
+  let mfiInstitutionAvailable = false;
   if (mfiEnabled) {
     await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]')", 'role-aware mini-app launcher');
     await evaluate("document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"mfi\"]').click()");
     await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace rendering');
+    await waitFor("!!document.querySelector('#workspace [data-mfi-service-search]') || !!document.querySelector('#workspace [data-mfi-form=\"create-institution\"]')", 'SACCO institution state');
+    mfiInstitutionAvailable = await evaluate("!!document.querySelector('#workspace [data-mfi-service-search]')");
+    if (!mfiInstitutionAvailable) {
+      assert.equal(await evaluate("!!document.querySelector('#workspace [data-mfi-form=\"create-institution\"]')"), true,
+        'An empty SACCO environment should present the institution setup workflow to a platform administrator');
+    }
   } else {
     assert.equal(await evaluate("document.querySelector('#mfi-tab')?.hidden"), true, 'Disabled SACCO pilot should remain hidden');
   }
   await evaluate("document.querySelector('#agents-tab').click()");
   await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"commissions\"]')", 'agent mini-app shortcuts');
-  if (mfiEnabled) {
+  if (mfiEnabled && mfiInstitutionAvailable) {
     await evaluate("document.querySelector('#mfi-tab').click()");
     await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace return');
-    await waitFor("!!document.querySelector('#workspace [data-mfi-service-search]')", 'accessible service finder');
+    try {
+      await waitFor("!!document.querySelector('#workspace [data-mfi-service-search]')", 'accessible service finder', 150);
+    } catch {
+      const snapshot = await evaluate(`({ title: document.querySelector('#page-title')?.textContent?.trim(), panel: document.querySelector('#workspace')?.dataset.panel, alert: document.querySelector('#alert')?.textContent?.trim(), mfi: document.querySelector('#workspace .mfi-workspace')?.innerText?.slice(0, 900), workspace: document.querySelector('#workspace')?.innerText?.slice(0, 900) })`);
+      throw new Error(`MFI service finder did not render: ${JSON.stringify(snapshot)}`);
+    }
     const serviceSearch = await evaluate(`(() => {
       const field = document.querySelector('#workspace [data-mfi-service-search]');
       field.value = 'Digital wallet';
@@ -309,6 +343,14 @@ try {
     await waitFor("!!document.querySelector('#workspace [data-mfi-form=\"npl-classification\"]') || !!document.querySelector('#workspace .mfi-record-list')", 'risk classification screen');
     await evaluate("document.querySelector('#workspace [data-mfi-module=\"staff\"]')?.click()");
     await waitFor("!!document.querySelector('#workspace .mfi-staff-form')", 'institution staff form');
+  } else if (mfiEnabled) {
+    await evaluate("document.querySelector('#mfi-tab').click()");
+    try {
+      await waitFor("!!document.querySelector('#workspace [data-mfi-form=\"create-institution\"]')", 'SACCO institution setup empty state');
+    } catch {
+      const snapshot = await evaluate(`({ title: document.querySelector('#page-title')?.textContent?.trim(), panel: document.querySelector('#workspace')?.dataset.panel, alert: document.querySelector('#alert')?.textContent?.trim(), workspace: document.querySelector('#workspace')?.innerText?.slice(0, 500) })`);
+      throw new Error(`SACCO institution setup did not return: ${JSON.stringify(snapshot)}`);
+    }
   }
   const edirEnabled = await evaluate("document.querySelector('#edir-tab')?.hidden === false");
   if (edirEnabled) {
@@ -364,28 +406,15 @@ try {
     revokedRequestIds = new Set(inFlightRequests.keys());
     await evaluate("document.querySelector('#logout').click()");
     await waitFor("document.querySelector('#app-view')?.hidden === true && document.querySelector('#login-form')?.hidden === false", `${role} sign-in form`);
-    await evaluate(`(() => {
-      const form = document.querySelector('#login-form');
-      form.elements.phone.value = ${JSON.stringify(rolePhone)};
-      form.elements.password.value = ${JSON.stringify(rolePassword)};
-      form.requestSubmit();
-      return true;
-    })()`);
-    await waitFor("document.querySelector('#app-view')?.hidden === false", `${role} workspace`);
+    await evaluate(`(() => { const form = document.querySelector('#login-form'); form.elements.phone.value = ${JSON.stringify(rolePhone)}; form.elements.password.value = ${JSON.stringify(rolePassword)}; return true; })()`);
     const roleCredentials = accountLine.split('|').map((part) => part.trim());
     const roleMfaSecret = roleCredentials[3];
-    if (roleMfaSecret) {
-      await waitFor("document.querySelector('#mfa-field')?.hidden === false", `${role} authenticator challenge`);
+    const roleLogin = await submitLoginAndWait(role);
+    if (roleLogin.mfaVisible) {
+      assert.ok(roleMfaSecret, `${role} authenticator challenge requires the isolated test account setup key`);
       const code = totp(roleMfaSecret);
-      await evaluate(`(() => {
-        const form = document.querySelector('#login-form');
-        form.elements.code.value = ${JSON.stringify(code)};
-        form.requestSubmit();
-        return true;
-      })()`);
-    }
-    if (await evaluate("document.querySelector('#page-title')?.textContent?.trim() === 'Account security'")) {
-      await completeStaffMfaSetup(role, rolePhone, rolePassword);
+      const authenticated = await submitLoginAndWait(`${role} authenticator`, code);
+      assert.equal(authenticated.appVisible, true, `${role} authenticator code should complete sign-in`);
     }
     await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Your workspace'", `${role} overview rendering`);
     const roleCheck = await evaluate(`({role:${JSON.stringify(role)},title:document.querySelector('#page-title')?.textContent?.trim() || '',adminVisible:document.querySelector('#admin-tab')?.hidden === false})`);
@@ -400,11 +429,12 @@ try {
     `${roleChecks.length} additional role sign-ins`, 'accessible names, image alternatives, document language and main heading smoke',
     'browser exceptions and unexpected console errors',
   ];
-  if (mfiEnabled) checks.push('SACCO navigation, service finder, member, policy, affordability, collections, NPL, and staff screens');
+  if (mfiEnabled && mfiInstitutionAvailable) checks.push('SACCO navigation, service finder, member, policy, affordability, collections, NPL, and staff screens');
+  else if (mfiEnabled) checks.push('SACCO pilot empty-state and institution setup are shown when no institution is provisioned');
   else checks.push('SACCO pilot remains hidden while disabled');
   if (edirEnabled) checks.push('Edir workspace and finance shortcut');
   console.log(JSON.stringify({ result: 'PASS', checks, skipped: [
-    ...(!mfiEnabled ? ['SACCO workflows (pilot disabled in this environment)'] : []),
+    ...(!mfiEnabled ? ['SACCO workflows (pilot disabled in this environment)'] : !mfiInstitutionAvailable ? ['SACCO institution workflows (no institution is provisioned)'] : []),
     ...(edirEnabled ? [] : ['Edir workflows (disabled in this environment)']),
     ...(roleChecks.length ? [] : ['Additional-role journeys (no role accounts configured)']),
   ], accessibilityChecks, mobileNavigation, layouts, roleChecks, mfaEnrollments,

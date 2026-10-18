@@ -108,7 +108,9 @@ async function api(path, options = {}) {
   const response = await fetch(`${apiRoot()}${path}`, { ...options, headers });
   const result = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
-    if (response.status === 401 && token) signOut({ revoke: false, message: 'Your session expired or is no longer active. Please sign in again.' });
+    if (response.status === 401 && token && token === sessionStorage.getItem(TOKEN_KEY)) {
+      signOut({ revoke: false, message: 'Your session expired or is no longer active. Please sign in again.' });
+    }
     const retryAfter = Number(result?.retry_after_seconds ?? response.headers.get('retry-after'));
     if (response.status === 429 && Number.isFinite(retryAfter) && retryAfter > 0) {
       throw new Error(t(result?.error ?? 'Too many requests. Please try again in {{seconds}} seconds.', { seconds: Math.ceil(retryAfter) }));

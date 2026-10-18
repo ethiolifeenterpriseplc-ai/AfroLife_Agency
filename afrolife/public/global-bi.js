@@ -150,6 +150,9 @@ export function createGlobalBiWorkspace(api) {
     const from = fromInput.value;
     const to = toInput.value;
     if (!from || !to || from > to) {
+      summary.replaceChildren();
+      metrics.replaceChildren();
+      trends.replaceChildren();
       status.textContent = 'Choose a valid reporting period. The start date must be on or before the end date.';
       status.classList.add('is-error');
       return;
