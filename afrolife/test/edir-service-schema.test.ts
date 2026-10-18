@@ -26,6 +26,7 @@ const platformCapGuardMigration = await readFile(new URL('../services/afrolife-e
 const organizationLedgerBootstrapMigration = await readFile(new URL('../services/afrolife-edir/021_organization_ledger_bootstrap.sql', import.meta.url), 'utf8');
 const memberCreditControlLockMigration = await readFile(new URL('../services/afrolife-edir/022_member_credit_control_lock.sql', import.meta.url), 'utf8');
 const memberCreditControlPostingRolesMigration = await readFile(new URL('../services/afrolife-edir/023_member_credit_control_posting_roles.sql', import.meta.url), 'utf8');
+const registrationDocumentsMigration = await readFile(new URL('../services/afrolife-edir/026_registration_documents.sql', import.meta.url), 'utf8');
 const creditRouter = await readFile(new URL('../services/afrolife-edir/credit-router.ts', import.meta.url), 'utf8');
 const edirUi = await readFile(new URL('../public/edir.js', import.meta.url), 'utf8');
 const complaintIntakeRoute = creditRouter.split("edirCreditRouter.post('/complaints'")[1]?.split("edirCreditRouter.post('/complaints/:complaintId/decision'")[0] ?? '';
@@ -308,4 +309,14 @@ test('Edir member risk controls serialize with credit actions without widening m
   assert.match(memberCreditControlLockMigration,/REVOKE ALL ON FUNCTION edir_lock_member_credit_controls\(uuid\) FROM PUBLIC/);
   assert.match(memberCreditControlPostingRolesMigration,/edir_has_staff_role\(ARRAY\['edir_admin','credit_manager','compliance','finance_manager','treasurer'\]\)/);
   assert.match(creditRouter,/edir_lock_member_credit_controls\(\$1\)/);
+});
+
+test('public Edir document uploads use a short-lived token-scoped RLS lookup and require verified official documents',()=>{
+  assert.match(migrationRunner,/afrolife-edir-v26-registration-documents/);
+  assert.match(registrationDocumentsMigration,/CREATE POLICY edir_registration_public_upload_lookup ON edir_registration_applications FOR SELECT/);
+  assert.match(registrationDocumentsMigration,/current_setting\('app\.edir_registration_upload_token_hash',true\)/);
+  assert.match(registrationDocumentsMigration,/CREATE POLICY edir_registration_documents_public_replace ON edir_registration_documents FOR UPDATE/);
+  assert.match(router,/set_config\('app\.edir_registration_upload_token_hash'/);
+  assert.match(router,/Required Edir official documents must be uploaded and verified before approval/);
+  assert.match(router,/registration-applications\/:id\/documents\/:documentId\/review/);
 });

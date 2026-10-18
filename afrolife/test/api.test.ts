@@ -1203,3 +1203,61 @@ test('Insurance brokerage sandbox runs a synthetic, scoped and production-locked
 });
 
 test.after(() => db.end());
+
+test('manual service subscriptions enforce fixed catalog, ownership, and independent Finance review', async () => {
+  const catalog = await call(learningCustomer, 'GET', '/subscriptions/catalog');
+  assert.equal(catalog.status, 200);
+  assert.deepEqual(catalog.body.services.map((service: any) => service.key), [
+    'property_management', 'workforce_management', 'super_agent', 'edir',
+    'insurance_brokerage', 'agent', 'landlord', 'seller',
+  ]);
+  assert.equal(catalog.body.services.every((service: any) =>
+    service.monthly_fee === 1000 && service.currency === 'ETB' && service.payment_method === 'manual'), true);
+  assert.equal((await call(learningCustomer, 'GET', '/subscriptions/review')).status, 403);
+  assert.equal((await call(learningCustomer, 'POST', '/subscriptions/requests', {
+    services: ['accounting'],
+  })).status, 400);
+  assert.equal((await call(learningCustomer, 'POST', '/subscriptions/requests', {
+    services: ['edir', 'edir'],
+  })).status, 400);
+
+  const created = await call(learningCustomer, 'POST', '/subscriptions/requests', {
+    services: ['seller'],
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const subscription = created.body.requests[0];
+  assert.equal(subscription.monthly_fee, '1000.00');
+  assert.equal(subscription.status, 'requested');
+  const paymentReference = `TEST-${randomUUID()}`;
+  const submitted = await call(learningCustomer, 'POST',
+    `/subscriptions/${subscription.id}/payment-reference`, { payment_reference: paymentReference });
+  assert.equal(submitted.status, 200, JSON.stringify(submitted.body));
+  assert.equal(submitted.body.request.status, 'payment_review');
+
+  const ownerReview = await call(learningCustomer, 'POST', `/subscriptions/review/${subscription.id}`, {
+    decision: 'reject',
+    reason: 'The payment reference needs independent verification.',
+  });
+  assert.equal(ownerReview.status, 403);
+  const queue = await call(fin1, 'GET', '/subscriptions/review');
+  assert.equal(queue.status, 200, JSON.stringify(queue.body));
+  assert.equal(queue.body.requests.some((item: any) => item.id === subscription.id), true);
+
+  const rejected = await call(fin1, 'POST', `/subscriptions/review/${subscription.id}`, {
+    decision: 'reject',
+    reason: 'The payment could not be matched to the submitted reference.',
+  });
+  assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+  assert.equal(rejected.body.request.status, 'rejected');
+  const mine = await call(learningCustomer, 'GET', '/subscriptions/mine');
+  assert.equal(mine.status, 200);
+  assert.equal(mine.body.requests.find((item: any) => item.id === subscription.id).payment_reference, paymentReference);
+  const otherOwnerRequest = await call(learningManager, 'POST', '/subscriptions/requests', {
+    services: ['seller'],
+  });
+  assert.equal(otherOwnerRequest.status, 201, JSON.stringify(otherOwnerRequest.body));
+  const duplicateReference = await call(learningManager, 'POST',
+    `/subscriptions/${otherOwnerRequest.body.requests[0].id}/payment-reference`,
+    { payment_reference: paymentReference.toLowerCase() });
+  assert.equal(duplicateReference.status, 409);
+});

@@ -61,7 +61,7 @@ function formatBps(value) {
   return `${Math.floor(value / 100)}.${String(value % 100).padStart(2, '0')}%`;
 }
 
-export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) {
+export function createEdirWorkspace(api, user, onOrganizationChange = () => {}, downloadFile) {
   const root = node('div', undefined, 'edir-workspace');
   const isAdmin = isPlatformAdmin(user.role);
   const canManage = () => isAdmin || me.staff_roles.includes('edir_admin');
@@ -193,8 +193,32 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
       const item = card(application.display_name,
         `${application.legal_name} · Contact ${application.contact_name}, ${application.contact_phone}${application.contact_email ? ` · ${application.contact_email}` : ''} · ${application.registration_reference ?? 'No registration reference'} · ${application.status}`,
         application.status);
+      const documents = Array.isArray(application.documents) ? application.documents : [];
+      for (const document of documents) {
+        const documentItem = node('div', undefined, 'registration-document-review');
+        documentItem.append(node('p',
+          `${document.document_type.replaceAll('_', ' ')} · ${document.status} · ${document.mime} · ${document.size_bytes} bytes${document.review_reason ? ` · ${document.review_reason}` : ''}`));
+        const download = actionButton('Download official document', 'registration-document-download', document.id);
+        download.dataset.applicationId = application.id;
+        download.dataset.documentType = document.document_type;
+        documentItem.append(download);
+        if (application.status === 'pending' && document.status === 'uploaded') {
+          const verify = actionButton('Verify document', 'registration-document-review', document.id, 'verified');
+          const reject = actionButton('Return document', 'registration-document-review', document.id, 'rejected');
+          verify.dataset.applicationId = application.id;
+          reject.dataset.applicationId = application.id;
+          documentItem.append(verify, reject);
+        }
+        item.append(documentItem);
+      }
       if (application.status === 'pending') {
-        item.append(actionButton('Approve and activate', 'registration-decision', application.id, 'accepted'));
+        const verified = new Set(documents.filter((document) => document.status === 'verified')
+          .map((document) => document.document_type));
+        if (verified.has('legal_registration') && verified.has('governance_charter')) {
+          item.append(actionButton('Approve and activate', 'registration-decision', application.id, 'accepted'));
+        } else {
+          item.append(node('p', 'Official registration and governance documents must both be verified before approval.', 'muted'));
+        }
         item.append(actionButton('Reject application', 'registration-decision', application.id, 'rejected'));
       }
       applicationsList.append(item);
@@ -1270,6 +1294,35 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}) 
         notice = action.dataset.decision === 'accepted' ? 'Edir registration approved and its independent organization workspace activated.' : 'Edir registration application rejected.';
         await load(); render();
       } catch (reason) { error = reason.message; render(); }
+      return;
+    }
+    if (action.dataset.edirAction === 'registration-document-download') {
+      action.disabled = true;
+      try {
+        if (!downloadFile) throw new Error('Secure document download is unavailable in this workspace.');
+        await downloadFile(
+          `/edir/registration-applications/${encodeURIComponent(action.dataset.applicationId)}/documents/${encodeURIComponent(action.dataset.id)}/file`,
+          `edir-${action.dataset.documentType}-document`,
+        );
+      } catch (reason) { error = reason.message; render(); }
+      finally { if (action.isConnected) action.disabled = false; }
+      return;
+    }
+    if (action.dataset.edirAction === 'registration-document-review') {
+      const reason = window.prompt(t('Enter a document review reason (minimum 10 characters).'));
+      if (!reason || reason.trim().length < 10) return;
+      action.disabled = true;
+      try {
+        await api(
+          `/edir/registration-applications/${encodeURIComponent(action.dataset.applicationId)}/documents/${encodeURIComponent(action.dataset.id)}/review`,
+          { method: 'POST', body: JSON.stringify({ decision: action.dataset.decision, reason: reason.trim() }) },
+        );
+        notice = action.dataset.decision === 'verified'
+          ? 'Official Edir document verified.'
+          : 'Official Edir document returned for replacement.';
+        await load(); render();
+      } catch (reason) { error = reason.message; render(); }
+      finally { if (action.isConnected) action.disabled = false; }
       return;
     }
     if (action.dataset.edirAction === 'archive-group') {

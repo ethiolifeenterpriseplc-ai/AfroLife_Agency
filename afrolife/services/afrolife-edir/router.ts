@@ -1,8 +1,12 @@
 import { Router, type Request, type Response, type RequestHandler } from 'express';
+import express from 'express';
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { AuthUser } from '../../src/auth-types.js';
 import { HttpError } from '../../src/http-error.js';
+import { sniff } from '../../src/files.js';
+import { getFile, putFile } from '../../src/storage.js';
 import { withUser } from './db.js';
 import { edirFinanceRouter } from './finance-router.js';
 import { edirCreditRouter } from './credit-router.js';
@@ -71,27 +75,153 @@ edirRouter.post('/public/registration-applications', h(async (req, res) => {
     contact_email: z.union([z.string().trim().email().max(254), z.literal('')]).optional(),
     accept_review_terms: z.literal(true),
   }).strict().parse(req.body);
+  const uploadToken = randomBytes(32).toString('base64url');
   const application = await withUser(req.user!, async (client) => (await client.query(
     `INSERT INTO edir_registration_applications
       (display_name, legal_name, registration_reference, governance_reference,
-       contact_name, contact_phone, contact_email, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       contact_name, contact_phone, contact_email, created_by, upload_token_hash, upload_token_expires_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now() + interval '24 hours')
      RETURNING id, display_name, status, created_at`,
     [body.display_name, body.legal_name, body.registration_reference ?? null,
       body.governance_reference ?? null, body.contact_name, body.contact_phone,
-      body.contact_email || null, req.user!.id],
+      body.contact_email || null, req.user!.id, createHash('sha256').update(uploadToken).digest('hex')],
   )).rows[0]);
-  res.status(201).json(application);
+  res.status(201).json({ ...application, upload_token: uploadToken });
 }));
+
+edirRouter.post(
+  '/public/registration-applications/:applicationId/documents/:documentType',
+  express.raw({ type: () => true, limit: '10mb' }),
+  h(async (req, res) => {
+    if (req.user!.role !== 'public' || req.user!.id !== '00000000-0000-4000-8000-000000000000') {
+      throw new HttpError(403, 'Public Edir registration gateway is required');
+    }
+    const applicationId = z.string().uuid().parse(req.params.applicationId);
+    const documentType = z.enum(['legal_registration','governance_charter']).parse(req.params.documentType);
+    const token = req.get('authorization')?.match(/^Signup ([A-Za-z0-9_-]{40,})$/)?.[1];
+    if (!token) throw new HttpError(401, 'A valid Edir registration upload token is required.');
+    const file = req.body as Buffer;
+    if (!Buffer.isBuffer(file) || file.length === 0) throw new HttpError(400, 'Choose an official document to upload.');
+    const mime = sniff(file);
+    if (!mime) throw new HttpError(415, 'Only PDF, JPEG or PNG official documents are accepted.');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const storageKey = randomUUID();
+    const document = await withUser(req.user!, async (client) => {
+      await client.query(
+        "SELECT set_config('app.edir_registration_upload_token_hash',$1,true)",
+        [tokenHash],
+      );
+      const application = (await client.query(
+        `SELECT id FROM edir_registration_applications
+         WHERE id=$1 AND status='pending' AND upload_token_hash=$2 AND upload_token_expires_at>now()`,
+        [applicationId, tokenHash],
+      )).rows[0];
+      if (!application) throw new HttpError(401, 'The Edir registration upload token is invalid, expired, or no longer usable.');
+      const existing = (await client.query(
+        'SELECT id,status FROM edir_registration_documents WHERE application_id=$1 AND document_type=$2 FOR UPDATE',
+        [applicationId, documentType],
+      )).rows[0];
+      if (existing && existing.status !== 'rejected') {
+        throw new HttpError(409, 'This official document is already on file and cannot be replaced unless returned by review.');
+      }
+      await putFile(storageKey, file);
+      if (existing) {
+        const updated = (await client.query(
+          `UPDATE edir_registration_documents
+           SET storage_key=$2,sha256=$3,mime=$4,size_bytes=$5,status='uploaded',
+             uploaded_by=$6,reviewer_id=NULL,reviewed_at=NULL,review_reason=NULL,created_at=now()
+           WHERE id=$1 RETURNING id,application_id,document_type,status,mime,size_bytes,created_at`,
+          [existing.id, storageKey, createHash('sha256').update(file).digest('hex'), mime, file.length, req.user!.id],
+        )).rows[0];
+        await audit(client, req.user!.id, 'edir_registration_document_replaced', 'edir_registration_document',
+          existing.id, { document_type: documentType, status: 'rejected' }, { status: 'uploaded' });
+        return updated;
+      }
+      const inserted = (await client.query(
+        `INSERT INTO edir_registration_documents
+           (application_id,document_type,storage_key,sha256,mime,size_bytes,uploaded_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         RETURNING id,application_id,document_type,status,mime,size_bytes,created_at`,
+        [applicationId, documentType, storageKey, createHash('sha256').update(file).digest('hex'), mime, file.length, req.user!.id],
+      )).rows[0];
+      await audit(client, req.user!.id, 'edir_registration_document_uploaded', 'edir_registration_document',
+        inserted.id, null, { application_id: applicationId, document_type: documentType, mime, size_bytes: file.length });
+      return inserted;
+    });
+    res.status(201).json(document);
+  }),
+);
 
 edirRouter.get('/registration-applications', requireEdirMaster, h(async (req, res) => {
   const applications = await withUser(req.user!, async (client) => (await client.query(
     `SELECT id, display_name, legal_name, registration_reference, governance_reference,
             contact_name, contact_phone, contact_email, status, reviewed_by, reviewed_at,
-            review_reason, organization_id, created_at
+            review_reason, organization_id, created_at,
+            COALESCE((
+              SELECT jsonb_agg(jsonb_build_object(
+                'id',document.id,'document_type',document.document_type,'status',document.status,
+                'mime',document.mime,'size_bytes',document.size_bytes,'review_reason',document.review_reason,
+                'reviewed_at',document.reviewed_at,'created_at',document.created_at
+              ) ORDER BY document.document_type)
+              FROM edir_registration_documents document WHERE document.application_id=application.id
+            ),'[]'::jsonb) AS documents
      FROM edir_registration_applications ORDER BY created_at DESC LIMIT 500`,
   )).rows);
   res.json(applications);
+}));
+
+edirRouter.get('/registration-applications/:id/documents/:documentId/file', requireEdirMaster, h(async (req, res) => {
+  const applicationId = z.string().uuid().parse(req.params.id);
+  const documentId = z.string().uuid().parse(req.params.documentId);
+  const document = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,storage_key,mime FROM edir_registration_documents
+     WHERE id=$1 AND application_id=$2`,
+    [documentId, applicationId],
+  )).rows[0]);
+  if (!document) throw new HttpError(404, 'Edir registration document not found.');
+  await withUser(req.user!, async (client) => {
+    await audit(client, req.user!.id, 'edir_registration_document_downloaded', 'edir_registration_document',
+      documentId, { application_id: applicationId });
+  });
+  res.set({
+    'Content-Type': document.mime,
+    'Content-Disposition': 'attachment',
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'private, no-store',
+  }).send(await getFile(document.storage_key));
+}));
+
+edirRouter.post('/registration-applications/:id/documents/:documentId/review', requireEdirMaster, h(async (req, res) => {
+  const applicationId = z.string().uuid().parse(req.params.id);
+  const documentId = z.string().uuid().parse(req.params.documentId);
+  const body = z.object({
+    decision: z.enum(['verified','rejected']),
+    reason: z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
+  const document = await withUser(req.user!, async (client) => {
+    const current = (await client.query(
+      `SELECT document.id,document.document_type,document.status,application.status AS application_status
+       FROM edir_registration_documents document
+       JOIN edir_registration_applications application ON application.id=document.application_id
+       WHERE document.id=$1 AND document.application_id=$2 FOR UPDATE OF document`,
+      [documentId, applicationId],
+    )).rows[0];
+    if (!current) throw new HttpError(404, 'Edir registration document not found.');
+    if (current.application_status !== 'pending') throw new HttpError(409, 'Only pending Edir registrations can have documents reviewed.');
+    if (current.status !== 'uploaded') throw new HttpError(409, 'This Edir registration document has already been reviewed.');
+    const updated = (await client.query(
+      `UPDATE edir_registration_documents
+       SET status=$2,reviewer_id=$3,reviewed_at=now(),review_reason=$4
+       WHERE id=$1
+       RETURNING id,application_id,document_type,status,reviewer_id,reviewed_at,review_reason`,
+      [documentId, body.decision, req.user!.id, body.reason],
+    )).rows[0];
+    await audit(client, req.user!.id, `edir_registration_document_${body.decision}`,
+      'edir_registration_document', documentId,
+      { status: current.status }, { status: updated.status, reason: body.reason });
+    return updated;
+  });
+  res.json(document);
 }));
 
 edirRouter.post('/registration-applications/:id/decision', requireEdirMaster, h(async (req, res) => {
@@ -104,6 +234,16 @@ edirRouter.post('/registration-applications/:id/decision', requireEdirMaster, h(
     if (!application) throw new HttpError(404, 'Pending Edir registration application was not found');
     let organizationId: string | null = null;
     if (body.decision === 'accepted') {
+      const requiredDocuments = ['legal_registration', 'governance_charter'];
+      const verifiedDocuments = (await client.query(
+        `SELECT document_type FROM edir_registration_documents
+         WHERE application_id=$1 AND status='verified'`,
+        [id],
+      )).rows.map((document) => document.document_type);
+      const missingDocuments = requiredDocuments.filter((documentType) => !verifiedDocuments.includes(documentType));
+      if (missingDocuments.length) {
+        throw new HttpError(409, `Required Edir official documents must be uploaded and verified before approval: ${missingDocuments.join(', ')}.`);
+      }
       const organization = (await client.query(
         `INSERT INTO edir_organizations
           (id, parent_organization_id, organization_type, display_name, legal_name, registration_reference,
@@ -117,7 +257,8 @@ edirRouter.post('/registration-applications/:id/decision', requireEdirMaster, h(
     }
     const updated = (await client.query(
       `UPDATE edir_registration_applications
-       SET status=$2, reviewed_by=$3, reviewed_at=now(), review_reason=$4, organization_id=$5
+       SET status=$2, reviewed_by=$3, reviewed_at=now(), review_reason=$4, organization_id=$5,
+           upload_token_hash=NULL, upload_token_expires_at=NULL
        WHERE id=$1 RETURNING id, display_name, status, organization_id, reviewed_at`,
       [id, body.decision, req.user!.id, body.reason, organizationId],
     )).rows[0];

@@ -592,6 +592,78 @@ footer { padding: 20px max(22px, calc((100vw - 1360px) / 2)); padding-block-end:
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
+.login-registration-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.login-registration-actions .button { min-height: 48px; text-align: center; }
+.signup-kyc {
+  margin: 10px 0 16px;
+  padding: 16px;
+  border: 1px solid #d8e4d9;
+  border-inline-start: 4px solid var(--gold);
+  border-radius: 13px;
+  background: #f7faf5;
+}
+.signup-kyc h3 { margin-bottom: 5px; color: var(--green-dark); font-size: 16px; }
+.signup-kyc > .muted { margin-bottom: 12px; font-size: 12px; line-height: 1.55; }
+.signup-kyc label[hidden], .edir-registration-form label[hidden] { display: none !important; }
+.admin-server-tools { margin-block: 20px; }
+.admin-server-tools h3 { margin-bottom: 6px; }
+.admin-server-tools > p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.admin-server-tools .server-setup { max-width: 560px; margin-top: 15px; }
+.app-dashboard {
+  margin: 18px 0 22px;
+  border-inline-start: 4px solid var(--gold);
+  box-shadow: 0 12px 32px rgba(23, 43, 39, .07);
+}
+.app-dashboard > h2 { margin-bottom: 7px; color: var(--green-dark); font-size: 19px; }
+.app-dashboard > p { font-size: 12px; line-height: 1.65; }
+.app-dashboard-summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.app-dashboard-stat { min-width: 148px; display: grid; gap: 5px; padding: 12px 15px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfa; }
+.app-dashboard-stat span { color: var(--muted); font-size: 11px; }
+.app-dashboard-stat strong { color: var(--green-dark); font-size: 22px; }
+.app-dashboard-empty { padding: 10px 0; }
+.app-dashboard-chart { margin: 16px 0 0; }
+.app-dashboard-chart figcaption { margin-bottom: 8px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.app-dashboard-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.app-dashboard-table th, .app-dashboard-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: start; }
+.app-dashboard-table thead th { color: var(--muted); font-size: 10px; font-weight: 700; }
+.app-dashboard-table tbody th { font-weight: 600; }
+.app-dashboard-table meter { width: min(100%, 240px); height: 12px; accent-color: var(--green); }
+.subscription-catalog { padding-bottom: 25px; }
+.subscription-policy { max-width: 900px; padding: 13px 15px; border-inline-start: 3px solid var(--gold); background: #faf7ee; color: #574a30; font-size: 12px; line-height: 1.65; }
+.subscription-service-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; margin: 18px 0 12px; padding: 14px 16px 8px; border: 1px solid var(--line); border-radius: 13px; }
+.subscription-service-list legend { padding-inline: 7px; color: var(--green-dark); font-size: 13px; font-weight: 700; }
+.subscription-service-option { display: flex; align-items: flex-start; gap: 11px; min-height: 66px; margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.subscription-service-option input { flex: 0 0 18px; width: 18px; min-height: 18px; margin: 3px 0 0; accent-color: var(--green); }
+.subscription-service-option span { display: grid; gap: 4px; }
+.subscription-service-option strong { color: var(--green-dark); font-size: 13px; }
+.subscription-service-option small { color: var(--muted); font-size: 11px; font-weight: 500; }
+.subscription-total { margin: 14px 0; color: var(--green-dark); font-size: 15px; font-weight: 800; }
+.subscription-request-list { margin: 9px 0 0; padding-inline-start: 20px; }
+.subscription-request-list li { margin: 5px 0; }
+.subscription-request-summary { margin: 5px 0; }
+.subscription-payment-reference { display: flex; align-items: end; gap: 10px; margin: 8px 0 14px; }
+.subscription-payment-reference label { flex: 1; }
+.subscription-review { margin-top: 22px; }
+.subscription-review-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.registration-document-review { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 9px 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.registration-document-review p { flex: 1 1 100%; margin: 0; }
+.subscription-catalog [data-action="subscription-request"] { min-width: min(100%, 280px); }
+.edir-registration-form > #edir-registration-upload-status { margin: 10px 0; font-size: 12px; line-height: 1.6; }
+
+@media (max-width: 700px) {
+  .login-registration-actions { grid-template-columns: 1fr; }
+  .subscription-service-list { grid-template-columns: 1fr; }
+  .subscription-payment-reference { align-items: stretch; flex-direction: column; }
+  .subscription-review-item { grid-template-columns: 1fr; }
+  .app-dashboard-table th, .app-dashboard-table td { padding-inline: 6px; }
+  .app-dashboard-table meter { width: min(100%, 120px); }
+}
+
 
 /* Shared quality layer: calmer surfaces, legible data, and predictable controls. */
 :root {

@@ -6,6 +6,7 @@ import {
   createInsuranceRequestsServiceGateway,
   createInsuranceServiceGateway,
   createMfiServiceGateway,
+  createPublicServiceGateway,
   createServiceGateway,
   verifyInsuranceServiceAssertion,
   type InsuranceServiceAssertion,
@@ -158,6 +159,65 @@ test('Insurance information-request path is forwarded through its own signed ser
   const response = await fetch(`http://127.0.0.1:${apiPort}/insurance/requests/me`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { identity: '3cd21265-95d9-40a4-9e68-95538d8d6650' });
+});
+
+test('public Edir gateway forwards binary official documents with the scoped upload token and signed request', async (context) => {
+  const requestPath = '/api/v1/edir/public/registration-applications/3cd21265-95d9-40a4-9e68-95538d8d6650/documents/legal_registration';
+  const service = express();
+  service.post(requestPath, express.raw({ type: () => true, limit: '10mb' }), (req, res) => {
+    const identity = verifyInsuranceServiceAssertion(
+      secret,
+      req.get('x-afrolife-identity') ?? '',
+      req.get('x-afrolife-signature') ?? '',
+      req.method,
+      req.originalUrl,
+      req.body,
+    );
+    res.status(identity ? 201 : 401).json({
+      identity: identity ? { id: identity.userId, role: identity.role } : null,
+      uploadToken: req.get('authorization') ?? null,
+      mime: req.get('content-type') ?? null,
+      bodyLength: Buffer.isBuffer(req.body) ? req.body.length : -1,
+    });
+  });
+  const serviceServer = service.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => serviceServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    serviceServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const api = express();
+  const servicePort = (serviceServer.address() as import('node:net').AddressInfo).port;
+  api.post(
+    '/edir/public/registration-applications/:applicationId/documents/:documentType',
+    express.raw({ type: () => true, limit: '10mb' }),
+    createPublicServiceGateway({
+      baseUrl: `http://127.0.0.1:${servicePort}`,
+      secret,
+      servicePath: '/api/v1/edir',
+      serviceName: 'AfroLife Edir document upload',
+    }),
+  );
+  const apiServer = api.listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => apiServer.once('listening', resolve));
+  context.after(() => new Promise<void>((resolve, reject) => {
+    apiServer.close((error) => error ? reject(error) : resolve());
+  }));
+
+  const file = Buffer.from('%PDF synthetic registration certificate');
+  const apiPort = (apiServer.address() as import('node:net').AddressInfo).port;
+  const response = await fetch(`http://127.0.0.1:${apiPort}/edir/public/registration-applications/3cd21265-95d9-40a4-9e68-95538d8d6650/documents/legal_registration`, {
+    method: 'POST',
+    headers: { authorization: `Signup ${'a'.repeat(43)}`, 'content-type': 'application/pdf' },
+    body: new Uint8Array(file),
+  });
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), {
+    identity: { id: '00000000-0000-4000-8000-000000000000', role: 'public' },
+    uploadToken: `Signup ${'a'.repeat(43)}`,
+    mime: 'application/pdf',
+    bodyLength: file.length,
+  });
 });
 
 test('SACCO/MFI gateway signs and forwards requests to the isolated service API', async (context) => {

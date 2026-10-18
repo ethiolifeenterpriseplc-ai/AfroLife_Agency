@@ -4,8 +4,29 @@ import { HttpError } from './core.js';
 // ================= Marketplace configuration and product/service listings =================
 export const ConfigScope = z.enum(['system','users','products','services','properties','rentals']);
 const CatalogItem = z.object({ key: z.string().regex(/^[a-z0-9_]{2,40}$/), label: z.string().trim().min(2).max(80), enabled: z.boolean() }).strict();
-const KycMap = z.record(z.enum(['worker','customer','agent','property_owner']), z.array(z.enum(['national_id','police_clearance'])).max(2));
+const AccountType = z.enum(['worker','customer','agent','property_owner']);
+const KycMap = z.object({
+  worker: z.array(z.enum(['national_id','police_clearance'])).min(1).max(2),
+  customer: z.array(z.enum(['national_id','police_clearance'])).min(1).max(2),
+  agent: z.array(z.enum(['national_id','police_clearance'])).min(1).max(2),
+  property_owner: z.array(z.enum(['national_id','police_clearance'])).min(1).max(2),
+}).strict();
 const AccountTypeOption = z.object({ key: z.enum(['worker','customer','agent','property_owner']), label: z.string().trim().min(2).max(40), enabled: z.boolean() }).strict();
+
+export const DEFAULT_KYC_REQUIREMENTS = Object.freeze({
+  worker: Object.freeze(['national_id', 'police_clearance']),
+  customer: Object.freeze(['national_id']),
+  agent: Object.freeze(['national_id']),
+  property_owner: Object.freeze(['national_id']),
+});
+
+export function getKycRequirements(value: unknown) {
+  return KycMap.parse(value ?? DEFAULT_KYC_REQUIREMENTS);
+}
+
+export function requiredKycDocuments(value: unknown, accountType: unknown) {
+  return getKycRequirements(value)[AccountType.parse(accountType)];
+}
 
 export function validateMarketplaceConfig(scope: string, key: string, value: unknown) {
   if (scope === 'system') {
@@ -23,8 +44,10 @@ export function validateMarketplaceConfig(scope: string, key: string, value: unk
       return items;
     }
     if (key === 'kyc_requirements') {
-      const requirements = KycMap.parse(value);
-      if (Object.values(requirements).some((docs) => docs.length === 0)) throw new HttpError(422, 'Each enabled account type must keep at least one KYC document requirement.');
+      const requirements = getKycRequirements(value);
+      if (Object.values(requirements).some((docs) => !docs.includes('national_id'))) {
+        throw new HttpError(422, 'Every self-registration account type must require a National ID for KYC.');
+      }
       if (!requirements.worker?.includes('national_id') || !requirements.worker?.includes('police_clearance')) throw new HttpError(422, 'Worker registration must keep both National ID and Police clearance requirements.');
       return requirements;
     }

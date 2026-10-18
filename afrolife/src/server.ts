@@ -29,6 +29,7 @@ import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
 import { allowedMiniApps, requireAnyMiniAppAccess, requireMiniAppAccess } from './mini-app-access.js';
+import { subscriptionRouter } from './subscriptions.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
@@ -90,6 +91,19 @@ api.post('/edir/public/registration-applications', process.env.EDIR_SERVICE_URL
     serviceName: 'AfroLife Edir registration',
   })
   : (_req, res) => res.status(503).json({ error: 'AfroLife Edir service is not configured' }));
+api.post(
+  '/edir/public/registration-applications/:applicationId/documents/:documentType',
+  createApiRateLimiter('edir-registration-documents', 10),
+  express.raw({ type: () => true, limit: '10mb' }),
+  process.env.EDIR_SERVICE_URL
+    ? createPublicServiceGateway({
+      baseUrl: process.env.EDIR_SERVICE_URL,
+      secret: process.env.EDIR_GATEWAY_SECRET ?? '',
+      servicePath: '/api/v1/edir',
+      serviceName: 'AfroLife Edir document upload',
+    })
+    : (_req, res) => res.status(503).json({ error: 'AfroLife Edir service is not configured' }),
+);
 
 api.use(authenticate);
 api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
@@ -136,6 +150,7 @@ api.use((req, _res, next) => {
       `${req.method} ${req.path}`, null, { user_agent: req.get('user-agent') ?? null });
   }).then(() => next(), next);
 });
+api.use('/subscriptions', subscriptionRouter);
 api.get('/features', (_req, res) => res.json({
   mfiPilotEnabled: runtimeConfig.mfiPilotEnabled,
   edirEnabled: Boolean(process.env.EDIR_SERVICE_URL),

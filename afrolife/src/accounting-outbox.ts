@@ -7,7 +7,7 @@ type AccountingEvent = {
   description: string; lines: AccountingLine[]; maker_id: string; checker_id: string; checker_reason: string;
 };
 
-export async function enqueueAccountingEvent(client: PoolClient, input: Omit<AccountingEvent, 'source_event_id'>) {
+export async function enqueueAccountingEvent(client: PoolClient, input: Omit<AccountingEvent, 'source_event_id'>): Promise<string | undefined> {
   if (input.maker_id === input.checker_id) throw new Error('Accounting events require distinct maker and checker identities');
   if (!process.env.ACCOUNTING_SERVICE_URL && !process.env.ACCOUNTING_INGEST_SECRET) return;
   if (!process.env.ACCOUNTING_SERVICE_URL || !process.env.ACCOUNTING_INGEST_SECRET) throw new Error('Accounting event delivery requires both ACCOUNTING_SERVICE_URL and ACCOUNTING_INGEST_SECRET');
@@ -18,6 +18,7 @@ export async function enqueueAccountingEvent(client: PoolClient, input: Omit<Acc
      VALUES($1,$2,$3::jsonb) ON CONFLICT(source_event_id) DO NOTHING`,
     [source_event_id, input.source_entity_id, JSON.stringify(payload)],
   );
+  return source_event_id;
 }
 
 export async function dispatchAccountingEvents(pool: Pool, serviceUrl: string, secret: string, source = 'afrolife_core', dispatcherRole = 'finance_manager') {
@@ -51,7 +52,13 @@ export async function dispatchAccountingEvents(pool: Pool, serviceUrl: string, s
         'x-accounting-timestamp': timestamp, 'x-accounting-signature': signature,
       }, body, signal: AbortSignal.timeout(15_000) });
       if (!response.ok) throw new Error(`Accounting service returned HTTP ${response.status}: ${(await response.text()).slice(0,500)}`);
-      await updateOutbox(pool,`UPDATE accounting_event_outbox SET status='delivered',delivered_at=now(),locked_until=NULL,last_error=NULL WHERE id=$1`, [event.id], dispatcherRole);
+      await updateOutbox(
+        pool,
+        `UPDATE accounting_event_outbox SET status='delivered',delivered_at=now(),locked_until=NULL,last_error=NULL WHERE id=$1`,
+        [event.id],
+        dispatcherRole,
+        event.payload.source_event_id,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message.slice(0,1000) : 'Accounting event delivery failed';
       await updateOutbox(pool,
@@ -66,8 +73,27 @@ export async function dispatchAccountingEvents(pool: Pool, serviceUrl: string, s
   return events.length;
 }
 
-async function updateOutbox(pool:Pool,sql:string,params:unknown[],dispatcherRole:string){
+async function updateOutbox(pool:Pool,sql:string,params:unknown[],dispatcherRole:string,deliveredEventId?:string){
   const client=await pool.connect();
-  try{await client.query('BEGIN');await client.query("SELECT set_config('app.role',$1,true)",[dispatcherRole]);await client.query(sql,params);await client.query('COMMIT');}
+  try{
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.role',$1,true)",[dispatcherRole]);
+    await client.query(sql,params);
+    if(deliveredEventId){
+      const subscriptionsExist=(await client.query(
+        "SELECT to_regclass('public.platform_service_subscriptions') IS NOT NULL AS present",
+      )).rows[0]?.present===true;
+      if(subscriptionsExist){
+        await client.query(
+        `UPDATE platform_service_subscriptions
+         SET status='active',active_from=transaction_timestamp(),
+           active_until=transaction_timestamp()+interval '1 month'
+         WHERE accounting_event_id=$1 AND status='accounting_pending'`,
+        [deliveredEventId],
+      );
+      }
+    }
+    await client.query('COMMIT');
+  }
   catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }

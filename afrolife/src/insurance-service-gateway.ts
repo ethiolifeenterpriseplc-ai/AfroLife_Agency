@@ -189,7 +189,9 @@ export function createPublicServiceGateway(options: {
     throw new Error(`Invalid service origin for ${options.serviceName}`);
   }
   return (req, res, next) => {
-    const path = `${options.servicePath}/public/registration-applications`;
+    const path = `${options.servicePath}/public/registration-applications${req.params.applicationId
+      ? `/${encodeURIComponent(req.params.applicationId)}/documents/${encodeURIComponent(req.params.documentType ?? '')}`
+      : ''}`;
     const issuedAt = Date.now();
     const assertion = Buffer.from(JSON.stringify({
       userId: '00000000-0000-4000-8000-000000000000', role: 'public', issuedAt,
@@ -202,9 +204,12 @@ export function createPublicServiceGateway(options: {
         'x-afrolife-identity': assertion,
         'x-afrolife-signature': signed,
         'x-afrolife-correlation-id': getCorrelationId(req),
-        'content-type': 'application/json',
+        'content-type': req.get('content-type') ?? 'application/json',
+        ...(req.params.applicationId && req.get('authorization')
+          ? { authorization: req.get('authorization')! }
+          : {}),
       },
-      body: JSON.stringify(req.body),
+      body: Buffer.isBuffer(req.body) ? new Uint8Array(req.body) : JSON.stringify(req.body),
       signal: AbortSignal.timeout(10_000),
     }).then(async (upstream) => {
       const responseBody = await upstream.arrayBuffer();

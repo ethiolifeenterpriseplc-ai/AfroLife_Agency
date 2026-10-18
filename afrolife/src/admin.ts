@@ -17,6 +17,7 @@ import { createApiRateLimiter } from './rate-limit-store.js';
 import { sessionIdleTimeoutMinutes, WORKSPACE_MODULES } from './runtime-config.js';
 import { ROLE_ACTIVITIES, ROLE_NAMES, getRoleActivity, hasRoleActivityAccess, type RoleName } from './role-activities.js';
 import { MINI_APP_LABELS } from './mini-app-access.js';
+import { getKycRequirements, requiredKycDocuments } from './marketplace-config.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
@@ -138,7 +139,7 @@ loginRouter.get('/auth/signup/options', h(async (_req, res) => {
       { key: 'worker', label: 'Worker', enabled: true }, { key: 'customer', label: 'Buyer / customer', enabled: true },
       { key: 'property_owner', label: 'Seller / property owner', enabled: true }, { key: 'agent', label: 'Agent', enabled: true },
     ],
-    kyc_requirements: kycOptions.rows[0]?.config_value ?? { worker: ['national_id','police_clearance'], customer: ['national_id'], agent: ['national_id'], property_owner: ['national_id'] },
+    kyc_requirements: getKycRequirements(kycOptions.rows[0]?.config_value),
   });
 }));
 
@@ -313,8 +314,8 @@ loginRouter.post('/auth/signup/documents', createApiRateLimiter('signup-document
   const applicant = row.rows[0];
   if (!applicant) throw new HttpError(401, 'The sign-up upload token is invalid or expired.');
   const requirementsResult = await pool.query("SELECT config_value FROM marketplace_configuration WHERE scope='users' AND config_key='kyc_requirements'");
-  const requirements = requirementsResult.rows[0]?.config_value as Record<string, string[]> | undefined;
-  if (requirements && !requirements[applicant.account_type]?.includes(docType)) {
+  const requirements = getKycRequirements(requirementsResult.rows[0]?.config_value);
+  if (!requiredKycDocuments(requirements, applicant.account_type).includes(docType)) {
     throw new HttpError(422, 'This document is not required for the selected account type.');
   }
   const id = randomUUID();
@@ -364,8 +365,8 @@ loginRouter.get('/auth/signup/documents', h(async (req, res) => {
      WHERE t.token_hash=$1 AND t.expires_at>now() AND s.status='pending'`, [tokenHash],
   )).rows[0];
   if (!applicant) throw new HttpError(401, 'The sign-up upload token is invalid or expired.');
-  const config = (await pool.query("SELECT config_value FROM marketplace_configuration WHERE scope='users' AND config_key='kyc_requirements'")).rows[0]?.config_value as Record<string, string[]> | undefined;
-  const required = config?.[applicant.account_type] ?? ['national_id'];
+  const config = (await pool.query("SELECT config_value FROM marketplace_configuration WHERE scope='users' AND config_key='kyc_requirements'")).rows[0]?.config_value;
+  const required = requiredKycDocuments(config, applicant.account_type);
   const documents = await withUser({ id: applicant.id, role: applicant.role }, async (c) => (await c.query(
     'SELECT doc_type,status,review_note,reviewed_at FROM user_documents WHERE user_id=$1 ORDER BY doc_type', [applicant.id],
   )).rows);
@@ -1291,9 +1292,10 @@ adminRouter.post('/users/:id/kyc', requireRole('compliance'), h(async (req, res)
     if (decision === 'verified') {
       const signup = (await c.query('SELECT account_type FROM user_signups WHERE user_id = $1', [req.params.id])).rows[0];
       if (signup) {
-        const requiredTypes = signup.account_type === 'worker'
-          ? ['national_id', 'police_clearance']
-          : ['national_id'];
+        const config = (await c.query(
+          "SELECT config_value FROM marketplace_configuration WHERE scope='users' AND config_key='kyc_requirements'",
+        )).rows[0]?.config_value;
+        const requiredTypes = requiredKycDocuments(config, signup.account_type);
         const verified = (await c.query(
           "SELECT doc_type FROM user_documents WHERE user_id = $1 AND status = 'verified'",
           [req.params.id],

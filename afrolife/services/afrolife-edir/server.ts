@@ -19,6 +19,8 @@ app.get('/healthz', async (_req, res, next) => {
   }
 });
 app.post('/api/v1/edir/credit/documents/:documentType', express.raw({ type: () => true, limit: '10mb' }));
+app.post('/api/v1/edir/public/registration-applications/:applicationId/documents/:documentType',
+  express.raw({ type: () => true, limit: '10mb' }));
 app.use('/api/v1/edir', authenticateGateway, edirRouter);
 app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const correlationId = getCorrelationId(req);

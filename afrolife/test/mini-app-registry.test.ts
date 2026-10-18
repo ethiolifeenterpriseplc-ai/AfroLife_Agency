@@ -66,7 +66,7 @@ test('existing rent workspace drives the approved lease lifecycle without removi
   assert.match(operations, /if \(!legacyImmediateLeasesEnabled\(process\.env\)\)/);
 });
 
-test('parent EthioLife identity and install icons stay aligned with the brand shell', () => {
+test('AfroLife identity and retained install artwork stay aligned with the brand shell', () => {
   const logo = readFileSync(new URL('../public/icon.svg', import.meta.url), 'utf8');
   assert.match(logo, /<title[^>]*>EthioLife connected opportunity mark/);
   assert.match(logo, /#174b3d/i);
@@ -74,6 +74,8 @@ test('parent EthioLife identity and install icons stay aligned with the brand sh
   assert.match(logo, /three people connected through one shared service hub/i);
 
   const manifest = JSON.parse(readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8'));
+  assert.equal(manifest.name, 'AfroLife Agency');
+  assert.equal(manifest.short_name, 'AfroLife');
   assert.equal(manifest.theme_color, '#174b3d');
   for (const size of [192, 512]) {
     const iconPath = `/icons/ethio-life-icon-${size}.png`;
@@ -86,7 +88,7 @@ test('parent EthioLife identity and install icons stay aligned with the brand sh
   }
 
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.match(html, /class="brand-name">EthioLife/);
+  assert.match(html, /class="brand-name">AfroLife/);
   assert.match(html, /src="\/icon\.svg\?v=3"/);
   assert.match(html, /ethio-life-icon-192\.png/);
   assert.match(html, /placeholder="https:\/\/afrolife-agency\.duckdns\.org"/);
@@ -105,6 +107,12 @@ test('native Android launcher and splash resources use the EthioLife brand', () 
   assert.match(adaptiveMark, /#FFFFFFFF/);
   assert.match(adaptiveBackground, /#174b3d/i);
   const manifest = readFileSync(new URL('AndroidManifest.xml', new URL('../android/app/src/main/', import.meta.url)), 'utf8');
+  const appStrings = readFileSync(new URL('values/strings.xml', resources), 'utf8');
+  const capacitorConfig = JSON.parse(readFileSync(new URL('../capacitor.config.json', import.meta.url), 'utf8'));
+  const iosInfo = readFileSync(new URL('../ios/App/App/Info.plist', import.meta.url), 'utf8');
+  assert.match(appStrings, /<string name="app_name">አፍሮ-ላይፍ ኤጄንሲ \/ AfroLife Agency<\/string>/);
+  assert.equal(capacitorConfig.appName, 'አፍሮ-ላይፍ ኤጄንሲ / AfroLife Agency');
+  assert.match(iosInfo, /<key>CFBundleDisplayName<\/key>\s*<string>AfroLife Agency<\/string>/);
   assert.match(manifest, /android:networkSecurityConfig="@xml\/network_security_config"/);
   assert.match(manifest, /android:allowBackup="false"/);
   const debugTrust = readFileSync(new URL('../android/app/src/debug/res/xml/network_security_config.xml', import.meta.url), 'utf8');
