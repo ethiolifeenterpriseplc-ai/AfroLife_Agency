@@ -7,6 +7,7 @@ import {
 } from '../public/dashboard-metrics.js';
 import {
   canChangeServer,
+  DEFAULT_NATIVE_API_ORIGIN,
   edirApplicationDocumentPath,
   missingSignupDocuments,
   signupRequiredDocuments,
@@ -26,6 +27,7 @@ test('signup uploads enforce configured KYC documents and limit server changes t
     kind === 'national_id' ? { name: 'id.png' } : null), ['police_clearance']);
   assert.equal(canChangeServer('super_admin'), true);
   assert.equal(canChangeServer('finance'), false);
+  assert.equal(DEFAULT_NATIVE_API_ORIGIN, 'https://integrating-devices-executive-springs.trycloudflare.com');
   assert.equal(edirApplicationDocumentPath('application/1', 'legal_registration'),
     '/edir/public/registration-applications/application%2F1/documents/legal_registration');
 });

@@ -358,7 +358,7 @@ builds trust system certificates only. Stop the preview and remove its
 firewall rule with `scripts/stop-local-android-lan.ps1` when testing ends.
 This LAN preview is for synthetic data and internal testing only.
 
-On first launch, enter the deployed AfroLife server's HTTPS origin (the selected hostname is `https://afrolife-agency.duckdns.org`, once claimed and configured). The app stores that origin locally and uses it for API requests; it rejects plain HTTP except for localhost development. Configure the API server with the exact production PWA origin and `https://localhost` so the Android WebView origin is allowed, then restart the API. Keep the Android app and API on HTTPS in production.
+The native app is preconfigured to use `https://integrating-devices-executive-springs.trycloudflare.com` as its API origin and stores that origin on-device. This is a Cloudflare quick-tunnel address for the current deployment, not a durable production hostname; replace the bundled default and rebuild before production if the tunnel changes. A Super Admin can change the server from the app after signing in. The API must allow the exact native WebView origin `https://localhost` in `CORS_ORIGINS`. Keep the Android app and API on HTTPS.
 
 For a signed release APK, configure `AFROLIFE_RELEASE_STORE_FILE`,
 `AFROLIFE_RELEASE_STORE_PASSWORD`, `AFROLIFE_RELEASE_KEY_ALIAS`, and
@@ -382,10 +382,13 @@ npm run ios:sync
 npm run ios:open
 ```
 
-Run and debug on an iOS simulator or a connected iPhone in Xcode. In the app's
-server setup screen, enter the deployed HTTPS origin, for example
-`https://afrolife-agency.duckdns.org`; the origin is saved on-device and used
-for API requests. Use HTTPS outside local development. Configure the API
+Run and debug on an iOS simulator or a connected iPhone in Xcode. The native
+app is preconfigured to use
+`https://integrating-devices-executive-springs.trycloudflare.com` as its API
+origin and stores it on-device. This Cloudflare quick-tunnel address is for the
+current deployment and is not a durable production hostname; replace the
+bundled default and rebuild before production if the tunnel changes. A Super
+Admin can change the server from the app after signing in. Configure the API
 server's `CORS_ORIGINS` to include the exact native WebView origin
 `https://localhost` as well as the trusted website origins. Keep service
 backends private behind the existing API gateway.
