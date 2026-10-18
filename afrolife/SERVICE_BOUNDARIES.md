@@ -21,12 +21,20 @@ deployment is verified; the current registry and verification field do not
 provision or independently attest to an actual deployment.
 
 Global BI is a separate read-only analytics database and is the only intended
-cross-tenant data exception. It may receive tenant-identified projections
-excluding secrets, while tenant databases remain authoritative for
-transactions. Projection delivery, classification, access controls, retention,
-and reliable offline/replay handling are not implemented yet. Do not describe
-the existing shared-database mirror as this global BI store or use it as a
-tenant-isolation boundary.
+cross-tenant data exception. The platform now defines a minimized monthly
+aggregate catalog, a read-only dashboard API, and a strict projection importer.
+Only Global Admin, Super Admin, Finance, and Finance Manager can query the
+cross-tenant totals; the UI does not expose tenant-level rows or identifiers.
+Projection records contain only tenant IDs, approved metric keys, monthly
+aggregate values, units, and projection timestamps. The query role is
+read-only; the separately provisioned projector role can write only to the
+aggregate store. A 13-month window is enforced by the API and importer.
+
+Tenant-side aggregate extraction, signed/verified tenant enrollment, the
+hourly scheduler, replay monitoring, and production source reconciliation are
+not implemented or verified yet. Until those controls are deployed, the
+dashboard must remain disabled or show no data; never substitute direct
+cross-tenant operational queries or the shared-database mirror.
 
 Existing shared-database and legacy-schema access remain transitional until
 tenant-by-tenant migration, reconciliation, role grants, rollback, and

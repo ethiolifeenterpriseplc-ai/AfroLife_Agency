@@ -293,11 +293,23 @@ export function createAccountingRouter(withUser: WithUser): RouterType {
 
   router.get('/entities/:entityId/dashboard', h(async(req,res)=>{
     const entityId=UUID.parse(req.params.entityId); await assertAccess(withUser,req.user!,entityId,roles);
-    const summary=await withUser(req.user!,async(client)=> (await client.query(`SELECT
-      count(*) FILTER(WHERE status='posted')::int AS posted_journals,
-      count(*) FILTER(WHERE status='pending_approval')::int AS pending_journals,
-      coalesce(sum(amount) FILTER(WHERE status='posted'),0)::numeric(18,2) AS posted_volume
-      FROM accounting_journals WHERE entity_id=$1`,[entityId])).rows[0]);
+    const summary=await withUser(req.user!,async(client)=>{
+      const totals=(await client.query(`SELECT
+        count(*) FILTER(WHERE status='posted')::int AS posted_journals,
+        count(*) FILTER(WHERE status='pending_approval')::int AS pending_journals,
+        coalesce(sum(amount) FILTER(WHERE status='posted'),0)::numeric(18,2) AS posted_volume
+        FROM accounting_journals WHERE entity_id=$1`,[entityId])).rows[0];
+      const monthly=(await client.query(`SELECT months.month_start::date::text AS month,
+        count(j.id) FILTER(WHERE j.status='posted')::int AS posted_journals,
+        coalesce(sum(j.amount) FILTER(WHERE j.status='posted'),0)::numeric(18,2)::text AS posted_volume
+        FROM generate_series(date_trunc('month',current_date)-interval '11 months',
+          date_trunc('month',current_date),interval '1 month') AS months(month_start)
+        LEFT JOIN accounting_journals j ON j.entity_id=$1
+          AND j.entry_date>=months.month_start::date
+          AND j.entry_date<(months.month_start+interval '1 month')::date
+        GROUP BY months.month_start ORDER BY months.month_start`,[entityId])).rows;
+      return { ...totals, monthly };
+    });
     res.json(summary);
   }));
 
