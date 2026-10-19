@@ -37,7 +37,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [] };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
@@ -841,7 +841,7 @@ function signOut({ revoke = true, message = '' } = {}) {
     leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [],
     commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
     roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
-    platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [],
+    platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [], businessTenants: [],
     marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
     insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [],
     edirMe: null, mfaSetup: null,
@@ -906,8 +906,10 @@ async function loadWorkspace() {
   $('#agents-tab').hidden = !['global_admin', 'super_admin', 'master_agent'].includes(state.user.role);
   $('#rent-tab').hidden = !['property.tenancy.manage', 'rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity);
   $('#mfi-tab').hidden = !state.features.mfiPilotEnabled;
-  const accountingRole = ['global_admin','super_admin','finance','finance_manager','compliance','corporate_business_manager','master_agent','field_agent','property_owner','insurance_agent','insurance_broker','customer'].includes(state.user.role);
-  $('#accounting-tab').hidden = !state.features.accountingEnabled || !accountingRole;
+  const accountingRole = ['global_admin','super_admin','finance','finance_manager','compliance','corporate_business_manager','property_owner','customer'].includes(state.user.role);
+  const accountingAllowed = accountingRole && state.features.accountingEnabled
+    && (!Array.isArray(state.features.allowedModules) || state.features.allowedModules.includes('accounting'));
+  $('#accounting-tab').hidden = !accountingAllowed;
   $('#global-bi-tab').hidden = state.features.globalBiEnabled !== true;
   $('#edir-tab').hidden = !state.features.edirEnabled;
   if ($('#mfi-tab').hidden && state.panel === 'mfi') state.panel = 'overview';
@@ -921,7 +923,7 @@ async function loadWorkspace() {
       if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
       if (hasActivity('staffing.requests.manage')) allowed.add('requests');
       if (['rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity)) allowed.add('rent');
-      if (accountingRole && state.features.accountingEnabled) allowed.add('accounting');
+      if (accountingAllowed) allowed.add('accounting');
       tab.hidden = !allowed.has(tab.dataset.panel);
     } else if (['worker', 'corporate_business_manager', 'master_agent', 'field_agent'].includes(state.user.role)) {
       const allowed = new Set([
@@ -930,7 +932,7 @@ async function loadWorkspace() {
         'leads', 'contracts', 'commissions', 'agents',
       ]);
       if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
-      if (accountingRole && state.features.accountingEnabled) allowed.add('accounting');
+      if (accountingAllowed) allowed.add('accounting');
       if (hasActivity('staffing.requests.manage')) allowed.add('requests');
       if (canUseListings) allowed.add('properties');
       if (hasActivity('learning.content.view') || hasActivity('learning.content.manage')) allowed.add('learning');
@@ -1054,7 +1056,9 @@ async function loadPanelData(panel) {
       await load('commissions', '/commissions');
       break;
     case 'agents':
-      await load('team', '/agents/team');
+      [state.team, state.agentBusinessTenants] = await Promise.all([
+        safeGet('/agents/team', []), safeGet('/platform/my-business-tenant', []),
+      ]);
       break;
     case 'rent':
       [state.propertyAccountingTemplate, state.properties, state.tenants, state.pendingRent, state.leases] = await Promise.all([
@@ -1083,31 +1087,33 @@ async function loadPanelData(panel) {
         ? await safeGet('/edir/me', null) : null;
       break;
     case 'admin':
-      state.users = ['global_admin', 'super_admin', 'compliance'].includes(state.user.role)
+      state.users = ['global_admin', 'compliance','corporate_business_manager'].includes(state.user.role)
         ? await safeGet('/users', []) : [];
       [state.territories, state.serviceIdentities, state.readinessEvidence, state.globalAdminPromotions] = await Promise.all([
         safeGet('/territories', []),
-        isPlatformAdmin() ? safeGet('/service-identities', []) : [],
-        isPlatformAdmin() ? safeGet('/readiness-evidence', []) : [],
-        isPlatformAdmin() ? safeGet('/global-admin-promotions', []) : [],
+        state.user.role === 'global_admin' ? safeGet('/service-identities', []) : [],
+        state.user.role === 'global_admin' ? safeGet('/readiness-evidence', []) : [],
+        state.user.role === 'global_admin' ? safeGet('/global-admin-promotions', []) : [],
       ]);
       state.businessRules = state.user.role === 'global_admin' ? await safeGet('/business-rules', []) : [];
-      state.roleAccess = state.user.role === 'super_admin' ? await safeGet('/role-access', null) : null;
-      state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
+      state.roleAccess = state.user.role === 'global_admin' ? await safeGet('/role-access', null) : null;
+      state.tenantAdminTenants = state.user.role === 'super_admin' ? await safeGet('/platform/my-tenants', []) : [];
+      state.summary = ['global_admin', 'finance', 'finance_manager'].includes(state.user.role)
         ? await safeGet('/reports/summary', null) : null;
       if (['global_admin', 'super_admin', 'finance', 'finance_manager'].includes(state.user.role)) {
         state.propertyAccountingTemplate = await safeGet('/finance/property-chart-of-accounts-template', null);
       }
       if (state.user.role === 'global_admin') {
-        [state.platformServices, state.platformServicePackages, state.platformTenants, state.platformCatalogProducts] = await Promise.all([
+        [state.platformServices, state.platformServicePackages, state.platformTenants, state.platformCatalogProducts, state.businessTenants] = await Promise.all([
           safeGet('/platform/services', []), safeGet('/platform/service-packages', []),
           safeGet('/platform/tenants', []), safeGet('/platform/catalog-products', []),
+          safeGet('/platform/business-tenants', []),
         ]);
       }
       break;
     case 'status':
       state.serviceStatus = await safeGet('/system/status', null);
-      state.serviceMetrics = isPlatformAdmin()
+      state.serviceMetrics = state.user.role === 'global_admin'
         ? await safeGet('/system/metrics', { routes: [] }) : null;
       break;
     default:
@@ -2623,6 +2629,9 @@ function renderAgents() {
   const wrap = node('div');
   wrap.append(sectionHeading('Agent management', "Review agent activity and set optional profile focus across the Super Agent and Master Agent network. Profile focus does not limit an agent's services."));
   wrap.append(renderServiceLauncher(['leads', 'workers', 'requests', 'properties', 'marketplace', 'contracts', 'commissions', 'rent', 'agents', 'edir', 'mfi', 'insurance']));
+  for (const tenant of state.agentBusinessTenants ?? []) {
+    wrap.append(card(`${tenant.display_name} · ${tenant.tenant_key}`, `${tenant.tenant_type.replaceAll('_', ' ')} · ${tenant.member_role.replaceAll('_', ' ')} · ${tenant.member_status} · ${tenant.status} · configuration v${tenant.config_version}`, tenant.status));
+  }
   const list = node('div', undefined, 'list');
   const services = {
     financial_service: 'Financial services focus',
@@ -2822,8 +2831,8 @@ function renderGlobalAdminPromotions() {
   const section = node('section', undefined, 'panel form-card');
   section.style.marginTop = '20px';
   section.append(node('h3', 'Global Admin governance'));
-  section.append(node('p', 'Promotion requires two different active, MFA-enabled Super Admins. Global Admin access does not bypass financial maker-checker approvals.'));
-  if (state.user.role === 'super_admin') {
+  section.append(node('p', 'Promotion requires two different active, MFA-enabled platform administrators. Global Admin access does not bypass financial maker-checker approvals.'));
+  if (isPlatformAdmin()) {
     const candidates = state.users.filter((user) =>
       user.id !== state.user.id && user.active && user.mfa_enabled && user.role === 'super_admin');
     if (candidates.length) {
@@ -2852,7 +2861,7 @@ function renderGlobalAdminPromotions() {
     for (const request of state.globalAdminPromotions) {
       const item = card(request.target_name, `${request.status} · Requested by ${request.requester_name} · ${request.created_at}`, request.status);
       if (request.approver_name) item.append(node('p', `Decision by ${request.approver_name}: ${request.decision_reason}`));
-      const canDecide = state.user.role === 'super_admin'
+      const canDecide = isPlatformAdmin()
         && request.status === 'pending'
         && request.requested_by !== state.user.id
         && request.target_user_id !== state.user.id;
@@ -2868,11 +2877,11 @@ function renderGlobalAdminPromotions() {
 }
 
 function renderRoleAccess() {
-  if (state.user.role !== 'super_admin' || !state.roleAccess) return document.createDocumentFragment();
+  if (state.user.role !== 'global_admin' || !state.roleAccess) return document.createDocumentFragment();
   const section = node('section', undefined, 'panel form-card role-access');
   section.append(
     node('h3', 'Role and activity access'),
-    node('p', 'Select the activities each role may perform. Sensitive financial actions remain subject to transaction controls and independent-actor checks. Super Admin access is fixed.'),
+    node('p', 'Select the activities each role may perform. Sensitive financial actions remain subject to transaction controls and independent-actor checks. Tenant Super Admin scope is managed through tenant assignments.'),
   );
   const form = node('form', undefined, 'role-access-form');
   form.dataset.form = 'role-access';
@@ -2904,6 +2913,44 @@ function renderReadinessEvidence() {
   section.style.marginTop = '20px';
   section.append(node('h3', 'Production readiness evidence'));
   section.append(node('p', 'Append operational evidence for each service. Records are stored in the shared database and attributed to the signed-in administrator. An evidence record does not itself grant legal, provider, finance, or production authorization.'));
+  const insuranceGates = [
+    ['insurance_license', 'Broker licence and permitted class', 'Verified NBE licence, class scope, effective dates, source, and independent verification evidence.'],
+    ['insurance_professional_indemnity', 'Professional indemnity', 'Valid PI policy, insurer, coverage, dates, filing evidence, and the compliance owner’s documented minimum-coverage calculation.'],
+    ['insurance_ceo_oversight', 'CEO and management oversight', 'Qualified CEO evidence, appointment history, day-to-day oversight, and management-change notification procedure.'],
+    ['insurance_branch_oversight', 'Branch governance', 'Branch manager, address, opening/closure notice evidence, and pending-business disposition plan.'],
+    ['insurance_market_comparison', 'Three-insurer comparison', 'Versioned workflow and evidence that each risk is offered to at least three insurers with analysis of price, cover, and insurer reputation.'],
+    ['insurance_customer_choice_exception', 'Customer-selected insurer exception', 'Written customer statement, linked risk and insurer, authenticity checks, and independent review; no unrestricted bypass.'],
+    ['insurance_disclosure_consent', 'Disclosure, advice, and consent', 'Needs assessment, material-fact notice, advice rationale, final terms shown, and consent tied to the selected proposal.'],
+    ['insurance_policy_issuance', 'Policy issuance evidence', 'Insurer-authoritative issue/cover confirmation and immutable policy snapshot; submission alone is not issuance.'],
+    ['insurance_premium_custody', 'Premium and funds custody boundary', 'Approved authority and insurer agreement before collection; otherwise clear evidence-only accounting and reconciliation boundary.'],
+    ['insurance_claims_records', 'Client and claims records', 'Required policy/client/claim register fields, access scope, correction history, and retention owner.'],
+    ['insurance_data_rights', 'Privacy and data rights', 'Data inventory, purpose/lawful-basis review, rights-request workflow, retention schedule, legal holds, and processor/transfer review.'],
+    ['insurance_tenant_isolation', 'Tenant isolation', 'Negative access evidence for APIs, database, files, exports, background jobs, notifications, and analytics.'],
+    ['insurance_integration_reconciliation', 'Insurer integration and reconciliation', 'Versioned schemas, idempotency, bounded retries, exception queue, manual fallback, and settlement reconciliation evidence.'],
+    ['insurance_business_continuity', 'Continuity and recovery', 'Approved RTO/RPO, encrypted backups, restore evidence for databases/files/configuration, and incident-response exercise.'],
+    ['insurance_global_financial_reporting', 'Global Insurance financial reporting', 'A separate Insurance database and ledger with tenant-scoped books, audited global aggregation, reconciled insurer settlements, and exportable period reports.'],
+    ['insurance_commission_distribution', 'Agent commission distribution', 'Versioned, approved insurer/broker agreements; explainable agent and Master/Super Agent splits; eligibility, caps, clawbacks, maker-checker approval, and payout reconciliation.'],
+    ['insurance_legal_signoff', 'Legal and release sign-off', 'Local legal/compliance applicability review, assigned owners, witnessed UAT, security review, and separate production release approval.'],
+  ];
+  const gateList = node('div', undefined, 'list');
+  gateList.append(node('h4', 'Insurance brokerage regulatory release gates'));
+  gateList.append(node('p', 'Evidence is a readiness record, not a regulatory approval or certification. Live brokerage activity remains disabled until all applicable gates are independently reviewed and separately approved.'));
+  const latestByCategory = new Map();
+  for (const evidence of state.readinessEvidence) {
+    if (evidence.module === 'insurance' && !latestByCategory.has(evidence.category)) latestByCategory.set(evidence.category, evidence);
+  }
+  for (const [categoryKey, title, requirement] of insuranceGates) {
+    const evidence = latestByCategory.get(categoryKey);
+    const gate = card(title, requirement, evidence?.status ?? 'open');
+    if (evidence) {
+      gate.append(node('p', `Latest evidence: ${evidence.evidence_reference} · ${evidence.owner_name} · ${new Date(evidence.created_at).toLocaleDateString(document.documentElement.lang)}`));
+      gate.append(node('p', evidence.notes || 'No review notes recorded.'));
+    } else {
+      gate.append(node('p', 'No evidence recorded.'));
+    }
+    gateList.append(gate);
+  }
+  section.append(gateList);
   const form = node('form', undefined, 'inline-form');
   form.dataset.form = 'readiness-evidence';
   form.append(
@@ -2921,7 +2968,15 @@ function renderReadinessEvidence() {
     const option = node('option', value.toUpperCase()); option.value = value; moduleSelect.append(option);
   }
   const category = form.elements.category;
-  for (const value of ['legal', 'provider', 'finance', 'security', 'operations', 'accessibility', 'capacity', 'dr', 'incident', 'service_account', 'release_owner', 'privacy']) {
+  const evidenceCategories = [
+    'legal', 'provider', 'finance', 'security', 'operations', 'accessibility', 'capacity', 'dr', 'incident', 'service_account', 'release_owner', 'privacy',
+    'insurance_license','insurance_professional_indemnity','insurance_ceo_oversight','insurance_branch_oversight',
+    'insurance_market_comparison','insurance_customer_choice_exception','insurance_disclosure_consent',
+    'insurance_policy_issuance','insurance_premium_custody','insurance_claims_records','insurance_data_rights',
+    'insurance_tenant_isolation','insurance_integration_reconciliation','insurance_business_continuity',
+    'insurance_global_financial_reporting','insurance_commission_distribution','insurance_legal_signoff',
+  ];
+  for (const value of evidenceCategories) {
     const option = node('option', value.replaceAll('_', ' ')); option.value = value; category.append(option);
   }
   const statusSelect = form.elements.status;
@@ -3049,6 +3104,20 @@ function renderPlatformControlPlane() {
   }
   section.append(serviceList);
 
+  const businessTenants = node('div', undefined, 'list');
+  businessTenants.append(node('h3', 'Agent and Super Admin business tenants'));
+  businessTenants.append(node('p', 'These are business workspaces in the Global Platform. They are separate from deployment tenants, which track hosting and infrastructure. Master Agents own agent-network tenants; their Field Agents join through the registered parent relationship. Tenant Super Admins have their own tenant boundary.'));
+  if (!state.businessTenants.length) businessTenants.append(empty('No Agent Network or Super Admin business tenants are registered.'));
+  for (const tenant of state.businessTenants) {
+    const item = card(`${tenant.display_name} · ${tenant.tenant_key}`, `${tenant.tenant_type.replaceAll('_', ' ')} · ${tenant.owner_role} · ${tenant.status} · owner ${tenant.owner_active ? 'active' : 'inactive'} · KYC ${tenant.owner_kyc_status}`, tenant.status);
+    item.append(node('p', `Owner: ${tenant.owner_name} · ${tenant.owner_phone} · configuration v${tenant.config_version}`));
+    for (const member of tenant.members ?? []) {
+      item.append(node('p', `${member.legal_name} · ${member.role.replaceAll('_', ' ')} · ${member.status} · ${member.phone}`));
+    }
+    businessTenants.append(item);
+  }
+  section.append(businessTenants);
+
   const tenants = node('div', undefined, 'list');
   if (!state.platformTenants.length) tenants.append(empty('No tenant deployments are registered yet.'));
   for (const tenant of state.platformTenants) {
@@ -3060,6 +3129,25 @@ function renderPlatformControlPlane() {
     item.append(node('p', `Packages: ${tenant.packages.map((entry) => entry.display_name).join(', ') || 'none'}`));
     if (tenant.deployment_reference) item.append(node('p', `Deployment reference: ${tenant.deployment_reference}`));
     if (tenant.deployment_verification_reference) item.append(node('p', `Verification evidence reference: ${tenant.deployment_verification_reference}`));
+    const assignedAdmins = node('div', undefined, 'list');
+    for (const administrator of tenant.admins ?? []) {
+      const assignment = card(administrator.legal_name, administrator.phone, 'assigned Super Admin');
+      assignment.append(button('Remove tenant assignment', 'tenant-admin-remove', 'button button-outline', {
+        tenantId: tenant.id, userId: administrator.id,
+      }));
+      assignedAdmins.append(assignment);
+    }
+    const assignmentForm = node('form', undefined, 'inline-form');
+    assignmentForm.dataset.form = 'platform-tenant-admin';
+    assignmentForm.dataset.tenantId = tenant.id;
+    const adminField = field('Assign Super Admin', 'user_id', 'select');
+    const adminPlaceholder = node('option', 'Choose an active Super Admin'); adminPlaceholder.value = ''; adminField.input.append(adminPlaceholder);
+    for (const user of state.users.filter((candidate) => candidate.active && candidate.role === 'super_admin'
+      && !(tenant.admins ?? []).some((assigned) => assigned.id === candidate.id))) {
+      const option = node('option', `${user.legal_name} · ${user.phone}`); option.value = user.id; adminField.input.append(option);
+    }
+    assignmentForm.append(adminField.label, button('Grant this tenant scope', 'submit', 'button button-outline'));
+    item.append(assignedAdmins, assignmentForm);
     const form = node('form', undefined, 'inline-form');
     form.dataset.form = 'platform-tenant-update';
     form.dataset.tenantId = tenant.id;
@@ -3133,12 +3221,51 @@ function renderPlatformControlPlane() {
   return section;
 }
 
+function renderTenantAdminWorkspace() {
+  const section = node('section', undefined, 'panel form-card');
+  section.style.marginTop = '20px';
+  section.append(node('h3', 'Assigned tenant deployments'));
+  section.append(node('p', 'Your Global System Admin assignments define which tenant deployments you can register. Service packages and available services are set centrally; only deployment references and registration status can be submitted here. Global verification and activation remain centrally controlled.'));
+  if (!state.tenantAdminTenants.length) {
+    section.append(empty('No tenant deployment has been assigned to this Super Admin. Ask the Global System Admin to assign a tenant.'));
+    return section;
+  }
+  for (const tenant of state.tenantAdminTenants) {
+    const item = card(`${tenant.display_name} · ${tenant.tenant_key}`,
+      `${tenant.hosting_mode.replaceAll('_', ' ')} · ${tenant.region ?? 'region not set'} · ${tenant.status}`,
+      `deployment ${tenant.deployment_status}`);
+    for (const configured of tenant.configured_packages ?? []) {
+      item.append(node('p', `Global configuration: ${configured.display_name} · ${(configured.services ?? []).join(', ') || 'No services'}`));
+    }
+    if (tenant.status === 'active') {
+      item.append(node('p', 'This tenant is active. Contact the Global System Admin to change its deployment registration.'));
+    } else {
+      const form = node('form', undefined, 'inline-form');
+      form.dataset.form = 'tenant-deployment-registration';
+      form.dataset.tenantId = tenant.id;
+      form.append(field('Deployment reference (no URL, key, or secret)', 'deployment_reference', 'text', false, {
+        maxlength: '200', value: tenant.deployment_reference ?? '', placeholder: 'deployment inventory reference',
+      }).label);
+      const status = field('Registration state', 'deployment_status', 'select');
+      for (const [value, labelText] of [['not_registered', 'Not registered'], ['registered', 'Registered']]) {
+        const option = node('option', labelText); option.value = value; status.input.append(option);
+      }
+      status.input.value = tenant.deployment_status === 'registered' ? 'registered' : 'not_registered';
+      form.append(status.label, button('Submit registration', 'submit', 'button button-primary'));
+      item.append(form);
+    }
+    section.append(item);
+  }
+  return section;
+}
+
 function renderAdmin() {
   const wrap = node('div');
   const isAdmin = isPlatformAdmin();
   const isGlobalAdmin = state.user.role === 'global_admin';
   const isBusinessManager=state.user.role==='corporate_business_manager';
-  wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global administration' : 'Administration' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Manage system-wide configuration and review cross-module operations.' : 'Provision accounts and review the operational summary.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
+  const canProvisionAgents = isGlobalAdmin || isBusinessManager;
+  wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global System Administration' : 'Tenant administration' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Configure platform-wide templates, tenant boundaries, identity, access, and operations.' : 'Manage only tenant deployments assigned by the Global System Admin.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
   if (isNativeApp && canChangeServer(state.user.role)) {
     const serverTools = node('section', undefined, 'panel form-card admin-server-tools');
     serverTools.append(node('h3', 'Connection settings'));
@@ -3156,14 +3283,14 @@ function renderAdmin() {
     serverTools.append(changeButton, $('#server-setup'));
     wrap.append(serverTools);
   }
-  if (isAdmin) wrap.append(createMiniAppAccessEditor(api, state.user, state.users));
-  if (state.user.role === 'super_admin') wrap.append(renderRoleAccess());
+  if (isGlobalAdmin) wrap.append(createMiniAppAccessEditor(api, state.user, state.users));
+  if (isGlobalAdmin) wrap.append(renderRoleAccess());
   const columns = node('div', undefined, 'columns');
   if (isGlobalAdmin) wrap.append(renderBusinessRules());
   if (isGlobalAdmin) wrap.append(renderPlatformControlPlane());
-  if (isAdmin) wrap.append(renderGlobalAdminPromotions());
-  if (isAdmin) wrap.append(renderReadinessEvidence());
-  if (isAdmin) {
+  if (isGlobalAdmin) wrap.append(renderGlobalAdminPromotions());
+  if (isGlobalAdmin) wrap.append(renderReadinessEvidence());
+  if (canProvisionAgents) {
     const identities = node('section', undefined, 'panel form-card');
     identities.style.marginTop = '20px';
     identities.append(node('h3', 'Service identity inventory'));
@@ -3212,13 +3339,13 @@ function renderAdmin() {
     }
     wrap.append(identities);
   }
-  if (isAdmin) {
+  if (isGlobalAdmin || isBusinessManager) {
     const form = node('form', undefined, 'panel form-card inline-form');
     form.dataset.form = 'user';
-    const title = node('h3', 'Create an account'); title.className = 'span-2'; form.append(title);
+    const title = node('h3', isBusinessManager ? 'Onboard a direct agent' : 'Create an account'); title.className = 'span-2'; form.append(title);
     form.append(field('Legal name', 'legal_name').label, field('Phone', 'phone', 'tel', true, { placeholder: '0911 234 567' }).label);
     const role = field('Role', 'role', 'select');
-    for (const [value, label] of [['super_admin','Super Agent / Super Admin'],['corporate_business_manager','Corporate Business Manager'],['master_agent','Master agent'],['field_agent','Field agent'],['compliance','Compliance'],['finance','Finance'],['finance_manager','Finance manager'],['customer','Customer'],['worker','Worker'],['property_owner','Property owner']]) {
+    for (const [value, label] of (isBusinessManager ? [['master_agent','Master agent'],['field_agent','Field agent']] : [['super_admin','Super Agent / Super Admin'],['corporate_business_manager','Corporate Business Manager'],['master_agent','Master agent'],['field_agent','Field agent'],['compliance','Compliance'],['finance','Finance'],['finance_manager','Finance manager'],['customer','Customer'],['worker','Worker'],['property_owner','Property owner']])) {
       const option = node('option', label); option.value = value; role.input.append(option);
     }
     form.append(role.label);
@@ -3231,14 +3358,18 @@ function renderAdmin() {
     const none = node('option', 'No territory'); none.value = ''; area.input.append(none);
     for (const territory of state.territories) { const option = node('option', territory.name); option.value = territory.id; area.input.append(option); }
     form.append(area.label);
+    const agentPlan = field('Agent service plan', 'requested_plan', 'select', false);
+    for (const [value,label] of [['free','Free'],['pro','Pro'],['enterprise','Enterprise']]) { const option=node('option',label); option.value=value; agentPlan.input.append(option); }
+    form.append(agentPlan.label);
     const parent = field('Master agent (required for field agents)', 'parent_agent_id', 'select', false);
     const parentEmpty = node('option', 'Choose master agent'); parentEmpty.value = ''; parent.input.append(parentEmpty);
-    for (const user of state.users.filter((item) => item.role === 'master_agent')) { const option = node('option', user.legal_name); option.value = user.id; parent.input.append(option); }
+    for (const user of state.users.filter((item) => item.role === 'master_agent' && item.active && (!isBusinessManager || user.created_by === state.user.id))) { const option = node('option', user.legal_name); option.value = user.id; parent.input.append(option); }
     form.append(parent.label);
     form.append(field('Email', 'email', 'email', false).label);
     form.append(button('Create account', 'submit', 'button button-primary span-2'));
     columns.append(form);
   }
+  if (state.user.role === 'super_admin') wrap.append(renderTenantAdminWorkspace());
   const users = node('div', undefined, 'list');
   if (!state.users.length) users.append(empty('No accounts to display.'));
   for (const user of state.users.slice(0, 25)) {
@@ -3258,7 +3389,7 @@ function renderAdmin() {
       user.household_cover_interest && 'Household cover requested',
     ].filter(Boolean).join(' · ');
     const item = card(user.legal_name, [signupDetails, requestedBenefits].filter(Boolean).join(' · '), user.active ? 'active' : user.kyc_status);
-    if (user.signup_account_type && ['global_admin', 'super_admin', 'compliance'].includes(state.user.role)) {
+    if (user.signup_account_type && ['global_admin', 'compliance'].includes(state.user.role)) {
       item.append(button(`KYC documents (${user.kyc_document_count ?? 0})`, 'user-documents', 'button button-outline', { id: user.id }));
     }
     if (state.user.role === 'compliance' && ['uploaded','under_review'].includes(user.kyc_status) && user.id !== state.user.id) {
@@ -3269,7 +3400,7 @@ function renderAdmin() {
     if (isAdmin && user.active && user.id !== state.user.id) item.append(button('Deactivate', 'user-deactivate', 'button button-outline', { id: user.id }));
     users.append(item);
   }
-  columns.append(users);
+  if (isGlobalAdmin || isBusinessManager || state.user.role === 'compliance') columns.append(users);
   wrap.append(columns);
   if (isAdmin && state.summary) {
     const summary = node('section', undefined, 'panel form-card');
@@ -3353,7 +3484,7 @@ function renderPanel() {
     admin: 'Admin workspace',
     learning: 'Training & support',
     mfi: 'SACCO / MFI workspace',
-    accounting: 'Financial Services',
+    accounting: 'Accounting & Finance',
     'global-bi': 'Global BI',
     edir: 'AfroLife Edir workspace',
     insurance: 'Insurance information',
@@ -3523,6 +3654,26 @@ async function submitForm(form) {
     form.reset();
     await refresh();
     showAlert('Tenant registered in provisioning state. Verify its deployment before activation.');
+    return;
+  }
+  if (form.dataset.form === 'platform-tenant-admin') {
+    if (!values.user_id) throw new Error('Choose an active Super Admin.');
+    await api(`/platform/tenants/${encodeURIComponent(form.dataset.tenantId)}/admins`, {
+      method: 'POST', body: JSON.stringify({ user_id: values.user_id }),
+    });
+    await refresh();
+    showAlert('Super Admin assigned to this tenant.');
+    return;
+  }
+  if (form.dataset.form === 'tenant-deployment-registration') {
+    const reference = String(values.deployment_reference ?? '').trim();
+    const payload = { deployment_status: values.deployment_status };
+    if (reference) payload.deployment_reference = reference;
+    await api(`/platform/tenants/${encodeURIComponent(form.dataset.tenantId)}`, {
+      method: 'PATCH', body: JSON.stringify(payload),
+    });
+    await refresh();
+    showAlert('Deployment registration submitted to the Global System Admin.');
     return;
   }
   if (form.dataset.form === 'platform-service') {
@@ -3828,12 +3979,14 @@ async function submitForm(form) {
     if (!payload.parent_agent_id) delete payload.parent_agent_id;
     if (!payload.email) delete payload.email;
     if (!payload.service_specialization) delete payload.service_specialization;
+    if (!['master_agent','field_agent'].includes(payload.role)) delete payload.requested_plan;
     const result = await api('/users', { method: 'POST', body: JSON.stringify(payload) });
     form.reset();
     await refresh();
-    showAlert('Account created for {{name}}. Temporary password (shown once): {{password}}', false, {
+    showAlert('Account created for {{name}}. Temporary password (shown once): {{password}}. KYC upload token (valid 24 hours): {{upload_token}}. The agent stays inactive until KYC review and independent activation are complete.', false, {
       name: result.user.legal_name,
       password: result.temp_password,
+      upload_token: result.signup_upload_token ?? 'not required for this account',
     });
     return;
   } else if (form.dataset.form === 'global-admin-promotion') {
@@ -4154,6 +4307,15 @@ document.addEventListener('click', async (event) => {
   const action = event.target.closest('button[data-action]');
   if (!action) return;
   const { action: name, id } = action.dataset;
+  if (name === 'tenant-admin-remove') {
+    if (!window.confirm(t('Remove this Super Admin from the tenant? Their deployment access will end immediately.'))) return;
+    try {
+      await api(`/platform/tenants/${encodeURIComponent(action.dataset.tenantId)}/admins/${encodeURIComponent(action.dataset.userId)}`, { method: 'DELETE' });
+      await refresh();
+      showAlert('Tenant Super Admin assignment removed.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
   if (name === 'subscription-review-refresh') {
     await loadSubscriptionReview();
     return;
@@ -4696,14 +4858,22 @@ document.addEventListener('click', async (event) => {
     return;
   }
   if (name === 'user-kyc') {
-    api(`/users/${id}/kyc`, { method: 'POST', body: JSON.stringify({ decision: action.dataset.decision }) })
+    const reason = window.prompt(t(action.dataset.decision === 'verified'
+      ? 'Record the verification basis (at least 10 characters).'
+      : 'Explain what failed and what the applicant must correct (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    api(`/users/${id}/kyc`, { method: 'POST', body: JSON.stringify({ decision: action.dataset.decision, reason: reason.trim() }) })
       .then(async () => { showAlert(`Account marked ${action.dataset.decision}.`); await refresh(); })
       .catch((error) => showAlert(error.message, true));
     return;
   }
   if (name === 'user-activate' || name === 'user-deactivate') {
     const endpoint = name === 'user-activate' ? 'activate' : 'deactivate';
-    api(`/users/${id}/${endpoint}`, { method: 'POST', body: '{}' })
+    const reason = name === 'user-activate'
+      ? window.prompt(t('Record why this account is approved for activation (at least 10 characters).'))
+      : null;
+    if (name === 'user-activate' && (!reason || reason.trim().length < 10)) return;
+    api(`/users/${id}/${endpoint}`, { method: 'POST', body: JSON.stringify(reason ? { reason: reason.trim() } : {}) })
       .then(async () => { showAlert(`Account ${name === 'user-activate' ? 'activated' : 'deactivated'}.`); await refresh(); })
       .catch((error) => showAlert(error.message, true));
     return;

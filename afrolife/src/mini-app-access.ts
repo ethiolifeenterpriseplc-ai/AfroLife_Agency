@@ -19,7 +19,7 @@ export const MINI_APP_LABELS: Readonly<Record<MiniAppKey, string>> = Object.free
   agents: 'Agent Network',
   rent: 'Rent and Deposits',
   mfi: 'SACCO / MFI',
-  accounting: 'Financial Services',
+  accounting: 'Accounting & Finance',
   edir: 'Edir',
   insurance: 'Insurance',
   privacy: 'Privacy and Data Rights',
@@ -59,10 +59,12 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
         'rent.deposit.refund_request',
       ]);
     case 'accounting':
+      // Subscribers and corporate finance users may open the full workspace;
+      // subscriber entitlement is checked in API middleware. Other mini-apps
+      // keep their own service-specific ledgers.
       return [
         'global_admin', 'super_admin', 'finance', 'finance_manager',
-        'compliance', 'corporate_business_manager', 'master_agent',
-        'field_agent', 'property_owner', 'insurance_agent', 'insurance_broker', 'customer',
+        'compliance', 'corporate_business_manager', 'customer', 'property_owner',
       ].includes(user.role);
     case 'commissions':
       return [
@@ -85,7 +87,6 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
 
 export function hasMiniAppAccess(user: AuthUser, module: MiniAppKey): boolean {
   return roleCanUseMiniApp(user, module)
-    && !(module === 'accounting' && user.role === 'customer' && user.miniAppAccessMode !== 'custom')
     && (user.miniAppAccessMode !== 'custom' || user.miniAppGrants?.includes(module) === true);
 }
 

@@ -17,7 +17,7 @@ import { createApiRateLimiter } from './rate-limit-store.js';
 import { sessionIdleTimeoutMinutes, WORKSPACE_MODULES } from './runtime-config.js';
 import { ROLE_ACTIVITIES, ROLE_NAMES, getRoleActivity, hasRoleActivityAccess, type RoleName } from './role-activities.js';
 import { MINI_APP_LABELS } from './mini-app-access.js';
-import { getKycRequirements, requiredKycDocuments } from './marketplace-config.js';
+import { getKycRequirements, requiredKycDocuments, ConfigScope, validateMarketplaceConfig, loadMarketplaceConfig } from './marketplace-config.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
@@ -25,13 +25,9 @@ const MFA_STAFF = [...STAFF, 'corporate_business_manager'];
 const AGENT_ROLES = ['master_agent', 'field_agent'];
 const PROVISIONABLE_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner'] as const;
 const PLATFORM_SERVICE_KEYS = [
-  'agency', 'workforce', 'staffing', 'property', 'marketplace', 'insurance',
+  'agency', 'workforce', 'staffing', 'property', 'marketplace', 'accounting', 'insurance',
   'sacco_mfi', 'edir', 'learning', 'privacy', 'operations',
 ] as const;
-const requireGlobalAdmin: RequestHandler = (req, _res, next) =>
-  req.user?.role === 'global_admin'
-    ? next()
-    : next(new HttpError(403, 'Only a Global Admin can change platform-wide configuration.'));
 const requireEnterprisePlan: RequestHandler = (req, _res, next) => {
   pool.query(
     `SELECT 1 FROM user_signups
@@ -376,7 +372,49 @@ loginRouter.get('/auth/signup/documents', h(async (req, res) => {
 // ================= Signed-in: own account =================
 export const adminRouter = Router();
 
-adminRouter.get('/platform/services', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/marketplace/config', h(async (req, res) => {
+  res.json(await withUser(req.user!, loadMarketplaceConfig));
+}));
+
+adminRouter.patch('/marketplace/config', requireRole('global_admin', 'corporate_business_manager'), h(async (req, res) => {
+  const body = z.object({
+    values: z.array(z.object({ scope: ConfigScope, key: z.string().trim().min(1).max(80), value: z.unknown() }).strict()).min(1).max(30),
+  }).strict().parse(req.body);
+  const isPlatformAdmin = req.user!.role === 'global_admin';
+  const uniqueKeys = new Set<string>();
+  const normalized = body.values.map((item) => {
+    const identity = `${item.scope}.${item.key}`;
+    if (uniqueKeys.has(identity)) throw new HttpError(422, `Configuration item ${identity} appears more than once.`);
+    uniqueKeys.add(identity);
+    if (!isPlatformAdmin && !['products', 'services', 'properties', 'rentals'].includes(item.scope)) {
+      throw new HttpError(403, 'Business Managers may only configure product, service, property, and rental catalogs.');
+    }
+    return { ...item, value: validateMarketplaceConfig(item.scope, item.key, item.value) };
+  });
+  const config = await withUser(req.user!, async (c) => {
+    for (const item of normalized) {
+      const prior = (await c.query(
+        'SELECT config_value,revision FROM marketplace_configuration WHERE scope=$1 AND config_key=$2 FOR UPDATE',
+        [item.scope, item.key],
+      )).rows[0];
+      const upserted = await c.query(
+        `INSERT INTO marketplace_configuration(scope,config_key,config_value,updated_by,revision)
+         VALUES ($1,$2,$3,$4,1)
+         ON CONFLICT (scope,config_key) DO UPDATE SET config_value=EXCLUDED.config_value,
+           updated_by=EXCLUDED.updated_by,revision=marketplace_configuration.revision+1
+         RETURNING revision`,
+        [item.scope, item.key, JSON.stringify(item.value), req.user!.id],
+      );
+      await audit(c, req.user!.id, 'marketplace_configuration_updated', 'marketplace_configuration', `${item.scope}.${item.key}`,
+        { value: prior?.config_value ?? null, revision: prior?.revision ?? 0 },
+        { value: item.value, revision: Number(upserted.rows[0].revision) });
+    }
+    return loadMarketplaceConfig(c);
+  });
+  res.json(config);
+}));
+
+adminRouter.get('/platform/services', requireRole('global_admin'), h(async (req, res) => {
   const services = await withUser(req.user!, async (client) => (await client.query(
     `SELECT service_key, display_name, description, available, updated_at
      FROM platform_services ORDER BY display_name`,
@@ -384,7 +422,7 @@ adminRouter.get('/platform/services', requireGlobalAdmin, h(async (req, res) => 
   res.json(services);
 }));
 
-adminRouter.patch('/platform/services/:serviceKey', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/services/:serviceKey', requireRole('global_admin'), h(async (req, res) => {
   const serviceKey = z.enum(PLATFORM_SERVICE_KEYS).parse(req.params.serviceKey);
   const body = z.object({
     display_name: z.string().trim().min(2).max(120),
@@ -405,7 +443,7 @@ adminRouter.patch('/platform/services/:serviceKey', requireGlobalAdmin, h(async 
   res.json(service);
 }));
 
-adminRouter.get('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/service-packages', requireRole('global_admin'), h(async (req, res) => {
   const packages = await withUser(req.user!, async (client) => (await client.query(
     `SELECT p.id, p.package_key, p.display_name, p.description, p.active, p.created_at, p.updated_at,
        COALESCE(array_agg(i.service_key ORDER BY i.service_key)
@@ -417,7 +455,7 @@ adminRouter.get('/platform/service-packages', requireGlobalAdmin, h(async (req, 
   res.json(packages);
 }));
 
-adminRouter.post('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.post('/platform/service-packages', requireRole('global_admin'), h(async (req, res) => {
   const body = z.object({
     package_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
     display_name: z.string().trim().min(2).max(120),
@@ -449,7 +487,7 @@ adminRouter.post('/platform/service-packages', requireGlobalAdmin, h(async (req,
   res.status(201).json(created);
 }));
 
-adminRouter.patch('/platform/service-packages/:packageId', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/service-packages/:packageId', requireRole('global_admin'), h(async (req, res) => {
   const packageId = z.string().uuid().parse(req.params.packageId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(120),
@@ -487,14 +525,17 @@ adminRouter.patch('/platform/service-packages/:packageId', requireGlobalAdmin, h
   res.json(updated);
 }));
 
-adminRouter.get('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/tenants', requireRole('global_admin'), h(async (req, res) => {
   const tenants = await withUser(req.user!, async (client) => (await client.query(
     `SELECT t.id,t.tenant_key,t.display_name,t.status,t.hosting_mode,t.region,
        t.deployment_reference,t.deployment_status,t.config_version,t.created_at,t.updated_at,
        t.deployment_verification_reference,
        COALESCE(jsonb_agg(jsonb_build_object(
          'id',p.id,'package_key',p.package_key,'display_name',p.display_name
-       ) ORDER BY p.package_key) FILTER (WHERE p.id IS NOT NULL),'[]'::jsonb) AS packages
+       ) ORDER BY p.package_key) FILTER (WHERE p.id IS NOT NULL),'[]'::jsonb) AS packages,
+       COALESCE((SELECT jsonb_agg(jsonb_build_object('id',u.id,'legal_name',u.legal_name,'phone',u.phone)
+         ORDER BY u.legal_name) FROM platform_tenant_admins a JOIN users u ON u.id=a.user_id
+         WHERE a.tenant_id=t.id),'[]'::jsonb) AS admins
      FROM platform_tenants t
      LEFT JOIN platform_tenant_packages tp ON tp.tenant_id=t.id
      LEFT JOIN platform_service_packages p ON p.id=tp.package_id
@@ -503,7 +544,118 @@ adminRouter.get('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
   res.json(tenants);
 }));
 
-adminRouter.post('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/my-tenants', requireRole('super_admin'), h(async (req, res) => {
+  const tenants = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT t.id,t.tenant_key,t.display_name,t.status,t.hosting_mode,t.region,
+       t.deployment_reference,t.deployment_status,t.config_version,t.updated_at,
+       a.assigned_at,
+       COALESCE(jsonb_agg(DISTINCT jsonb_build_object('package_key',p.package_key,'display_name',p.display_name,
+         'services',COALESCE((SELECT jsonb_agg(i.service_key ORDER BY i.service_key)
+           FROM platform_service_package_items i WHERE i.package_id=p.id),'[]'::jsonb)))
+         FILTER (WHERE p.id IS NOT NULL),'[]'::jsonb) AS configured_packages
+     FROM platform_tenant_admins a JOIN platform_tenants t ON t.id=a.tenant_id
+     LEFT JOIN platform_tenant_packages tp ON tp.tenant_id=t.id
+     LEFT JOIN platform_service_packages p ON p.id=tp.package_id AND p.active
+     WHERE a.user_id=$1 GROUP BY t.id,a.assigned_at ORDER BY t.display_name`,
+    [req.user!.id],
+  )).rows);
+  res.json(tenants);
+}));
+
+adminRouter.get('/platform/business-tenants', requireRole('global_admin'), h(async (req, res) => {
+  const tenants = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT t.id,t.tenant_key,t.display_name,t.tenant_type,t.owner_user_id,t.status,t.config_version,t.created_at,t.updated_at,
+       owner.legal_name AS owner_name,owner.phone AS owner_phone,owner.role AS owner_role,owner.active AS owner_active,
+       owner.kyc_status AS owner_kyc_status,
+       COALESCE((SELECT jsonb_agg(jsonb_build_object(
+         'user_id',member.user_id,'legal_name',member_user.legal_name,'phone',member_user.phone,
+         'role',member.member_role,'status',member.status
+       ) ORDER BY member.member_role,member_user.legal_name)
+       FROM platform_business_tenant_members member JOIN users member_user ON member_user.id=member.user_id
+       WHERE member.tenant_id=t.id),'[]'::jsonb) AS members
+     FROM platform_business_tenants t JOIN users owner ON owner.id=t.owner_user_id
+     ORDER BY t.tenant_type,t.display_name`)).rows);
+  res.json(tenants);
+}));
+
+adminRouter.patch('/platform/business-tenants/:tenantId', requireRole('global_admin'), h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const body = z.object({
+    status: z.enum(['active','suspended','retired']),
+    reason: z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
+  const updated = await withUser(req.user!, async (client) => {
+    const current = (await client.query(
+      `SELECT tenant.id,tenant.status,tenant.tenant_type,tenant.owner_user_id,owner.active,owner.kyc_status
+       FROM platform_business_tenants tenant JOIN users owner ON owner.id=tenant.owner_user_id
+       WHERE tenant.id=$1 FOR UPDATE OF tenant`, [tenantId],
+    )).rows[0];
+    if (!current) throw new HttpError(404, 'Business tenant not found.');
+    if (current.status === 'retired') throw new HttpError(409, 'Retired business tenants cannot be reactivated.');
+    if (body.status === 'active' && (!current.active || current.kyc_status !== 'verified')) {
+      throw new HttpError(409, 'A business tenant owner must be active and KYC verified before tenant activation.');
+    }
+    if (current.status === body.status) throw new HttpError(409, `Business tenant is already ${body.status}.`);
+    const row = (await client.query(
+      `UPDATE platform_business_tenants SET status=$2,config_version=config_version+1,updated_at=now()
+       WHERE id=$1 RETURNING id,tenant_key,display_name,tenant_type,status,config_version,updated_at`,
+      [tenantId,body.status],
+    )).rows[0];
+    const eventType = body.status === 'active' ? 'tenant_activated' : body.status === 'suspended' ? 'tenant_suspended' : 'tenant_retired';
+    await client.query(
+      `INSERT INTO platform_business_tenant_events(tenant_id,actor_id,event_type,event_data)
+       VALUES($1,$2,$3,$4)`, [tenantId,req.user!.id,eventType,JSON.stringify({ reason: body.reason, previous_status: current.status })],
+    );
+    await audit(client,req.user!.id,`business_tenant_${body.status}`,'platform_business_tenant',tenantId,
+      { status: current.status },{ status: body.status, reason: body.reason });
+    return row;
+  });
+  res.json(updated);
+}));
+
+adminRouter.get('/platform/my-business-tenant', requireRole('super_admin','master_agent','field_agent'), h(async (req, res) => {
+  const tenants = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT tenant.id,tenant.tenant_key,tenant.display_name,tenant.tenant_type,tenant.owner_user_id,
+       tenant.status,tenant.config_version,member.member_role,member.status AS member_status
+     FROM platform_business_tenant_members member
+     JOIN platform_business_tenants tenant ON tenant.id=member.tenant_id
+     WHERE member.user_id=$1 AND member.status='active'
+     ORDER BY tenant.tenant_type,tenant.display_name`,
+    [req.user!.id],
+  )).rows);
+  res.json(tenants);
+}));
+
+adminRouter.post('/platform/tenants/:tenantId/admins', requireRole('global_admin'), h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const { user_id } = z.object({ user_id: z.string().uuid() }).strict().parse(req.body);
+  await withUser(req.user!, async (client) => {
+    if (!(await client.query('SELECT 1 FROM platform_tenants WHERE id=$1', [tenantId])).rowCount) {
+      throw new HttpError(404, 'Tenant not found.');
+    }
+    const user = (await client.query('SELECT id,role,active FROM users WHERE id=$1 FOR UPDATE', [user_id])).rows[0];
+    if (!user || user.role !== 'super_admin' || !user.active) throw new HttpError(422, 'Choose an active Super Admin account.');
+    await client.query(
+      'INSERT INTO platform_tenant_admins(tenant_id,user_id,assigned_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+      [tenantId, user_id, req.user!.id],
+    );
+    await audit(client, req.user!.id, 'platform_tenant_admin_assigned', 'platform_tenant', tenantId, null, { user_id });
+  });
+  res.sendStatus(204);
+}));
+
+adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requireRole('global_admin'), h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const userId = z.string().uuid().parse(req.params.userId);
+  await withUser(req.user!, async (client) => {
+    const removed = await client.query('DELETE FROM platform_tenant_admins WHERE tenant_id=$1 AND user_id=$2', [tenantId, userId]);
+    if (!removed.rowCount) throw new HttpError(404, 'Tenant Super Admin assignment not found.');
+    await audit(client, req.user!.id, 'platform_tenant_admin_unassigned', 'platform_tenant', tenantId, { user_id: userId }, null);
+  });
+  res.sendStatus(204);
+}));
+
+adminRouter.post('/platform/tenants', requireRole('global_admin'), h(async (req, res) => {
   const body = z.object({
     tenant_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9-]{1,79}$/),
     display_name: z.string().trim().min(2).max(160),
@@ -549,7 +701,7 @@ adminRouter.post('/platform/tenants', requireGlobalAdmin, h(async (req, res) => 
   res.status(201).json(tenant);
 }));
 
-adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/tenants/:tenantId', requireRole('global_admin', 'super_admin'), h(async (req, res) => {
   const tenantId = z.string().uuid().parse(req.params.tenantId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(160).optional(),
@@ -562,6 +714,13 @@ adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (re
     package_id: z.string().uuid().optional(),
   }).strict().refine((value) => Object.keys(value).length > 0);
   const changes = body.parse(req.body);
+  if (req.user!.role === 'super_admin') {
+    const allowedKeys = new Set(['deployment_reference', 'deployment_status']);
+    if (Object.keys(changes).some((key) => !allowedKeys.has(key))
+      || (changes.deployment_status !== undefined && !['registered', 'not_registered'].includes(changes.deployment_status))) {
+      throw new HttpError(403, 'Tenant Super Admins may only register deployment details allowed by their Global Admin assignment.');
+    }
+  }
   if (changes.deployment_reference && (/(password|secret|token|credential)/i.test(changes.deployment_reference) || changes.deployment_reference.includes('://'))) {
     throw new HttpError(422, 'Deployment references must not contain credentials or connection URLs.');
   }
@@ -571,7 +730,13 @@ adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (re
     throw new HttpError(422, 'Verification evidence must be a non-secret reference, not a URL or credential.');
   }
   const updated = await withUser(req.user!, async (client) => {
-    const prior = (await client.query('SELECT * FROM platform_tenants WHERE id=$1 FOR UPDATE', [tenantId])).rows[0];
+    const prior = (await client.query(
+      `SELECT t.* FROM platform_tenants t
+       WHERE t.id=$1 AND ($2::text='global_admin' OR EXISTS(
+         SELECT 1 FROM platform_tenant_admins a WHERE a.tenant_id=t.id AND a.user_id=$3
+       )) FOR UPDATE`,
+      [tenantId, req.user!.role, req.user!.id],
+    )).rows[0];
     if (!prior) throw new HttpError(404, 'Tenant not found.');
     const deploymentChanged = ['hosting_mode', 'region', 'deployment_reference']
       .some((key) => Object.hasOwn(changes, key));
@@ -636,7 +801,7 @@ adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (re
   res.json(updated);
 }));
 
-adminRouter.get('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/catalog-products', requireRole('global_admin'), h(async (req, res) => {
   const products = await withUser(req.user!, async (client) => (await client.query(
     `SELECT id,product_key,display_name,description,category,status,attributes,created_by,updated_by,created_at,updated_at
      FROM platform_catalog_products ORDER BY created_at DESC,product_key`,
@@ -644,7 +809,7 @@ adminRouter.get('/platform/catalog-products', requireGlobalAdmin, h(async (req, 
   res.json(products);
 }));
 
-adminRouter.post('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.post('/platform/catalog-products', requireRole('global_admin'), h(async (req, res) => {
   const body = z.object({
     product_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
     display_name: z.string().trim().min(2).max(160),
@@ -674,7 +839,7 @@ adminRouter.post('/platform/catalog-products', requireGlobalAdmin, h(async (req,
   res.status(201).json(product);
 }));
 
-adminRouter.patch('/platform/catalog-products/:productId', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/catalog-products/:productId', requireRole('global_admin'), h(async (req, res) => {
   const productId = z.string().uuid().parse(req.params.productId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(160),
@@ -704,12 +869,12 @@ adminRouter.patch('/platform/catalog-products/:productId', requireGlobalAdmin, h
   res.json(product);
 }));
 
-const requireExactSuperAdmin: RequestHandler = (req, _res, next) =>
-  req.user?.role === 'super_admin'
+const requireGlobalSystemAdmin: RequestHandler = (req, _res, next) =>
+  req.user?.role === 'global_admin'
     ? next()
-    : next(new HttpError(403, 'Only a Super Admin can configure role activities.'));
+    : next(new HttpError(403, 'Only a Global System Admin can configure shared role templates.'));
 
-adminRouter.get('/role-access', requireExactSuperAdmin, h(async (req, res) => {
+adminRouter.get('/role-access', requireGlobalSystemAdmin, h(async (req, res) => {
   const configured = await withUser(req.user!, async (c) => (await c.query(
     'SELECT role_name, activity_key, enabled FROM role_activity_permissions ORDER BY role_name, activity_key',
   )).rows);
@@ -722,7 +887,7 @@ adminRouter.get('/role-access', requireExactSuperAdmin, h(async (req, res) => {
   });
 }));
 
-adminRouter.get('/role-access/history', requireExactSuperAdmin, h(async (req, res) => {
+adminRouter.get('/role-access/history', requireGlobalSystemAdmin, h(async (req, res) => {
   const query = z.object({
     role: z.string().min(1).max(80).optional(),
     activity: z.string().min(1).max(100).optional(),
@@ -745,7 +910,7 @@ adminRouter.get('/role-access/history', requireExactSuperAdmin, h(async (req, re
   res.json({ history });
 }));
 
-adminRouter.get('/users/:id/access-history', requireRole('super_admin', 'global_admin', 'compliance'), h(async (req, res) => {
+adminRouter.get('/users/:id/access-history', requireRole('global_admin', 'compliance'), h(async (req, res) => {
   const userId = z.string().uuid().parse(req.params.id);
   const query = z.object({
     at: z.string().datetime({ offset: true }).optional(),
@@ -794,7 +959,7 @@ const miniAppAccessUpdate = z.discriminatedUnion('mode', [
   }
 });
 
-adminRouter.get('/users/:id/mini-app-access', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+adminRouter.get('/users/:id/mini-app-access', requireRole('global_admin'), h(async (req, res) => {
   const userId = z.string().uuid().parse(req.params.id);
   const result = await withUser(req.user!, async (client) => {
     if (!(await client.query('SELECT 1 FROM users WHERE id=$1', [userId])).rowCount) {
@@ -816,7 +981,7 @@ adminRouter.get('/users/:id/mini-app-access', requireRole('super_admin', 'global
   });
 }));
 
-adminRouter.get('/users/:id/mini-app-access/history', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+adminRouter.get('/users/:id/mini-app-access/history', requireRole('global_admin'), h(async (req, res) => {
   const userId = z.string().uuid().parse(req.params.id);
   const limit = z.coerce.number().int().min(1).max(500).default(100).parse(req.query.limit);
   const history = await withUser(req.user!, async (client) => {
@@ -833,7 +998,7 @@ adminRouter.get('/users/:id/mini-app-access/history', requireRole('super_admin',
   res.json({ history });
 }));
 
-adminRouter.put('/users/:id/mini-app-access', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+adminRouter.put('/users/:id/mini-app-access', requireRole('global_admin'), h(async (req, res) => {
   const userId = z.string().uuid().parse(req.params.id);
   const body = miniAppAccessUpdate.parse(req.body);
   if (userId === req.user!.id) {
@@ -886,7 +1051,7 @@ adminRouter.put('/users/:id/mini-app-access', requireRole('super_admin', 'global
   res.json(saved);
 }));
 
-adminRouter.patch('/role-access', requireExactSuperAdmin, h(async (req, res) => {
+adminRouter.patch('/role-access', requireGlobalSystemAdmin, h(async (req, res) => {
   const body = z.object({
     changes: z.array(z.object({
       role: z.string().min(1).max(80),
@@ -1034,7 +1199,7 @@ adminRouter.patch('/auth/preferences', h(async (req, res) => {
 }));
 
 // ================= Users: create, verify, activate (two different people) =================
-adminRouter.get('/users', requireRole('super_admin', 'compliance'), h(async (_req, res) => {
+adminRouter.get('/users', requireRole('global_admin', 'compliance', 'corporate_business_manager'), h(async (_req, res) => {
   const users = await withUser(_req.user!, async (c) => (await c.query(
     `SELECT u.id, u.legal_name, u.phone, u.role, u.kyc_status, u.active, u.mfa_enabled, u.created_at, u.created_by,
             s.account_type AS signup_account_type, s.requested_plan, s.payment_status AS signup_payment_status,
@@ -1042,7 +1207,9 @@ adminRouter.get('/users', requireRole('super_admin', 'compliance'), h(async (_re
             s.edir_life_interest, s.household_cover_interest, a.service_specialization,
             (SELECT count(*)::int FROM user_documents d WHERE d.user_id = u.id) AS kyc_document_count
      FROM users u LEFT JOIN user_signups s ON s.user_id = u.id LEFT JOIN agents a ON a.id = u.id
+     WHERE $1::text IN ('global_admin','compliance') OR u.created_by=$2
      ORDER BY u.created_at DESC LIMIT 300`,
+    [_req.user!.role,_req.user!.id],
   )).rows);
   res.json(users);
 }));
@@ -1059,8 +1226,10 @@ async function lockEligibleSuperAdmins(c: import('pg').PoolClient, userIds: stri
 
 const isEligibleSuperAdmin = (user?: { active: boolean; role: string; mfa_enabled: boolean }) =>
   user?.active === true && user.role === 'super_admin' && user.mfa_enabled === true;
+const isEligiblePlatformAdmin = (user?: { active: boolean; role: string; mfa_enabled: boolean }) =>
+  user?.active === true && ['super_admin', 'global_admin'].includes(user.role) && user.mfa_enabled === true;
 
-adminRouter.get('/global-admin-promotions', requireRole('super_admin'), h(async (_req, res) => {
+adminRouter.get('/global-admin-promotions', requireRole('global_admin'), h(async (_req, res) => {
   const rows = await withUser(_req.user!, async (c) => (await c.query(
     `SELECT r.id, r.status, r.decision_reason, r.created_at, r.decided_at,
             target.id AS target_user_id, target.legal_name AS target_name, target.phone AS target_phone,
@@ -1075,13 +1244,13 @@ adminRouter.get('/global-admin-promotions', requireRole('super_admin'), h(async 
   res.json(rows);
 }));
 
-adminRouter.post('/global-admin-promotions', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.post('/global-admin-promotions', requireRole('global_admin'), h(async (req, res) => {
   const { target_user_id } = z.object({ target_user_id: z.string().uuid() }).strict().parse(req.body);
   const request = await withUser(req.user!, async (c) => {
     if (target_user_id === req.user!.id) throw new HttpError(422, 'A different administrator must nominate the target account');
     const eligible = await lockEligibleSuperAdmins(c, [req.user!.id, target_user_id]);
-    if (!isEligibleSuperAdmin(eligible.get(req.user!.id))) {
-      throw new HttpError(403, 'Promotion requests require an active, MFA-enabled Super Admin');
+    if (!isEligiblePlatformAdmin(eligible.get(req.user!.id))) {
+      throw new HttpError(403, 'Promotion requests require an active, MFA-enabled platform administrator.');
     }
     const target = eligible.get(target_user_id);
     if (!isEligibleSuperAdmin(target)) {
@@ -1117,11 +1286,11 @@ async function decideGlobalAdminPromotion(req: Request, decision: 'approved' | '
       throw new HttpError(403, 'The requester and target cannot decide this promotion');
     }
     const eligible = await lockEligibleSuperAdmins(c, [req.user!.id, request.requested_by, request.target_user_id]);
-    if (!isEligibleSuperAdmin(eligible.get(req.user!.id))) {
-      throw new HttpError(403, 'Promotion decisions require an active, MFA-enabled Super Admin');
+    if (!isEligiblePlatformAdmin(eligible.get(req.user!.id))) {
+      throw new HttpError(403, 'Promotion decisions require an active, MFA-enabled platform administrator.');
     }
-    if (!isEligibleSuperAdmin(eligible.get(request.requested_by))) {
-      throw new HttpError(409, 'The requesting Super Admin is no longer eligible');
+    if (!isEligiblePlatformAdmin(eligible.get(request.requested_by))) {
+      throw new HttpError(409, 'The requesting platform administrator is no longer eligible.');
     }
     const target = eligible.get(request.target_user_id);
     if (!isEligibleSuperAdmin(target)) {
@@ -1145,12 +1314,12 @@ async function decideGlobalAdminPromotion(req: Request, decision: 'approved' | '
   return result;
 }
 
-adminRouter.post('/global-admin-promotions/:id/approve', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.post('/global-admin-promotions/:id/approve', requireRole('global_admin'), h(async (req, res) => {
   const { reason } = z.object({ reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
   res.json(await decideGlobalAdminPromotion(req, 'approved', reason));
 }));
 
-adminRouter.post('/global-admin-promotions/:id/reject', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.post('/global-admin-promotions/:id/reject', requireRole('global_admin'), h(async (req, res) => {
   const { reason } = z.object({ reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
   res.json(await decideGlobalAdminPromotion(req, 'rejected', reason));
 }));
@@ -1221,33 +1390,59 @@ adminRouter.patch('/business-rules', requireRole('global_admin'), h(async (req, 
   res.json(result);
 }));
 
-adminRouter.post('/users', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.post('/users', requireRole('global_admin','corporate_business_manager'), h(async (req, res) => {
   const b = z.object({
     legal_name: z.string().min(2), phone: Phone, email: z.string().email().optional(),
     role: z.enum(PROVISIONABLE_ROLES), territory_id: z.number().int().optional(), parent_agent_id: z.string().uuid().optional(),
+    requested_plan: z.enum(['free','pro','enterprise']).optional(),
     service_specialization: z.enum(['financial_service', 'growth_partnership', 'workforce_property']).optional(),
   }).parse(req.body);
+  if (req.user!.role === 'corporate_business_manager' && !['master_agent','field_agent'].includes(b.role)) {
+    throw new HttpError(403, 'Business Admins may onboard direct Master Agents and Field Agents only.');
+  }
   if (AGENT_ROLES.includes(b.role) && !b.territory_id) throw new HttpError(422, 'Agents need an area');
   if (b.role === 'field_agent' && !b.parent_agent_id) throw new HttpError(422, 'A field agent needs a master agent');
+  if (AGENT_ROLES.includes(b.role) && !b.requested_plan) throw new HttpError(422, 'Agents need an approved service plan selection.');
   if (!AGENT_ROLES.includes(b.role) && b.service_specialization) throw new HttpError(422, 'Specialization is only available for agents');
   const temp = randomPassword();
+  let uploadToken: string | undefined;
   const user = await withUser(req.user!, async (c) => {
+    if (b.role === 'field_agent') {
+      const parent = (await c.query(
+        `SELECT a.id FROM agents a JOIN users u ON u.id=a.id
+         WHERE a.id=$1 AND a.agent_type='master' AND u.role='master_agent' AND u.active=true AND a.territory_id=$2
+           AND ($3::text <> 'corporate_business_manager' OR u.created_by=$4)`,
+        [b.parent_agent_id,b.territory_id,req.user!.role,req.user!.id],
+      )).rows[0];
+      if (!parent) throw new HttpError(422, 'Choose an active Master Agent in the selected territory.');
+    }
     const r = await c.query(
       `INSERT INTO users (legal_name, phone, email, role, territory_id, password_hash, must_change_password, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,true,$7) RETURNING id, legal_name, phone, role, kyc_status, active`,
       [b.legal_name, b.phone, b.email ?? null, b.role, b.territory_id ?? null, await bcrypt.hash(temp, 12), req.user!.id],
     );
     if (AGENT_ROLES.includes(b.role)) {
-      await c.query('INSERT INTO agents (id, agent_type, parent_id, territory_id, service_specialization) VALUES ($1,$2,$3,$4,$5)', [r.rows[0].id, b.role === 'master_agent' ? 'master' : 'field', b.role === 'field_agent' ? b.parent_agent_id : null, b.territory_id, b.service_specialization ?? null]);
+      await c.query(
+        `INSERT INTO user_signups(user_id,account_type,requested_plan,payment_status,agent_type,territory_id,parent_agent_id)
+         VALUES($1,'agent',$2,$3,$4,$5,$6)`,
+        [r.rows[0].id,b.requested_plan,b.requested_plan==='free'?'not_required':'not_configured',
+          b.role==='master_agent'?'master':'field',b.territory_id,b.role==='field_agent'?b.parent_agent_id:null],
+      );
+      uploadToken = randomBytes(32).toString('base64url');
+      await c.query(
+        `INSERT INTO signup_upload_tokens(user_id,token_hash,expires_at)
+         VALUES($1,$2,now()+interval '24 hours')`,
+        [r.rows[0].id,createHash('sha256').update(uploadToken).digest('hex')],
+      );
     }
     await audit(c, req.user!.id, 'user_created', 'user', r.rows[0].id, null, { role: b.role });
     return r.rows[0];
   });
-  res.status(201).json({ user, temp_password: temp }); // shown once; the user must change it at first sign-in
+  res.status(201).json({ user, temp_password: temp, ...(uploadToken ? { signup_upload_token: uploadToken } : {}) }); // shown once; the invitee must change the temporary password and complete any required KYC
 }));
 
 // Super Agents administer the network; Master Agents can manage only their own direct field agents.
-adminRouter.get('/agents/team', requireRole('super_admin', 'master_agent'), h(async (req, res) => {
+adminRouter.get('/agents/team', requireRole('super_admin', 'global_admin', 'master_agent'), h(async (req, res) => {
   const team = await withUser(req.user!, async (c) => (await c.query(
     `SELECT u.id, u.legal_name, u.phone, u.role, u.active, u.territory_id,
             a.agent_type, a.parent_id, a.service_specialization,
@@ -1262,7 +1457,7 @@ adminRouter.get('/agents/team', requireRole('super_admin', 'master_agent'), h(as
   res.json(team);
 }));
 
-adminRouter.patch('/agents/:id/specialization', requireRole('super_admin', 'master_agent'), h(async (req, res) => {
+adminRouter.patch('/agents/:id/specialization', requireRole('super_admin', 'global_admin', 'master_agent'), h(async (req, res) => {
   const { service_specialization } = z.object({
     service_specialization: z.enum(['financial_service', 'growth_partnership', 'workforce_property']).nullable(),
   }).parse(req.body);
@@ -1286,11 +1481,21 @@ adminRouter.patch('/agents/:id/specialization', requireRole('super_admin', 'mast
 }));
 
 adminRouter.post('/users/:id/kyc', requireRole('compliance'), h(async (req, res) => {
-  const { decision } = z.object({ decision: z.enum(['verified', 'rejected']) }).parse(req.body);
+  const { decision, reason } = z.object({
+    decision: z.enum(['verified', 'rejected']),
+    reason: z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
   if (req.params.id === req.user!.id) throw new HttpError(403, 'You cannot verify yourself');
   res.json(await withUser(req.user!, async (c) => {
+    const signup = (await c.query('SELECT account_type FROM user_signups WHERE user_id = $1', [req.params.id])).rows[0];
+    if (signup) {
+      const reviewedByActor = await c.query(
+        'SELECT 1 FROM user_documents WHERE user_id=$1 AND reviewer_id=$2 LIMIT 1',
+        [req.params.id, req.user!.id],
+      );
+      if (reviewedByActor.rowCount) throw new HttpError(403, 'Final KYC approval must be completed by someone other than the document reviewer.');
+    }
     if (decision === 'verified') {
-      const signup = (await c.query('SELECT account_type FROM user_signups WHERE user_id = $1', [req.params.id])).rows[0];
       if (signup) {
         const config = (await c.query(
           "SELECT config_value FROM marketplace_configuration WHERE scope='users' AND config_key='kyc_requirements'",
@@ -1309,17 +1514,17 @@ adminRouter.post('/users/:id/kyc', requireRole('compliance'), h(async (req, res)
     await c.query(
       `UPDATE user_signups
        SET status = CASE WHEN $2 = 'rejected' THEN 'rejected' ELSE status END,
-           reviewed_by = $3, reviewed_at = now()
+           kyc_reviewed_by=$3, kyc_reviewed_at=now(), kyc_review_reason=$4
        WHERE user_id = $1`,
-      [req.params.id, decision, req.user!.id],
+      [req.params.id, decision, req.user!.id, reason],
     );
     if (decision === 'rejected') await c.query('DELETE FROM signup_upload_tokens WHERE user_id = $1', [req.params.id]);
-    await audit(c, req.user!.id, 'kyc_' + decision, 'user', String(req.params.id));
+    await audit(c, req.user!.id, 'kyc_' + decision, 'user', String(req.params.id), null, { reason });
     return r.rows[0];
   }));
 }));
 
-adminRouter.get('/users/:id/documents', requireRole('super_admin', 'compliance'), h(async (req, res) => {
+adminRouter.get('/users/:id/documents', requireRole('global_admin', 'compliance'), h(async (req, res) => {
   const documents = await withUser(req.user!, async (c) => (await c.query(
     'SELECT id, doc_type, mime, size_bytes, status, reviewer_id, reviewed_at, review_note, created_at FROM user_documents WHERE user_id = $1 ORDER BY created_at',
     [req.params.id],
@@ -1327,7 +1532,7 @@ adminRouter.get('/users/:id/documents', requireRole('super_admin', 'compliance')
   res.json(documents);
 }));
 
-adminRouter.get('/users/:id/documents/:documentId/file', requireRole('super_admin', 'compliance'), h(async (req, res) => {
+adminRouter.get('/users/:id/documents/:documentId/file', requireRole('global_admin', 'compliance'), h(async (req, res) => {
   const document = await withUser(req.user!, async (c) => (await c.query(
     'SELECT id, storage_key, mime FROM user_documents WHERE id = $1 AND user_id = $2',
     [req.params.documentId, req.params.id],
@@ -1367,8 +1572,8 @@ adminRouter.post('/users/:id/documents/:documentId/review', requireRole('complia
   res.json(document);
 }));
 
-adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req, res) => {
-  const { reason } = z.object({ reason: z.string().trim().min(10).max(1000).optional() }).strict().parse(req.body ?? {});
+adminRouter.post('/users/:id/activate', requireRole('global_admin'), h(async (req, res) => {
+  const { reason } = z.object({ reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body ?? {});
   res.json(await withUser(req.user!, async (c) => {
     const target = (await c.query('SELECT id, role, active, created_by FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!target) throw new HttpError(404, 'User not found');
@@ -1383,6 +1588,12 @@ adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req
       [req.params.id],
     )).rows[0];
     if (signup?.status === 'rejected') throw new HttpError(409, 'Rejected sign-up requests cannot be activated');
+    if (signup && !signup.kyc_reviewed_by) {
+      throw new HttpError(409, 'KYC must be formally reviewed before account activation.');
+    }
+    if (signup && signup.kyc_reviewed_by === req.user!.id) {
+      throw new HttpError(403, 'A different Super Admin must activate an account after KYC approval.');
+    }
     if (signup?.account_type === 'agent') {
       await c.query(
         `INSERT INTO agents (id, agent_type, parent_id, territory_id)
@@ -1391,24 +1602,24 @@ adminRouter.post('/users/:id/activate', requireRole('super_admin'), h(async (req
         [req.params.id, signup.agent_type, signup.parent_agent_id, signup.territory_id],
       );
     }
-    await c.query("SELECT set_config('app.access_change_reason',$1,true)", [reason ?? 'Account activated after authorized identity and account review']);
+    await c.query("SELECT set_config('app.access_change_reason',$1,true)", [reason]);
     const r = await c.query('UPDATE users SET active = true WHERE id = $1 RETURNING id, active', [req.params.id]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
     if (signup) {
       await c.query('DELETE FROM signup_upload_tokens WHERE user_id = $1', [req.params.id]);
       await c.query(
         `UPDATE user_signups
-         SET status = 'approved', reviewed_by = $2, reviewed_at = now()
+         SET status = 'approved', reviewed_by = $2, reviewed_at = now(), activation_reviewed_by=$2, activation_reviewed_at=now(), activation_review_reason=$3
          WHERE user_id = $1`,
-        [req.params.id, req.user!.id],
+        [req.params.id, req.user!.id, reason],
       );
     }
-    await audit(c, req.user!.id, 'user_activated', 'user', String(req.params.id));
+    await audit(c, req.user!.id, 'user_activated', 'user', String(req.params.id), null, { reason });
     return r.rows[0];
   }));
 }));
 
-adminRouter.post('/users/:id/deactivate', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.post('/users/:id/deactivate', requireRole('global_admin'), h(async (req, res) => {
   const { reason } = z.object({ reason: z.string().trim().min(10).max(1000).optional() }).strict().parse(req.body ?? {});
   if (req.params.id === req.user!.id) throw new HttpError(409, 'You cannot deactivate yourself');
   res.json(await withUser(req.user!, async (c) => {
@@ -1427,7 +1638,7 @@ adminRouter.post('/users/:id/deactivate', requireRole('super_admin'), h(async (r
 }));
 
 /** Lost phone: clears 2FA so the user can enrol again (staff with REQUIRE_MFA_FOR_STAFF are forced to on next sign-in). */
-adminRouter.post('/users/:id/mfa/reset', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.post('/users/:id/mfa/reset', requireRole('global_admin'), h(async (req, res) => {
   if (req.params.id === req.user!.id) throw new HttpError(403, 'Ask another Super Admin to reset your two-factor sign-in');
   const out = await withUser(req.user!, async (c) => {
     const target = (await c.query('SELECT role FROM users WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
@@ -1443,7 +1654,7 @@ adminRouter.post('/users/:id/mfa/reset', requireRole('super_admin'), h(async (re
   res.json(out);
 }));
 
-adminRouter.post('/users/:id/reset-password', requireRole('super_admin'), h(async (req, res) => {
+adminRouter.post('/users/:id/reset-password', requireRole('global_admin'), h(async (req, res) => {
   if (req.params.id === req.user!.id) throw new HttpError(403, 'Ask another Super Admin to reset your password');
   const temp = randomPassword();
   await withUser(req.user!, async (c) => {
@@ -1460,7 +1671,7 @@ adminRouter.post('/users/:id/reset-password', requireRole('super_admin'), h(asyn
 }));
 
 // ================= Reports =================
-adminRouter.get('/reports/summary', requireRole('super_admin', 'finance', 'finance_manager'), h(async (req, res) => {
+adminRouter.get('/reports/summary', requireRole('global_admin', 'finance', 'finance_manager'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => {
     const q = async (sql: string) => (await c.query(sql)).rows;
     const [leads, contracts, ledger, comms, pending, disputes, maint, overdue, agents, workers] = await Promise.all([

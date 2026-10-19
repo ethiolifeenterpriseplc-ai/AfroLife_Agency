@@ -15,6 +15,7 @@ try{
     ['accounting-v2-business-workflows','002_accounting_workflows.sql'],
     ['accounting-v3-direct-entity-access','003_accounting_entity_access.sql'],
     ['accounting-v4-transaction-controls','004_accounting_transaction_controls.sql'],
+    ['accounting-v5-subscriber-owned-businesses','005_accounting_subscriber_ownership.sql'],
   ]){
     const already=await client.query('SELECT 1 FROM accounting_service_migrations WHERE version=$1',[version]);
     if(already.rowCount)continue;

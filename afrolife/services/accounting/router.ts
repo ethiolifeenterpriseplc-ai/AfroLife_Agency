@@ -59,8 +59,13 @@ export function createAccountingRouter(withUser: WithUser): RouterType {
       name: z.string().trim().min(2).max(160), legal_name: z.string().trim().min(2).max(200).optional(),
       base_currency: z.string().regex(/^[A-Z]{3}$/).default('ETB'), fiscal_year_start_month: z.number().int().min(1).max(12).default(1),
     }).strict().parse(req.body);
+    const selfServiceOwner = ['customer','property_owner'].includes(req.user!.role);
     if (body.parent_entity_id) await assertAccess(withUser,req.user!,body.parent_entity_id,['entity_admin']);
-    else if (!global(req.user!.role)) throw new HttpError(403,'Only a platform administrator can create a root accounting entity');
+    else if (selfServiceOwner) {
+      if (!['legal_entity','cooperative','merchant','landlord','property_owner','other'].includes(body.entity_type)) {
+        throw new HttpError(400,'Choose a supported business entity type');
+      }
+    } else if (!global(req.user!.role)) throw new HttpError(403,'Only a platform administrator can create a root accounting entity');
     const row = await withUser(req.user!, async (client) => {
       const entity = (await client.query(`INSERT INTO accounting_entities(parent_entity_id,source_system,source_entity_id,entity_type,name,legal_name,base_currency,fiscal_year_start_month,created_by)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,

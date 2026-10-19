@@ -23,7 +23,7 @@ ops.use(staffingAccounting);
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const AGENT = ['master_agent', 'field_agent'];
 
-ops.get('/accounting-event-outbox/status', requireRole('global_admin','super_admin','finance','finance_manager'), h(async(req,res)=>{
+ops.get('/accounting-event-outbox/status', requireRole('global_admin','finance','finance_manager'), h(async(req,res)=>{
   const rows=await withUser(req.user!,async(client)=>(await client.query(
     `SELECT id,source_event_id,source_entity_id,status,attempts,next_attempt_at,delivered_at,last_error,created_at
      FROM accounting_event_outbox ORDER BY created_at DESC LIMIT 200`,
@@ -31,7 +31,7 @@ ops.get('/accounting-event-outbox/status', requireRole('global_admin','super_adm
   res.json(rows);
 }));
 
-ops.post('/accounting-event-outbox/:id/retry', requireRole('global_admin','super_admin','finance_manager'), h(async(req,res)=>{
+ops.post('/accounting-event-outbox/:id/retry', requireRole('global_admin','finance_manager'), h(async(req,res)=>{
   const id=z.string().uuid().parse(req.params.id);
   const row=await withUser(req.user!,async(client)=>(await client.query(
     `UPDATE accounting_event_outbox SET status='pending',attempts=0,next_attempt_at=now(),locked_until=NULL,last_error=NULL
@@ -72,7 +72,7 @@ ops.get('/owner/statements', requireRole('property_owner'), h(async (req, res) =
 }));
 
 // ================= Disputes =================
-ops.post('/disputes', requireRole(...AGENT, 'super_admin', 'compliance'), h(async (req, res) => {
+ops.post('/disputes', requireRole(...AGENT, 'super_admin', 'global_admin', 'compliance'), h(async (req, res) => {
   const b = z.object({ contract_id: z.string().uuid(), category: z.enum(['payment', 'service', 'worker_conduct', 'fees', 'other']), description: z.string().min(10) }).parse(req.body);
   const row = await withUser(req.user!, async (c) => {
     if (!(await c.query('SELECT 1 FROM contracts WHERE id = $1', [b.contract_id])).rowCount) throw new HttpError(404, 'Contract not found');
@@ -87,7 +87,7 @@ ops.get('/disputes', h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query('SELECT d.*, k.contract_no FROM disputes d JOIN contracts k ON k.id = d.contract_id ORDER BY d.opened_at DESC LIMIT 200')).rows));
 }));
 
-ops.post('/disputes/:id/assign', requireRole('super_admin'), h(async (req, res) => {
+ops.post('/disputes/:id/assign', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
   const { user_id } = z.object({ user_id: z.string().uuid() }).parse(req.body);
   res.json(await withUser(req.user!, async (c) => {
     const r = await c.query("UPDATE disputes SET assigned_to = $2, status = 'investigating' WHERE id = $1 AND status <> 'resolved' RETURNING *", [req.params.id, user_id]);
@@ -98,7 +98,7 @@ ops.post('/disputes/:id/assign', requireRole('super_admin'), h(async (req, res) 
 }));
 
 /** Resolving may include a refund. The refund is a new ledger transaction, never an edit of the original one. */
-ops.post('/disputes/:id/resolve', requireRole('super_admin', 'compliance'), h(async (req, res) => {
+ops.post('/disputes/:id/resolve', requireRole('super_admin', 'global_admin', 'compliance'), h(async (req, res) => {
   const b = z.object({ resolution: z.string().min(10), refund_amount: z.number().nonnegative().transform((x) => Math.round(x * 100) / 100).default(0), refund_kind: z.enum(['fee', 'guarantee']).optional() }).parse(req.body);
   if (b.refund_amount > 0 && !b.refund_kind) throw new HttpError(400, 'Say whether this refunds fees or the guarantee');
   if (b.refund_amount > 0 && !isPlatformAdminRole(req.user!.role)) throw new HttpError(403, 'Only a platform administrator can approve a refund');
@@ -606,7 +606,7 @@ ops.post('/leases/:id/end', requireActivity('property.tenancy.manage'), h(async 
 }));
 
 // ----------------- Service identity inventory -----------------
-ops.post('/service-identities', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+ops.post('/service-identities', requireRole('global_admin'), h(async (req, res) => {
   const b = z.object({
     name: z.string().trim().min(3).max(200),
     purpose: z.string().trim().min(3).max(1000),
@@ -640,7 +640,7 @@ ops.post('/service-identities', requireRole('super_admin', 'global_admin'), h(as
   }));
 }));
 
-ops.get('/service-identities', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+ops.get('/service-identities', requireRole('global_admin'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
     `SELECT si.id,si.name,si.purpose,si.environment,si.owner_user_id,si.expiry_date,
        si.secret_manager_reference,si.rotated_at,si.last_rotated_by,si.last_rotation_evidence,
@@ -650,7 +650,7 @@ ops.get('/service-identities', requireRole('super_admin', 'global_admin'), h(asy
   )).rows));
 }));
 
-ops.post('/service-identities/:id/rotate', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+ops.post('/service-identities/:id/rotate', requireRole('global_admin'), h(async (req, res) => {
   const b = z.object({
     secret_manager_reference: z.string().trim().regex(/^(vault|aws-sm|azure-kv):\/\/[A-Za-z0-9._/-]+$/),
     expiry_date: z.string().date(),
@@ -680,7 +680,7 @@ ops.post('/service-identities/:id/rotate', requireRole('super_admin', 'global_ad
   }));
 }));
 
-ops.post('/service-identities/:id/retire', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+ops.post('/service-identities/:id/retire', requireRole('global_admin'), h(async (req, res) => {
   const { evidence } = z.object({ evidence: z.string().trim().min(10).max(2000) }).parse(req.body);
   res.json(await withUser(req.user!, async (c) => {
     const current = (await c.query('SELECT id,status,created_by FROM service_identities WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
@@ -702,7 +702,7 @@ ops.post('/service-identities/:id/retire', requireRole('super_admin', 'global_ad
   }));
 }));
 
-ops.get('/service-identities/:id/events', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
+ops.get('/service-identities/:id/events', requireRole('global_admin'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => {
     if (!(await c.query('SELECT 1 FROM service_identities WHERE id=$1', [req.params.id])).rowCount) {
       throw new HttpError(404, 'Service identity not found');
@@ -762,7 +762,7 @@ ops.get('/finance/property-period-close', requireRole('finance','finance_manager
 }));
 
 // ----------------- Release approvals (record owner sign-off) -----------------
-ops.get('/readiness-evidence', requireRole('super_admin','global_admin'), h(async (req, res) => {
+ops.get('/readiness-evidence', requireRole('global_admin'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
     `SELECT e.id,e.module,e.category,e.status,e.owner_name,e.approver_name,
        e.evidence_reference,e.environment,e.notes,e.recorded_by_role,e.created_at,
@@ -773,10 +773,17 @@ ops.get('/readiness-evidence', requireRole('super_admin','global_admin'), h(asyn
   )).rows));
 }));
 
-ops.post('/readiness-evidence', requireRole('super_admin','global_admin'), h(async (req, res) => {
+ops.post('/readiness-evidence', requireRole('global_admin'), h(async (req, res) => {
   const b = z.object({
     module: z.enum(['platform','workforce','insurance','mfi','edir','property','marketplace','agency']),
-    category: z.enum(['legal','provider','finance','security','operations','accessibility','capacity','dr','incident','service_account','release_owner','privacy']),
+    category: z.enum([
+      'legal','provider','finance','security','operations','accessibility','capacity','dr','incident','service_account','release_owner','privacy',
+      'insurance_license','insurance_professional_indemnity','insurance_ceo_oversight','insurance_branch_oversight',
+      'insurance_market_comparison','insurance_customer_choice_exception','insurance_disclosure_consent',
+      'insurance_policy_issuance','insurance_premium_custody','insurance_claims_records','insurance_data_rights',
+      'insurance_tenant_isolation','insurance_integration_reconciliation','insurance_business_continuity',
+      'insurance_global_financial_reporting','insurance_commission_distribution','insurance_legal_signoff',
+    ]),
     status: z.enum(['open','evidence_recorded','blocked','not_applicable']),
     owner_name: z.string().trim().min(2).max(160),
     approver_name: z.string().trim().min(2).max(160),
@@ -966,7 +973,7 @@ ops.get('/maintenance', h(async (req, res) => {
 }));
 
 const NEXT_MAINT: Record<string, string[]> = { open: ['assigned', 'cancelled'], assigned: ['in_progress', 'cancelled'], in_progress: ['done', 'cancelled'] };
-ops.post('/maintenance/:id/update', requireRole(...AGENT, 'super_admin'), h(async (req, res) => {
+ops.post('/maintenance/:id/update', requireRole(...AGENT, 'super_admin', 'global_admin'), h(async (req, res) => {
   const b = z.object({ status: z.enum(['assigned', 'in_progress', 'done', 'cancelled']), assigned_to: z.string().min(2).optional(), cost: z.number().nonnegative().optional() }).parse(req.body);
   res.json(await withUser(req.user!, async (c) => {
     const m = (await c.query('SELECT * FROM maintenance_requests WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];

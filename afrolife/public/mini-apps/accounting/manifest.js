@@ -1,8 +1,8 @@
 export default Object.freeze({
   id: 'accounting',
-  name: 'Financial Services',
+  name: 'Accounting & Finance',
   logo: '/icon.svg',
-  description: 'Manage entity-scoped accounting, journal approvals, and financial reports.',
+  description: 'Accounting & Finance service: entity-scoped books, journals, approvals, and financial reports. Other mini-apps retain their own service-specific financial workflows.',
   panels: ['accounting'],
   api: ['/accounting'],
 });

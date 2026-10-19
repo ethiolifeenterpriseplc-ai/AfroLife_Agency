@@ -92,7 +92,7 @@ privacy.get('/privacy/incidents', requireRole(...privacyStaff), h(async (req, re
   res.json(rows);
 }));
 
-privacy.post('/privacy/incidents', requireRole('super_admin','compliance','finance','finance_manager'), h(async (req, res) => {
+privacy.post('/privacy/incidents', requireRole('super_admin','global_admin','compliance','finance','finance_manager'), h(async (req, res) => {
   const body = incidentBody.parse(req.body);
   const row = await withUser(req.user!, async (client) => {
     const incident = (await client.query(

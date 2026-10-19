@@ -28,7 +28,7 @@ import { dispatchAccountingEvents, enqueueAccountingEvent } from './accounting-o
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
-import { allowedMiniApps, requireAnyMiniAppAccess, requireMiniAppAccess } from './mini-app-access.js';
+import { allowedMiniApps, hasMiniAppAccess, requireAnyMiniAppAccess, requireMiniAppAccess } from './mini-app-access.js';
 import { subscriptionRouter } from './subscriptions.js';
 
 const app = express();
@@ -110,7 +110,18 @@ api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
 api.use(['/requests', '/matches', '/staffing-engagements', '/staffing-work-periods', '/staffing-settlements'], requireMiniAppAccess('requests'));
 api.use(['/properties'], requireMiniAppAccess('properties'));
 api.use('/marketplace', requireMiniAppAccess('marketplace'));
-api.use('/accounting', requireMiniAppAccess('accounting'));
+api.use('/accounting', (req, _res, next) => {
+  void (async () => {
+    if (!hasMiniAppAccess(req.user!, 'accounting')) throw new HttpError(403, 'Accounting & Finance is not assigned to your account');
+    if (['global_admin','super_admin','finance','finance_manager','compliance','corporate_business_manager'].includes(req.user!.role)) return;
+    const subscribed = await withUser(req.user!, async (client) => Boolean((await client.query(
+      `SELECT 1 FROM platform_service_subscriptions
+       WHERE user_id=$1 AND service_key='accounting' AND status='active' AND active_until>now()
+       LIMIT 1`, [req.user!.id],
+    )).rowCount));
+    if (!subscribed) throw new HttpError(403, 'An active Accounting & Finance subscription is required');
+  })().then(() => next(), next);
+});
 api.use('/edir', requireMiniAppAccess('edir'));
 api.use('/insurance', requireMiniAppAccess('insurance'));
 api.use('/mfi', requireMiniAppAccess('mfi'));
@@ -151,15 +162,32 @@ api.use((req, _res, next) => {
   }).then(() => next(), next);
 });
 api.use('/subscriptions', subscriptionRouter);
-api.get('/features', (_req, res) => res.json({
+api.get('/features', h(async (req, res) => {
+  const enabledModules = runtimeConfig.enabledModules;
+  const subscriberRole = ['customer','property_owner'].includes(req.user!.role);
+  const accountingServiceAvailable = subscriberRole
+    ? Boolean(process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL)
+    : Boolean(process.env.ACCOUNTING_SERVICE_URL);
+  let allowedModules = allowedMiniApps(req.user!, enabledModules.filter((module) =>
+    (module !== 'global-bi' || Boolean(process.env.GLOBAL_BI_SERVICE_URL))
+    && (module !== 'accounting' || accountingServiceAvailable)));
+  if (subscriberRole) {
+    const subscribed = await withUser(req.user!, async (client) => Boolean((await client.query(
+      `SELECT 1 FROM platform_service_subscriptions
+       WHERE user_id=$1 AND service_key='accounting' AND status='active' AND active_until>now()
+       LIMIT 1`, [req.user!.id],
+    )).rowCount));
+    if (!subscribed) allowedModules = allowedModules.filter((module) => module !== 'accounting');
+  }
+  res.json({
   mfiPilotEnabled: runtimeConfig.mfiPilotEnabled,
   edirEnabled: Boolean(process.env.EDIR_SERVICE_URL),
-  accountingEnabled: Boolean(process.env.ACCOUNTING_SERVICE_URL),
+  accountingEnabled: accountingServiceAvailable,
   globalBiEnabled: Boolean(process.env.GLOBAL_BI_SERVICE_URL),
   insuranceBrokerageSandboxEnabled: isInsuranceBrokerageSandboxEnabled(),
-  enabledModules: runtimeConfig.enabledModules,
-  allowedModules: allowedMiniApps(_req.user!, runtimeConfig.enabledModules.filter((module) =>
-    module !== 'global-bi' || Boolean(process.env.GLOBAL_BI_SERVICE_URL))),
+  enabledModules,
+  allowedModules,
+  });
 }));
 api.get('/system/status', h(async (_req, res) => {
   const services = await checkWorkspaceServices([
@@ -175,14 +203,15 @@ api.get('/system/status', h(async (_req, res) => {
     { id: 'property-management', name: 'Property Management', enabled: true, url: process.env.PROPERTY_MANAGEMENT_SERVICE_URL, withoutUrl: 'integrated' },
     { id: 'marketplace', name: 'Marketplace', enabled: true, url: process.env.MARKETPLACE_SERVICE_URL, withoutUrl: 'integrated' },
     { id: 'edir', name: 'AfroLife Edir', enabled: Boolean(process.env.EDIR_SERVICE_URL), url: process.env.EDIR_SERVICE_URL, withoutUrl: 'disabled' },
-    { id: 'accounting', name: 'Accounting', enabled: Boolean(process.env.ACCOUNTING_SERVICE_URL), url: process.env.ACCOUNTING_SERVICE_URL, withoutUrl: 'disabled' },
+    { id: 'accounting-internal', name: 'Internal Accounting & Finance', enabled: Boolean(process.env.ACCOUNTING_SERVICE_URL), url: process.env.ACCOUNTING_SERVICE_URL, withoutUrl: 'disabled' },
+    { id: 'accounting-subscriber', name: 'Subscriber Accounting & Finance', enabled: Boolean(process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL), url: process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL, withoutUrl: 'disabled' },
     { id: 'global-bi', name: 'Global BI', enabled: Boolean(process.env.GLOBAL_BI_SERVICE_URL), url: process.env.GLOBAL_BI_SERVICE_URL, withoutUrl: 'disabled' },
     { id: 'insurance', name: 'Insurance ledger', enabled: Boolean(process.env.INSURANCE_SERVICE_URL), url: process.env.INSURANCE_SERVICE_URL, withoutUrl: 'integrated' },
     { id: 'mfi', name: 'SACCO / MFI', enabled: runtimeConfig.mfiPilotEnabled, url: process.env.MFI_SERVICE_URL, withoutUrl: 'disabled' },
   ]);
   res.json({ checked_at: new Date().toISOString(), services });
 }));
-api.get('/system/metrics', requireRole('global_admin', 'super_admin'), (_req, res) => {
+api.get('/system/metrics', requireRole('global_admin'), (_req, res) => {
   res.json(getApiMetrics());
 });
 api.use(adminRouter);
@@ -236,9 +265,20 @@ api.use(['/requests', '/matches', '/staffing-engagements', '/staffing-work-perio
 api.use('/properties', propertyManagementGateway);
 api.use('/marketplace', marketplaceGateway);
 api.use(supply);
-api.use('/accounting', process.env.ACCOUNTING_SERVICE_URL
+const internalAccountingGateway = process.env.ACCOUNTING_SERVICE_URL
   ? createAccountingServiceGateway({ baseUrl: process.env.ACCOUNTING_SERVICE_URL, secret: process.env.ACCOUNTING_GATEWAY_SECRET ?? '' })
-  : (_req,res) => res.status(503).json({ error: 'Standalone Accounting service is not configured' }));
+  : null;
+const subscriberAccountingGateway = process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL
+  ? createAccountingServiceGateway({ baseUrl: process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL, secret: process.env.ACCOUNTING_SUBSCRIBER_GATEWAY_SECRET ?? '' })
+  : null;
+api.use('/accounting', (req, res, next) => {
+  const subscriber = ['customer','property_owner'].includes(req.user?.role ?? '');
+  const gateway = subscriber ? subscriberAccountingGateway : internalAccountingGateway;
+  if (!gateway) return res.status(503).json({ error: subscriber
+    ? 'Subscriber Accounting service is not configured'
+    : 'Internal Accounting service is not configured' });
+  return gateway(req, res, next);
+});
 api.use('/global-bi', process.env.GLOBAL_BI_SERVICE_URL
   ? createServiceGateway({
     baseUrl: process.env.GLOBAL_BI_SERVICE_URL,
@@ -321,7 +361,7 @@ api.get('/leads/:id/attribution-history', h(async (req, res) => {
   res.json(events);
 }));
 
-api.post('/admin/leads/:id/reassign', requireMiniAppAccess('leads'), requireRole('global_admin','super_admin'), h(async (req, res) => {
+api.post('/admin/leads/:id/reassign', requireMiniAppAccess('leads'), requireRole('global_admin'), h(async (req, res) => {
   const body = z.object({ target_agent_id: z.string().uuid(), reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
   const lead = await withUser(req.user!, async (c) => {
     const current = (await c.query('SELECT * FROM leads WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
@@ -352,7 +392,7 @@ api.post('/admin/leads/:id/reassign', requireMiniAppAccess('leads'), requireRole
 }));
 
 // ---- Contracts ----
-api.post('/leads/:id/contracts', requireRole(...AGENT, 'super_admin'), h(async (req, res) => {
+api.post('/leads/:id/contracts', requireRole(...AGENT, 'super_admin', 'global_admin'), h(async (req, res) => {
   const b = z.object({ track: z.enum(['A', 'B']), base_value: z.number().positive() }).parse(req.body);
   const row = await withUser(req.user!, async (c) => {
     const l = (await c.query('SELECT * FROM leads WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
@@ -383,7 +423,7 @@ api.get('/contracts', h(async (req, res) => {
 }));
 
 // Agent supplied contract files stay in private storage and are available only within the contract's RLS scope.
-api.post('/contracts/:id/documents', requireRole(...AGENT, 'super_admin', 'corporate_business_manager'), express.raw({ type: () => true, limit: '10mb' }), h(async (req, res) => {
+api.post('/contracts/:id/documents', requireRole(...AGENT, 'super_admin', 'global_admin', 'corporate_business_manager'), express.raw({ type: () => true, limit: '10mb' }), h(async (req, res) => {
   const { stage } = z.object({ stage: z.enum(['party_signed', 'company_countersigned']) }).parse(req.query);
   const agentUploader = AGENT.includes(req.user!.role);
   if ((stage === 'party_signed' && !agentUploader) || (stage === 'company_countersigned' && !['global_admin', 'super_admin', 'corporate_business_manager'].includes(req.user!.role))) {
@@ -431,7 +471,7 @@ api.post('/contracts/:id/transition', h(async (req, res) => {
   res.json(await withUser(req.user!, (c) => transition(c, req.user!, String(req.params.id), action, req.body)));
 }));
 
-api.post('/contracts/:id/renew', requireRole('super_admin'), h(async (req, res) => {
+api.post('/contracts/:id/renew', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
   const row = await withUser(req.user!, async (c) => {
     const o = (await c.query("SELECT * FROM contracts WHERE id = $1 AND state = 'active'", [req.params.id])).rows[0];
     if (!o) throw new HttpError(404, 'Active contract not found');
@@ -479,7 +519,7 @@ api.post('/commissions/:id/approve', requireRole('finance', 'finance_manager'), 
   }));
 }));
 
-api.post('/commissions/:id/pay', requireRole('super_admin'), h(async (req, res) => {
+api.post('/commissions/:id/pay', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
   const b = z.object({ reference: z.string().trim().min(3).max(200) }).strict().parse(req.body);
   res.json(await withUser(req.user!, async (c) => {
     const k = (await c.query('SELECT * FROM commission_events WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
@@ -508,7 +548,7 @@ api.post('/commissions/:id/pay', requireRole('super_admin'), h(async (req, res) 
   }));
 }));
 
-api.post('/commissions/:id/release-held', requireRole('super_admin'), h(async (req, res) => {
+api.post('/commissions/:id/release-held', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
   const b = z.object({ reference: z.string().trim().min(3).max(200) }).strict().parse(req.body);
   res.json(await withUser(req.user!, async (c) => {
     const k = (await c.query('SELECT * FROM commission_events WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];

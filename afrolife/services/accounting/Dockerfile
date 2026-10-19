@@ -18,6 +18,7 @@ COPY services/accounting/001_accounting.sql ./dist/services/accounting/001_accou
 COPY services/accounting/002_accounting_workflows.sql ./dist/services/accounting/002_accounting_workflows.sql
 COPY services/accounting/003_accounting_entity_access.sql ./dist/services/accounting/003_accounting_entity_access.sql
 COPY services/accounting/004_accounting_transaction_controls.sql ./dist/services/accounting/004_accounting_transaction_controls.sql
+COPY services/accounting/005_accounting_subscriber_ownership.sql ./dist/services/accounting/005_accounting_subscriber_ownership.sql
 COPY services/accounting/web ./dist/services/accounting/web
 EXPOSE 3300
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

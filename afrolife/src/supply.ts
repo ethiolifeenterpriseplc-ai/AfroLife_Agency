@@ -14,7 +14,7 @@ supply.get('/territories', h(async (_req, res) => {
   res.json((await pool.query('SELECT id::int, parent_id::int, level, name FROM territories ORDER BY level, name')).rows);
 }));
 
-supply.post('/territories', requireRole('super_admin'), h(async (req, res) => {
+supply.post('/territories', requireRole('global_admin'), h(async (req, res) => {
   const b = z.object({ level: z.enum(['country', 'region', 'city', 'sub_city', 'woreda', 'kebele', 'zone']), name: z.string().min(2), parent_id: z.number().int().optional() }).parse(req.body);
   const r = await pool.query('INSERT INTO territories (parent_id, level, name) VALUES ($1,$2,$3) RETURNING id::int, parent_id::int, level, name', [b.parent_id ?? null, b.level, b.name]);
   res.status(201).json(r.rows[0]);
