@@ -52,25 +52,38 @@ $guestReady = $guestExitCode -eq 0 -and $servicesActive -and $bindingsSafe
 $guestDetails = "services=$($serviceStates -join ','); bindings=$($listenerLines.Count) listeners; API, DB, and proxy must bind only to IPv4 loopback"
 Write-Check -Name "WSL $Distro services and bind addresses" -Passed $guestReady -Details $guestDetails
 
-$healthBody = & curl.exe --silent --show-error --fail --max-time 5 'http://127.0.0.1:3000/healthz' 2>$null
-$healthExitCode = $LASTEXITCODE
 $healthReady = $false
-if ($healthExitCode -eq 0) {
-  try {
-    $health = $healthBody | ConvertFrom-Json
-    $healthReady = $health.ok -eq $true -and $health.database -eq 'connected'
-  } catch {
-    $healthReady = $false
+$healthDetails = '127.0.0.1:3000/healthz must report ok=true and database=connected'
+try {
+  $healthResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/healthz' -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+  $health = $healthResponse.Content | ConvertFrom-Json -ErrorAction Stop
+  $healthReady = $health.ok -eq $true -and $health.database -eq 'connected'
+  if (-not $healthReady) {
+    $healthDetails += '; response did not report a healthy database'
   }
+} catch {
+  $healthDetails += "; probe error: $($_.Exception.Message)"
 }
-Write-Check -Name 'Local API and database health' -Passed $healthReady -Details '127.0.0.1:3000/healthz must report ok=true and database=connected'
+Write-Check -Name 'Local API and database health' -Passed $healthReady -Details $healthDetails
 
-$servedHtml = (& curl.exe --silent --show-error --fail --max-time 5 'http://127.0.0.1:8080/' 2>$null) -join "`n"
-$servedExitCode = $LASTEXITCODE
+$servedHtml = ''
+$proxyDetails = ''
+try {
+  $servedResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/' -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
+  $servedHtml = $servedResponse.Content
+} catch {
+  $proxyDetails = "; probe error: $($_.Exception.Message)"
+}
 $sourceHtml = Get-Content -LiteralPath (Join-Path $projectRoot 'public\index.html') -Raw
 $expectedBrand = [regex]::Match($sourceHtml, '<title>([^|<]+)\|').Groups[1].Value.Trim()
-$currentReleaseServed = $servedExitCode -eq 0 -and $expectedBrand -and $servedHtml.Contains("<title>$expectedBrand |")
-Write-Check -Name 'Local proxy serves this workspace release' -Passed ([bool]$currentReleaseServed) -Details "127.0.0.1:8080 must serve the current app brand: $expectedBrand"
+$servedBrand = [regex]::Match($servedHtml, '<title>([^|<]+)\|').Groups[1].Value.Trim()
+$currentReleaseServed = $expectedBrand -and $servedBrand -eq $expectedBrand
+$releaseDetails = "127.0.0.1:8080 must serve the current app brand: $expectedBrand"
+if ($servedBrand -and -not $currentReleaseServed) {
+  $releaseDetails += "; currently serves: $servedBrand"
+}
+$releaseDetails += $proxyDetails
+Write-Check -Name 'Local proxy serves this workspace release' -Passed ([bool]$currentReleaseServed) -Details $releaseDetails
 
 if ($failed) {
   Write-Error 'Local deployment readiness checks failed. Do not treat this environment as production-ready.'
