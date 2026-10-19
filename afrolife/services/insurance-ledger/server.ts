@@ -2,6 +2,7 @@ import '../../src/env.js';
 import express from 'express';
 import { createInsuranceLedgerRouter } from '../../src/insurance-ledger.js';
 import { createInsuranceRequestsRouter } from '../../src/insurance-requests.js';
+import { createInsuranceBrokerageRouter } from './brokerage.js';
 import { HttpError } from '../../src/http-error.js';
 import { correlationIdMiddleware, getCorrelationId } from '../../src/request-context.js';
 import { pool, withUser, assertServiceDatabaseSafety } from './db.js';
@@ -22,6 +23,8 @@ app.get('/healthz', async (_req, res, next) => {
 });
 app.use('/api/v1/insurance/ledger', authenticateGateway, createInsuranceLedgerRouter(withUser));
 app.use('/api/v1/insurance/requests', authenticateGateway, createInsuranceRequestsRouter(withIdentityUser));
+app.use('/api/v1/insurance/brokerage', authenticateGateway,
+  createInsuranceBrokerageRouter(withUser, withIdentityUser));
 app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const correlationId = getCorrelationId(req);
   const reply = (status: number, body: Record<string, unknown>) =>

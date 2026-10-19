@@ -21,6 +21,19 @@ test('hierarchical Insurance migration replaces runtime-role grants', async () =
   assert.doesNotMatch(migration, /\{\{role\}\}/);
 });
 
+test('brokerage foundation migration is packaged by the Insurance service image', async () => {
+  const source = await readFile(
+    new URL('../services/insurance-ledger/033_brokerage_foundation.sql', import.meta.url),
+    'utf8',
+  );
+  const migration = buildInsuranceServiceMigration(source, 'insurance_runtime');
+  const dockerfile = await readFile(new URL('../services/insurance-ledger/Dockerfile', import.meta.url), 'utf8');
+  assert.match(migration, /GRANT SELECT, INSERT, UPDATE ON insurance_brokerage_tenants TO "insurance_runtime"/);
+  assert.doesNotMatch(migration, /\{\{role\}\}/);
+  assert.match(dockerfile, /COPY services\/insurance-ledger\/033_brokerage_foundation\.sql/);
+  assert.match(dockerfile, /COPY --from=build .*services\/insurance-ledger\/033_brokerage_foundation\.sql/);
+});
+
 test('service migration rejects an unsafe runtime role identifier', () => {
   assert.throws(() => buildInsuranceServiceMigration('CREATE TABLE x (id int);', 'runtime; DROP TABLE users'));
 });

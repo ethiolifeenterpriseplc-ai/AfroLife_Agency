@@ -14,6 +14,9 @@ const migrations = [
   ['insurance-ledger-v1', '026_insurance_ledger.sql'],
   ['insurance-ledger-v2-hierarchical-edirs', '031_hierarchical_edir_insurance.sql'],
   ['insurance-ledger-v3-accounting-outbox', '032_accounting_outbox.sql'],
+  ['insurance-brokerage-v1-foundation', '033_brokerage_foundation.sql'],
+  ['insurance-brokerage-v2-client-intake', '034_brokerage_client_intake.sql'],
+  ['insurance-brokerage-v3-quotes-advice', '035_brokerage_quotes_advice.sql'],
 ];
 
 const client = new pg.Client({ connectionString: migrationUrl });
@@ -29,7 +32,12 @@ try {
   for (const [version, filename] of migrations) {
     const applied = await client.query('SELECT 1 FROM insurance_service_migrations WHERE version=$1', [version]);
     if (applied.rowCount) continue;
-    const migrationUrl = filename === '032_accounting_outbox.sql'
+    const migrationUrl = [
+      '032_accounting_outbox.sql',
+      '033_brokerage_foundation.sql',
+      '034_brokerage_client_intake.sql',
+      '035_brokerage_quotes_advice.sql',
+    ].includes(filename)
       ? new URL(`../../../services/insurance-ledger/${filename}`, import.meta.url)
       : new URL(`../../../migrations/${filename}`, import.meta.url);
     const source = await readFile(migrationUrl, 'utf8');

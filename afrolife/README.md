@@ -318,6 +318,49 @@ service schema stores actor UUIDs as opaque identities and does not copy central
 user records into its database. Do not point the service at the legacy shared
 database if a database-per-service boundary is intended.
 
+The Insurance service now includes the first control-complete brokerage
+foundation at `/api/v1/insurance/brokerage`: platform-admin tenant provisioning
+with contract/onboarding evidence references, head-office and branch records,
+tenant-scoped staff grants and reasoned revocation, independent Compliance
+activation gated by current broker-licence and professional-indemnity evidence,
+insurer agreement records, immutable effective-dated product versions, consent-
+tracked client records linked to active KYC-verified central identities, and
+immutable versioned needs assessments. Advice intake requires recorded
+brokerage-advice consent and customer confirmation, conflict and limitation
+disclosure references; insurer-submission consent is a separate, revocable
+record. Assessment data is intentionally limited to product objectives,
+coverage gaps, budget, and broad exposure categories; do not place identity
+documents, medical details, or payment credentials in these records. Evidence
+references are opaque identifiers only (not filenames, URLs, or customer
+details); this service does not upload, scan, or retrieve documents. Staff
+assigned to a branch can only access its branches, clients,
+consents, assessments, and their audit records; tenant-wide audit records are
+visible only to tenant-wide administrators and Compliance/Auditors.
+Brokerage Owner/Administrator roles are tenant-wide and cannot be assigned to
+a single branch. The service can register insurer quote-submission references
+against a consented assessment and active product, capture and normalize
+manual insurer responses as immutable ETB offers, compare same-assessment
+offers, and submit a suitability rationale for independent Compliance or
+Brokerage Administrator approval. These records do not send requests to an
+insurer or constitute binding offers, regulated recommendations, policy
+placement, or customer-facing advice delivery. Schema versions
+`insurance-brokerage-v1-foundation` and
+`insurance-brokerage-v2-client-intake` are applied by `npm run migrate:insurance`
+and packaged in the Insurance container.
+The core API proxies the brokerage routes only through the signed Insurance
+gateway.
+
+`insurance-brokerage-v3-quotes-advice` is also applied by
+`npm run migrate:insurance`. This remains an operational foundation, not a
+production-ready brokerage. It does not yet implement secure KYC evidence
+handling, insurer API/secure-file delivery and callbacks, customer-facing quote
+presentation/advice acceptance, policy placement/endorsements, claims, premium
+custody/reconciliation, or privacy-rights/retention workflows.
+The existing brokerage training workflow remains synthetic-only. Do not accept
+premiums, bind cover, represent quotes as offers, or enable regulated activities
+until the remaining workflows, partner agreements, legal applicability review,
+security validation, and release approvals are completed.
+
 ## Android app
 
 The Android app wraps the existing `public/` web UI with Capacitor. From this project directory:

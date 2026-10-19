@@ -296,6 +296,14 @@ api.use('/insurance/requests', process.env.INSURANCE_SERVICE_URL
   : runtimeConfig.isProduction
     ? (_req, res) => res.status(503).json({ error: 'Separate Insurance service is not configured' })
     : createInsuranceRequestsRouter(withUser));
+api.use('/insurance/brokerage', process.env.INSURANCE_SERVICE_URL
+  ? createServiceGateway({
+    baseUrl: process.env.INSURANCE_SERVICE_URL,
+    secret: process.env.INSURANCE_GATEWAY_SECRET ?? '',
+    servicePath: '/api/v1/insurance/brokerage',
+    serviceName: 'Insurance brokerage service',
+  })
+  : (_req, res) => res.status(503).json({ error: 'Separate Insurance brokerage service is not configured' }));
 api.use('/insurance/brokerage-sandbox', createInsuranceBrokerageSandboxRouter(withUser));
 // Parse private Edir uploads before the signed service gateway so the raw
 // bytes and their content type can be forwarded and signed without JSON wrapping.
