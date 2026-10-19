@@ -43,7 +43,7 @@ const products = [
   { key: 'demo-property-b', category: 'property', label: 'Synthetic property training product B', monthlyPremiumMinor: 3100, features: ['property-demo', 'synthetic-support-demo'] },
 ] as const;
 
-function buildDemoWorkflow() {
+export function buildInsuranceBrokerageDemoWorkflow() {
   return [
     ['synthetic_intake', { scenario: 'SYNTHETIC_TRAINING_ONLY', customer_data: 'NONE' }],
     ['needs_assessment_simulated', { product_category: 'household', needs_profile: 'training_family', objective: 'training_comparison' }],
@@ -335,7 +335,7 @@ export function createInsuranceBrokerageSandboxRouter(withUser: WithUser) {
       scenario_run_id: z.string().uuid(),
       acknowledge_synthetic_only: z.literal(true),
     }).strict().parse(req.body);
-    const scenarioWorkflow = buildDemoWorkflow();
+    const scenarioWorkflow = buildInsuranceBrokerageDemoWorkflow();
     const events = await withUser(req.user!, async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [caseId]);
       const scenario = await client.query(

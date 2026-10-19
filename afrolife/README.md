@@ -360,6 +360,14 @@ The existing brokerage training workflow remains synthetic-only. Do not accept
 premiums, bind cover, represent quotes as offers, or enable regulated activities
 until the remaining workflows, partner agreements, legal applicability review,
 security validation, and release approvals are completed.
+For local demonstrations, after local database setup, applying migrations
+through `069_insurance_brokerage_sandbox.sql`, and creating an active local
+Super Admin, run `npm run seed:insurance:sandbox:local`. This idempotently
+creates one synthetic case with a complete lifecycle trace in the local
+sandbox tables only; it refuses non-local databases and never populates the
+operational brokerage ledger. Enable `INSURANCE_BROKERAGE_MODE=sandbox` in the
+development environment to display the training workspace. The seeded case is
+visible to Super Admins in that local environment.
 
 ## Android app
 

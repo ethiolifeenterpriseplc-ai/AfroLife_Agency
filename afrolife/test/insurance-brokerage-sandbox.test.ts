@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { createInsuranceBrokerageSandboxRouter, isInsuranceBrokerageSandboxEnabled } from '../src/insurance-brokerage-sandbox.js';
+import {
+  buildInsuranceBrokerageDemoWorkflow,
+  createInsuranceBrokerageSandboxRouter,
+  isInsuranceBrokerageSandboxEnabled,
+} from '../src/insurance-brokerage-sandbox.js';
+
+test('Insurance brokerage demo workflow contains only synthetic lifecycle events', () => {
+  const workflow = buildInsuranceBrokerageDemoWorkflow();
+  assert.equal(workflow.length, 22);
+  assert.equal(workflow[0][0], 'synthetic_intake');
+  assert.equal(workflow[0][1].customer_data, 'NONE');
+  assert.equal(workflow.find(([type]) => type === 'policy_issuance_simulated')?.[1].policy_state, 'SYNTHETIC_NOT_IN_FORCE');
+  assert.equal(workflow.find(([type]) => type === 'premium_receipt_simulated')?.[1].money_moved, false);
+  assert.equal(workflow.find(([type]) => type === 'insurer_submission_simulated')?.[1].transmission, 'NOT_SENT');
+});
 
 test('Insurance brokerage sandbox enablement cannot be turned on in production', () => {
   assert.equal(isInsuranceBrokerageSandboxEnabled({ NODE_ENV: 'production', INSURANCE_BROKERAGE_MODE: 'sandbox' }), false);

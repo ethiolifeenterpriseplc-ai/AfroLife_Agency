@@ -53,6 +53,7 @@
     "ios:open": "cap open ios",
     "seed:admin": "tsx src/seed-admin.ts",
     "seed:local-test-users": "tsx scripts/seed-local-test-users.ts",
+    "seed:insurance:sandbox:local": "tsx scripts/seed-insurance-sandbox-demo.ts",
     "seed:mfi:e2e:local": "node --require ./.codex-osinfo-fallback.cjs --import tsx scripts/seed-local-mfi-e2e-users.ts",
     "db:migrate": "tsx src/migrate.ts",
     "db:check-runtime-acls": "node scripts/check-runtime-acls.mjs",
