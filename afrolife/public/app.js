@@ -1,4 +1,4 @@
-import { initializeLocale, t } from './i18n.js';
+import { initializeLocale, setLocalizedNodeText, t, translateContent } from './i18n.js';
 import { ApiError, optionalApiFallback } from './api-errors.js';
 import { createMfiWorkspace } from './mfi.js';
 import { createAccountingWorkspace } from './accounting.js';
@@ -12,6 +12,8 @@ import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from './workspace-sea
 import { EDIR_APPLICATION_DOCUMENTS, canChangeServer, edirApplicationDocumentPath, missingSignupDocuments, nativeApiOrigin, signupRequiredDocuments } from './registration-flows.js';
 import { propertyDashboardMetrics, staffingDashboardMetrics, workforceDashboardMetrics } from './dashboard-metrics.js';
 import { normalizeMySubscriptions, normalizeSubscriptionCatalog, PUBLIC_SUBSCRIPTION_SERVICES, subscriptionRequestPayload } from './subscriptions.js';
+import { propertyOfferTerms } from './property-offers.js';
+import { marketplaceListingPayload } from './marketplace-form.js';
 
 const WEB_API_ROOT = '/api/v1';
 let API_ROOT = WEB_API_ROOT;
@@ -79,7 +81,7 @@ function roleLabel(role) {
 
 function node(tag, text, className) {
   const item = document.createElement(tag);
-  if (text !== undefined && text !== null) item.textContent = t(String(text));
+  if (text !== undefined && text !== null) setLocalizedNodeText(item.appendChild(document.createTextNode('')), String(text));
   if (className) item.className = className;
   return item;
 }
@@ -904,7 +906,7 @@ async function loadWorkspace() {
   $('#agents-tab').hidden = !['global_admin', 'super_admin', 'master_agent'].includes(state.user.role);
   $('#rent-tab').hidden = !['property.tenancy.manage', 'rent.payments.submit', 'rent.transactions.view', 'rent.transactions.reconcile', 'rent.transactions.void', 'rent.deposit.refund_request'].some(hasActivity);
   $('#mfi-tab').hidden = !state.features.mfiPilotEnabled;
-  const accountingRole = ['global_admin','super_admin','finance','finance_manager','compliance','corporate_business_manager','master_agent','field_agent','property_owner','insurance_agent','insurance_broker'].includes(state.user.role);
+  const accountingRole = ['global_admin','super_admin','finance','finance_manager','compliance','corporate_business_manager','master_agent','field_agent','property_owner','insurance_agent','insurance_broker','customer'].includes(state.user.role);
   $('#accounting-tab').hidden = !state.features.accountingEnabled || !accountingRole;
   $('#global-bi-tab').hidden = state.features.globalBiEnabled !== true;
   $('#edir-tab').hidden = !state.features.edirEnabled;
@@ -1038,8 +1040,9 @@ async function loadPanelData(panel) {
         ? (await safeGet('/owner/statements', { statements: [] })).statements ?? [] : [];
       break;
     case 'marketplace':
-      [state.marketplaceConfig, state.marketplaceListings, state.territories] = await Promise.all([
+      [state.marketplaceConfig, state.marketplaceListings, state.territories, state.properties] = await Promise.all([
         safeGet('/marketplace/config', {}), safeGet('/marketplace/listings', []), safeGet('/territories', []),
+        hasActivity('property.listings.view') ? safeGet('/properties', []) : [],
       ]);
       state.marketplaceSellers = ['global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)
         ? await safeGet('/marketplace/sellers', []) : [];
@@ -2080,6 +2083,43 @@ function renderLearning() {
   return wrap;
 }
 
+function propertyOfferSummary(property) {
+  const periods = state.marketplaceConfig.rentals?.periods ?? [];
+  return propertyOfferTerms(property).map((term) => {
+    const amount = term.amount == null ? null : Number(term.amount).toLocaleString(document.documentElement.lang);
+    if (term.type === 'sale') return t('For sale · ETB {{amount}}', { amount });
+    if (amount == null) return t('For rent · Price on request');
+    const period = t(periods.find((item) => item.key === term.period)?.label ?? term.period);
+    return t('For rent from ETB {{amount}} / {{period}}', { amount, period });
+  }).join(' · ');
+}
+
+function renderPropertyListings(canManage, emptyMessage = 'No property listings yet. Add a property to start the listing.') {
+  const listings = node('div', undefined, 'list property-list');
+  if (!state.properties.length) listings.append(empty(emptyMessage));
+  for (const property of state.properties) {
+    const details = t('{{type}} · {{territory}} · {{units}} units', {
+      type: t(property.ptype.split('_').map((part) => part[0].toUpperCase() + part.slice(1)).join(' ')),
+      territory: state.territories.find((area) => area.id === property.territory_id)?.name ?? property.territory_id,
+      units: property.units?.length ?? 0,
+    });
+    const item = card(property.address, [details, propertyOfferSummary(property)].filter(Boolean).join(' · '), property.status);
+    item.classList.add('property-card');
+    item.dataset.property = property.id;
+    if (property.units?.length) {
+      const unitSummary = node('p', property.units.map((unit) => `${unit.unit_no}${unit.rent == null ? '' : ` · ETB ${Number(unit.rent).toLocaleString(document.documentElement.lang)}`}`).join('  |  '));
+      unitSummary.className = 'property-unit-summary';
+      item.append(unitSummary);
+    }
+    const actions = node('div', undefined, 'property-actions');
+    actions.append(button('Photos & video', 'property-photos', 'button button-outline', { id: property.id }));
+    if (canManage) actions.append(button('Add media', 'property-upload', 'button button-outline', { id: property.id }));
+    item.append(actions);
+    listings.append(item);
+  }
+  return listings;
+}
+
 function renderProperties() {
   const wrap = node('div');
   const buyer = state.user.role === 'customer';
@@ -2127,11 +2167,24 @@ function renderProperties() {
     }
     form.append(field('Description','description','textarea',false,{maxlength:5000,rows:3}).label);
     const listingMode=field('Listing transaction','listing_mode','select');for(const [value,label] of [['sale','For sale'],['rent','For rent'],['sale_or_rent','Sale or rent']]){const option=node('option',label);option.value=value;listingMode.input.append(option);}form.append(listingMode.label);
-    form.append(field('Sale price (ETB)','sale_price','number',false,{min:0.01,step:'0.01'}).label);
+    const salePrice=field('Sale price (ETB)','sale_price','number',false,{min:0.01,step:'0.01'});form.append(salePrice.label);
     const rentPeriod=field('Rental period','rent_period','select',false);for(const item of state.marketplaceConfig.rentals?.periods??[{key:'month',label:'Monthly',enabled:true}])if(item.enabled){const option=node('option',item.label);option.value=item.key;rentPeriod.input.append(option);}form.append(rentPeriod.label);
     form.append(field('First unit number', 'unit_no', 'text', false).label);
     form.append(field('Floor (optional)', 'floor', 'number', false, { step: '1' }).label);
-    form.append(field('Monthly rent (ETB, optional)', 'rent', 'number', false, { min: '0', step: '0.01' }).label);
+    const monthlyRent=field('Unit rent (ETB, optional)','rent','number',false,{min:'0',step:'0.01'});form.append(monthlyRent.label);
+    const syncPropertyOfferFields=()=>{
+      const includesSale=listingMode.input.value!=='rent';
+      const includesRent=listingMode.input.value!=='sale';
+      salePrice.label.hidden=!includesSale;
+      monthlyRent.label.hidden=!includesRent;
+      salePrice.input.disabled=!includesSale;
+      salePrice.input.required=includesSale;
+      monthlyRent.input.disabled=!includesRent;
+      if(!includesSale)salePrice.input.value='';
+      if(!includesRent)monthlyRent.input.value='';
+    };
+    listingMode.input.addEventListener('change',syncPropertyOfferFields);
+    syncPropertyOfferFields();
     const pictureLabel = field('Listing pictures or video (JPEG, PNG, MP4 or WebM)', 'photos', 'file', false, { accept: 'image/jpeg,image/png,video/mp4,video/webm', multiple: true }).label;
     pictureLabel.className = 'span-2';
     form.append(pictureLabel);
@@ -2142,32 +2195,9 @@ function renderProperties() {
     columns.append(form);
   }
 
-  const listings = node('div', undefined, 'list property-list');
-  if (!state.properties.length) listings.append(empty('No property listings yet. Add a property to start the listing.'));
-  for (const property of state.properties) {
-    const item = card(
-      property.address,
-      t('{{type}} · {{territory}} · {{units}} units', {
-        type: t(property.ptype.split('_').map((part) => part[0].toUpperCase() + part.slice(1)).join(' ')),
-        territory: state.territories.find((area) => area.id === property.territory_id)?.name ?? property.territory_id,
-        units: property.units?.length ?? 0,
-      }),
-      property.status,
-    );
-    item.classList.add('property-card');
-    item.dataset.property = property.id;
-    if (property.units?.length) {
-      const unitSummary = node('p', property.units.map((unit) => `${unit.unit_no}${unit.rent == null ? '' : ` · ETB ${Number(unit.rent).toLocaleString(document.documentElement.lang)}`}`).join('  |  '));
-      unitSummary.className = 'property-unit-summary';
-      item.append(unitSummary);
-    }
-    const actions = node('div', undefined, 'property-actions');
-    actions.append(button('Photos & video', 'property-photos', 'button button-outline', { id: property.id }));
-    if (canManage) actions.append(button('Add media', 'property-upload', 'button button-outline', { id: property.id }));
-    item.append(actions);
-    listings.append(item);
-  }
-  columns.append(listings);
+  columns.append(renderPropertyListings(canManage, buyer
+    ? 'No available property listings are currently published.'
+    : 'No property listings yet. Add a property to start the listing.'));
   wrap.append(columns);
   if (state.user.role === 'property_owner') {
     const statements = node('section', undefined, 'panel form-card');
@@ -2217,6 +2247,16 @@ function renderMarketplace() {
     domain.input.addEventListener('change',()=>{ mode.input.value=domain.input.value==='services'?'service':'sale'; });
     form.append(mode.label);
     const period=field('Rental period','rent_period','select',false); for(const item of config.rentals?.periods??[]) if(item.enabled){const option=node('option',item.label);option.value=item.key;period.input.append(option);} form.append(period.label);
+    const syncRentalPeriod=()=>{
+      const isRental=mode.input.value==='rental';
+      period.label.hidden=!isRental;
+      period.input.disabled=!isRental;
+      period.input.required=isRental;
+      if(!isRental)period.input.value='';
+    };
+    mode.input.addEventListener('change',syncRentalPeriod);
+    domain.input.addEventListener('change',syncRentalPeriod);
+    syncRentalPeriod();
     const condition=field('Condition','condition','select',false); for(const [value,label] of [['new','New'],['like_new','Like new'],['good','Good'],['fair','Fair'],['not_applicable','Not applicable']]){const option=node('option',label);option.value=value;condition.input.append(option);} form.append(condition.label);
     const area=field('Territory','territory_id','select'); const choose=node('option','Choose an area');choose.value='';choose.disabled=true;choose.selected=true;area.input.append(choose);for(const territory of state.territories){const option=node('option',territory.name);option.value=territory.id;area.input.append(option);}form.append(area.label);
     form.append(field('Description','description','textarea',true,{minlength:10,maxlength:5000}).label);
@@ -2228,7 +2268,13 @@ function renderMarketplace() {
   const listingList=node('div',undefined,'list marketplace-list');
   if(!state.marketplaceListings.length) listingList.append(empty('No listings are available yet.'));
   for(const listing of state.marketplaceListings){
-    const item=card(listing.title,`${listing.seller_name} · ${listing.domain} · ${listing.transaction_mode}${listing.price?` · ETB ${Number(listing.price).toLocaleString()}`:''}`,listing.status);
+    const transaction = listing.transaction_mode === 'rental' ? 'For rent / hire' : listing.transaction_mode === 'service' ? 'Service' : 'For sale';
+    const rentalPeriod = listing.rent_period
+      ? t(config.rentals?.periods?.find((period) => period.key === listing.rent_period)?.label ?? listing.rent_period)
+      : '';
+    const price = listing.price == null ? '' : ` · ETB ${Number(listing.price).toLocaleString(document.documentElement.lang)}${rentalPeriod ? ` / ${rentalPeriod}` : ''}`;
+    const details = `${listing.seller_name} · ${t(listing.domain)} · ${t(transaction)}${price}`;
+    const item=card(listing.title,details,listing.status);
     item.classList.add('marketplace-card');
     item.append(node('p',listing.description,'marketplace-description'));
     if(listing.review_note) item.append(node('p',`Review note: ${listing.review_note}`,'form-error'));
@@ -2244,6 +2290,15 @@ function renderMarketplace() {
     listingList.append(item);
   }
   columns.append(listingList); wrap.append(columns);
+  if (enabled.includes('properties') && hasActivity('property.listings.view')) {
+    const propertySection = node('section', undefined, 'panel form-card marketplace-property-listings');
+    propertySection.append(sectionHeading('Property sale and rental listings', 'Browse available properties, prices, rental terms, and listing media.'));
+    propertySection.append(renderPropertyListings(
+      hasActivity('property.listings.manage'),
+      'No available property listings are currently published.',
+    ));
+    wrap.append(propertySection);
+  }
   if(manager) wrap.append(renderMarketplaceConfig());
   const ownedListings = state.marketplaceListings.filter((listing) =>
     listing.created_by === state.user.id || listing.seller_user_id === state.user.id);
@@ -3327,14 +3382,17 @@ function renderPanel() {
   $('#stat-grid').hidden = state.panel !== 'overview';
   if (state.panel === 'mfi') {
     $('#workspace').replaceChildren(createMfiWorkspace(api, state.user));
+    translateContent($('#workspace'));
     return;
   }
   if (state.panel === 'accounting') {
     $('#workspace').replaceChildren(createAccountingWorkspace(api,state.user));
+    translateContent($('#workspace'));
     return;
   }
   if (state.panel === 'global-bi') {
     $('#workspace').replaceChildren(createGlobalBiWorkspace(api));
+    translateContent($('#workspace'));
     return;
   }
   if (state.panel === 'edir') {
@@ -3344,10 +3402,12 @@ function renderPanel() {
       localStorage.setItem(EDIR_ORGANIZATION_KEY, organizationId);
       renderPanel();
     }, downloadAuthenticatedFile));
+    translateContent($('#workspace'));
     return;
   }
   if (state.panel === 'privacy') {
     $('#workspace').replaceChildren(createPrivacyWorkspace(api, state.user));
+    translateContent($('#workspace'));
     return;
   }
   const renderer = {
@@ -3370,6 +3430,7 @@ function renderPanel() {
     security: renderSecurity,
   }[state.panel] ?? renderOverview;
   $('#workspace').replaceChildren(renderer());
+  translateContent($('#workspace'));
 }
 
 function navigateToPanel(panel, { replace = false } = {}) {
@@ -4252,11 +4313,7 @@ document.addEventListener('click', async (event) => {
   if (form.dataset.form === 'marketplace') {
     const files=[...form.querySelector('input[name="media"]').files];
     if(!files.length) throw new Error('Add at least one photo before posting this listing.');
-    const payload={...values,territory_id:number(values.territory_id)};
-    if(!payload.seller_user_id) delete payload.seller_user_id;
-    if(payload.price) payload.price=number(payload.price); else delete payload.price;
-    if(!payload.rent_period) delete payload.rent_period;
-    if(!payload.condition) delete payload.condition;
+    const payload=marketplaceListingPayload(values);
     const listing=await api('/marketplace/listings',{method:'POST',body:JSON.stringify(payload)});
     for(const file of files){const qs=new URLSearchParams();const response=await fetch(`${apiRoot()}/marketplace/listings/${listing.id}/media/upload?${qs}`,{method:'POST',headers:{authorization:`Bearer ${sessionStorage.getItem(TOKEN_KEY)}`,'content-type':file.type},body:file});const result=await response.json().catch(()=>null);if(!response.ok) throw new Error(result?.error??`Media upload failed (${response.status})`);}
     await api(`/marketplace/listings/${listing.id}/submit`,{method:'POST',body:'{}'});

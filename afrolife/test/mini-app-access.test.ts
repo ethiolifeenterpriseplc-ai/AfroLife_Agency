@@ -23,7 +23,9 @@ const user = (
 
 test('custom mini-app grants narrow but never elevate role access', () => {
   assert.equal(hasMiniAppAccess(user('finance'), 'accounting'), true);
-  assert.equal(hasMiniAppAccess(user('customer', 'custom', ['accounting']), 'accounting'), false);
+  assert.equal(hasMiniAppAccess(user('customer'), 'accounting'), false);
+  assert.equal(hasMiniAppAccess(user('customer', 'custom', ['accounting']), 'accounting'), true);
+  assert.equal(hasMiniAppAccess(user('customer', 'custom', []), 'accounting'), false);
   assert.equal(hasMiniAppAccess(user('finance', 'custom', []), 'accounting'), false);
   assert.equal(hasMiniAppAccess(user('finance', 'custom', ['global-bi']), 'global-bi'), true);
   assert.equal(hasMiniAppAccess(user('worker', 'custom', ['global-bi']), 'global-bi'), false);
@@ -35,6 +37,10 @@ test('allowed mini-apps intersect role ceiling, deployment modules and user gran
       'workers', 'requests', 'global-bi', 'accounting',
     ]),
     ['workers', 'requests'],
+  );
+  assert.deepEqual(
+    allowedMiniApps(user('customer', 'custom', ['accounting']), ['accounting']),
+    ['accounting'],
   );
 });
 

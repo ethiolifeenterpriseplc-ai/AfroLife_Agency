@@ -722,6 +722,84 @@ const publicSurfaceTranslations = {
   'Staffing dashboard': {
     am: 'የሠራተኛ ማሰማራት ዳሽቦርድ', om: 'Daashboordii Ramaddii Hojjettootaa', ti: 'ዳሽቦርድ ምድባ ሰራሕተኛ', so: 'Dashboard-ka Shaqaale-qorista', ar: 'لوحة التوظيف', sw: 'Dashibodi ya Upangaji Wafanyakazi',
   },
+  'Property sale and rental listings': {
+    am: 'የሽያጭና ኪራይ ንብረቶች', om: 'Tarree qabeenya gurgurtaa fi kireeffannaa', ti: 'ዝርዝራት ንብረት ሽያጥን ኪራይን', so: 'Liisaska guryaha iibka iyo kirada', ar: 'قوائم العقارات للبيع والإيجار', sw: 'Orodha za mali za kuuza na kukodisha',
+  },
+  'Post and discover products, services, equipment and property with private photo and video uploads.': {
+    am: 'ምስጢራዊ የፎቶና ቪዲዮ ሰቀላ በመጠቀም ምርቶችን፣ አገልግሎቶችን፣ መሣሪያዎችንና ንብረቶችን ያቅርቡ እና ያግኙ።', om: 'Suuraa fi viidiyoo dhuunfaa olkaa’uun oomisha, tajaajila, meeshaalee fi qabeenya maxxansaa fi barbaadaa.', ti: 'ምርታት፣ ኣገልግሎታት፣ መሳርሒታትን ንብረትን ብምስጢራዊ ምጽዓን ስእሊን ቪድዮን ኣቕርቡን ድለዩን።', so: 'Soo bandhig oo hel badeecooyin, adeegyo, qalab iyo hanti adigoo si gaar ah u gelinaya sawirro iyo muuqaallo.', ar: 'أضف واكتشف المنتجات والخدمات والمعدات والعقارات مع تحميل خاص للصور ومقاطع الفيديو.', sw: 'Chapisha na ugundue bidhaa, huduma, vifaa na mali kwa kupakia picha na video kwa faragha.',
+  },
+  'Create a listing': {
+    am: 'ዝርዝር ይፍጠሩ', om: 'Tarree uumaa', ti: 'ዝርዝር ፍጠሩ', so: 'Samee liis', ar: 'إنشاء إعلان', sw: 'Unda tangazo',
+  },
+  'Listing domain': {
+    am: 'የዝርዝር ምድብ', om: 'Gosa tarree', ti: 'ዓይነት ዝርዝር', so: 'Qaybta liiska', ar: 'فئة الإعلان', sw: 'Aina ya tangazo',
+  },
+  'Choose an active seller': {
+    am: 'ንቁ ሻጭ ይምረጡ', om: 'Gurguraa hojii irra jiru filadhaa', ti: 'ንጡፍ ሸያጢ ምረጹ', so: 'Dooro iibiye firfircoon', ar: 'اختر بائعًا نشطًا', sw: 'Chagua muuzaji anayefanya kazi',
+  },
+  'Photos and videos (add at least one photo to post)': {
+    am: 'ፎቶዎችና ቪዲዮዎች (ለማቅረብ ቢያንስ አንድ ፎቶ ያክሉ)', om: 'Suuraa fi viidiyoo (maxxansuuf yoo xiqqaate suuraa tokko dabalaa)', ti: 'ስእልታትን ቪድዮታትን (ንምልጣፍ እንተወሓደ ሓደ ስእሊ ወስኹ)', so: 'Sawirro iyo muuqaallo (ku dar ugu yaraan hal sawir si aad u daabacdo)', ar: 'الصور ومقاطع الفيديو (أضف صورة واحدة على الأقل للنشر)', sw: 'Picha na video (ongeza angalau picha moja ili kuchapisha)',
+  },
+  'No listings are available yet.': {
+    am: 'እስካሁን ዝርዝር አልተገኘም።', om: 'Hanga ammaatti tarreen hin jiru.', ti: 'ክሳብ ሕጂ ዝርዝር የለን።', so: 'Weli ma jiraan liisas la heli karo.', ar: 'لا توجد إعلانات متاحة حتى الآن.', sw: 'Bado hakuna matangazo yanayopatikana.',
+  },
+  'For rent / hire': {
+    am: 'ለኪራይ', om: 'Kireeffannaaf', ti: 'ንኪራይ', so: 'Kiro ah', ar: 'للإيجار', sw: 'Ya kukodisha',
+  },
+  'For sale': {
+    am: 'ለሽያጭ', om: 'Gurgurtaaf', ti: 'ንሽያጥ', so: 'Iib ah', ar: 'للبيع', sw: 'Inauzwa',
+  },
+  'For rent': {
+    am: 'ለኪራይ', om: 'Kireeffannaaf', ti: 'ንኪራይ', so: 'Kiro ah', ar: 'للإيجار', sw: 'Ya kukodisha',
+  },
+  'Sale or rent': {
+    am: 'ሽያጭ ወይም ኪራይ', om: 'Gurgurtaa ykn kireeffannaa', ti: 'ሽያጥ ወይ ኪራይ', so: 'Iib ama kiro', ar: 'للبيع أو الإيجار', sw: 'Kuuza au kukodisha',
+  },
+  'Listing transaction': {
+    am: 'የዝርዝር ግብይት', om: 'Daldala tarree', ti: 'ግብይት ዝርዝር', so: 'Macaamilka liiska', ar: 'نوع المعاملة للإعلان', sw: 'Muamala wa tangazo',
+  },
+  'Rental period': {
+    am: 'የኪራይ ጊዜ', om: 'Yeroo kireeffannaa', ti: 'እዋን ኪራይ', so: 'Muddada kirada', ar: 'مدة الإيجار', sw: 'Kipindi cha upangishaji',
+  },
+  'Sale price (ETB)': {
+    am: 'የሽያጭ ዋጋ (ብር)', om: 'Gatii gurgurtaa (ETB)', ti: 'ዋጋ ሽያጥ (ETB)', so: 'Qiimaha iibka (ETB)', ar: 'سعر البيع (ETB)', sw: 'Bei ya kuuza (ETB)',
+  },
+  'Price (ETB)': {
+    am: 'ዋጋ (ብር)', om: 'Gatii (ETB)', ti: 'ዋጋ (ETB)', so: 'Qiimaha (ETB)', ar: 'السعر (ETB)', sw: 'Bei (ETB)',
+  },
+  'Daily': {
+    am: 'በየቀኑ', om: 'Guyyaa guyyaan', ti: 'መዓልታዊ', so: 'Maalinle', ar: 'يومي', sw: 'Kila siku',
+  },
+  'Weekly': {
+    am: 'በየሳምንቱ', om: 'Torban torbaniin', ti: 'ሰሙናዊ', so: 'Toddobaadle', ar: 'أسبوعي', sw: 'Kila wiki',
+  },
+  'Monthly': {
+    am: 'በየወሩ', om: 'Ji’a ji’aan', ti: 'ወርሓዊ', so: 'Bille ah', ar: 'شهري', sw: 'Kila mwezi',
+  },
+  'Yearly': {
+    am: 'በየዓመቱ', om: 'Wagga waggaan', ti: 'ዓመታዊ', so: 'Sannadle', ar: 'سنوي', sw: 'Kila mwaka',
+  },
+  'Post listing': {
+    am: 'ዝርዝሩን አቅርብ', om: 'Tarree maxxansi', ti: 'ዝርዝር ኣቕርብ', so: 'Daabac liiska', ar: 'نشر الإعلان', sw: 'Chapisha tangazo',
+  },
+  'Published listings available': {
+    am: 'የታተሙ ዝርዝሮች ይገኛሉ', om: 'Tarreewwan maxxanfaman ni jiru', ti: 'ዝተሓትሙ ዝርዝራት ይርከቡ', so: 'Liisaska la daabacay ee la heli karo', ar: 'الإعلانات المنشورة المتاحة', sw: 'Matangazo yaliyochapishwa yanapatikana',
+  },
+  'Browse available properties, prices, rental terms, and listing media.': {
+    am: 'ያሉ ንብረቶችን፣ ዋጋዎችን፣ የኪራይ ውሎችንና ሚዲያዎችን ይመልከቱ።', om: 'Qabeenya jiru, gatii, haalawwan kireeffannaa fi miidiyaa tarree ilaalaa.', ti: 'ዘለዉ ንብረታት፣ ዋጋታት፣ ውዕላት ኪራይን ሚድያን ርአዩ።', so: 'Eeg hantida la heli karo, qiimayaasha, shuruudaha kirada iyo warbaahinta.', ar: 'تصفح العقارات المتاحة والأسعار وشروط الإيجار ووسائط الإعلان.', sw: 'Vinjari mali zilizopo, bei, masharti ya upangishaji na media za matangazo.',
+  },
+  'No available property listings are currently published.': {
+    am: 'በአሁኑ ጊዜ የታተመ የንብረት ዝርዝር የለም።', om: 'Amma tarreen qabeenyaa maxxanfame hin jiru.', ti: 'ኣብዚ ግዜ ዝተሓትመ ዝርዝር ንብረት የለን።', so: 'Hadda ma jiraan liisas hantiyeed oo la daabacay.', ar: 'لا توجد حاليًا قوائم عقارية منشورة.', sw: 'Kwa sasa hakuna matangazo ya mali yaliyochapishwa.',
+  },
+  'For sale · ETB {{amount}}': {
+    am: 'ለሽያጭ · ብር {{amount}}', om: 'Gurgurtaaf · ETB {{amount}}', ti: 'ንሽያጥ · ETB {{amount}}', so: 'Iib ah · ETB {{amount}}', ar: 'للبيع · {{amount}} ETB', sw: 'Inauzwa · ETB {{amount}}',
+  },
+  'For rent · Price on request': {
+    am: 'ለኪራይ · ዋጋውን ይጠይቁ', om: 'Kireeffannaaf · Gatii gaafadhaa', ti: 'ንኪራይ · ዋጋ ሕተቱ', so: 'Kiro ah · Weydii qiimaha', ar: 'للإيجار · السعر عند الطلب', sw: 'Ya kukodisha · Uliza bei',
+  },
+  'For rent from ETB {{amount}} / {{period}}': {
+    am: 'ከብር {{amount}} / {{period}} ለኪራይ', om: 'Kireeffannaa ETB {{amount}} / {{period}} irraa', ti: 'ካብ ETB {{amount}} / {{period}} ንኪራይ', so: 'Kiro laga bilaabo ETB {{amount}} / {{period}}', ar: 'للإيجار ابتداءً من {{amount}} ETB / {{period}}', sw: 'Kodi kuanzia ETB {{amount}} / {{period}}',
+  },
   'Property Management dashboard': {
     am: 'የንብረት አስተዳደር ዳሽቦርድ', om: 'Daashboordii Bulchiinsa Qabeenyaa', ti: 'ዳሽቦርድ ምምሕዳር ንብረት', so: 'Dashboard-ka Maamulka Hantida', ar: 'لوحة إدارة العقارات', sw: 'Dashibodi ya Usimamizi wa Mali',
   },
@@ -1048,6 +1126,51 @@ const publicSurfaceTranslations = {
   'SACCO / MFI': {
     am: 'ህብረት ሥራ ቁጠባ / ፋይናንስ ተቋም', om: 'SACCO / MFI', ti: 'SACCO / MFI', so: 'SACCO / MFI', ar: 'تعاونية ادخار وائتمان / مؤسسة تمويل أصغر', sw: 'SACCO / MFI',
   },
+  'Business entities': {
+    am: 'የንግድ ድርጅቶች', om: 'Dhaabbilee daldalaa', ti: 'ትካላት ንግዲ', so: 'Hay’adaha ganacsiga', ar: 'الكيانات التجارية', sw: 'Mashirika ya biashara',
+  },
+  'Select an entity book. Parent access only exposes consolidated totals unless you also have accounting access to child books.': {
+    am: 'የድርጅት መዝገብ ይምረጡ። የወላጅ ድርጅት መዳረሻ የተጠቃለሉ ድምሮችን ብቻ ያሳያል፤ የልጅ ድርጅቶች መዳረሻ ካለዎት በስተቀር።', om: 'Galmee dhaabbataa filadhaa. Hayyamni dhaabbata abbaa waliigala walitti qabame qofa agarsiisa; yoo galmee dhaabbata ijoollee argachuuf hayyama qabaattan malee.', ti: 'መዝገብ ትካል ምረጹ። መእተዊ ወላዲ ጠቕላላ ድምር ጥራይ የርኢ፤ ናብ መዝገብ ትካላት ውሉድ መእተዊ እንተሃልዩኩም ግን ኣይኮነን።', so: 'Dooro buugga hay’adda. Helitaanka hay’adda waalidku wuxuu muujinayaa wadarta la isku geeyey oo keliya ilaa aad sidoo kale u leedahay helitaanka buugaagta hay’adaha hoose.', ar: 'اختر دفتر الكيان. وصول الكيان الرئيسي يعرض الإجماليات المجمعة فقط ما لم يكن لديك وصول محاسبي إلى دفاتر الكيانات التابعة.', sw: 'Chagua kitabu cha taasisi. Ufikiaji wa taasisi mama huonyesha jumla zilizounganishwa tu isipokuwa pia uwe na ufikiaji wa vitabu vya taasisi ndogo.',
+  },
+  'Entity or business name': {
+    am: 'የድርጅት ወይም የንግድ ስም', om: 'Maqaa dhaabbataa ykn daldalaa', ti: 'ስም ትካል ወይ ንግዲ', so: 'Magaca hay’adda ama ganacsiga', ar: 'اسم الكيان أو النشاط التجاري', sw: 'Jina la taasisi au biashara',
+  },
+  'Entity type': {
+    am: 'የድርጅት ዓይነት', om: 'Gosa dhaabbataa', ti: 'ዓይነት ትካል', so: 'Nooca hay’adda', ar: 'نوع الكيان', sw: 'Aina ya taasisi',
+  },
+  'Base currency': {
+    am: 'መሠረታዊ ምንዛሬ', om: 'Maallaqa bu’uuraa', ti: 'መሰረታዊ ባጤራ', so: 'Lacagta aasaasiga ah', ar: 'العملة الأساسية', sw: 'Sarafu ya msingi',
+  },
+  'Create child entity': {
+    am: 'ንዑስ ድርጅት ፍጠር', om: 'Dhaabbata damee uumaa', ti: 'ንኡስ ትካል ፍጠር', so: 'Samee hay’ad hoose', ar: 'إنشاء كيان تابع', sw: 'Unda taasisi tanzu',
+  },
+  'Assign entity access': {
+    am: 'የድርጅት መዳረሻ መድብ', om: 'Hayyama dhaabbataa ramadi', ti: 'መእተዊ ትካል ምድባ', so: 'U qoondee gelitaanka hay’adda', ar: 'تعيين صلاحية الوصول إلى الكيان', sw: 'Weka ruhusa ya taasisi',
+  },
+  'AfroLife user UUID': {
+    am: 'የAfroLife ተጠቃሚ UUID', om: 'UUID fayyadamaa AfroLife', ti: 'UUID ተጠቃሚ AfroLife', so: 'UUID-ga isticmaalaha AfroLife', ar: 'معرّف مستخدم AfroLife', sw: 'UUID ya mtumiaji wa AfroLife',
+  },
+  'Accounting role': {
+    am: 'የሂሳብ ሚና', om: 'Gahee herregaa', ti: 'ሚና ሒሳብ', so: 'Doorka xisaabaadka', ar: 'الدور المحاسبي', sw: 'Jukumu la uhasibu',
+  },
+  'Create journal entry': {
+    am: 'የጆርናል መዝገብ ፍጠር', om: 'Galmee gaazexaa uumaa', ti: 'መዝገብ ጆርናል ፍጠር', so: 'Samee gelin joornaal', ar: 'إنشاء قيد يومية', sw: 'Unda ingizo la jarida',
+  },
+  'Chart of accounts': {
+    am: 'የሂሳብ መዝገብ ዝርዝር', om: 'Tarree herregaawwan', ti: 'ዝርዝር ሕሳባት', so: 'Jadwalka xisaabaadka', ar: 'دليل الحسابات', sw: 'Orodha ya akaunti',
+  },
+  'Journal register': {
+    am: 'የጆርናል መዝገብ ማውጫ', om: 'Galmee gaazexaa', ti: 'መዝገብ ጆርናል', so: 'Diiwaanka joornaalka', ar: 'سجل القيود اليومية', sw: 'Rejesta ya majarida',
+  },
+  'Accounting periods': {
+    am: 'የሂሳብ ጊዜያት', om: 'Yeroo herregaa', ti: 'እዋናት ሒሳብ', so: 'Xilliyada xisaabaadka', ar: 'الفترات المحاسبية', sw: 'Vipindi vya uhasibu',
+  },
+  'Entity reports': {
+    am: 'የድርጅት ሪፖርቶች', om: 'Gabaasa dhaabbataa', ti: 'ጸብጻባት ትካል', so: 'Warbixinnada hay’adda', ar: 'تقارير الكيان', sw: 'Ripoti za taasisi',
+  },
+  'Unit rent (ETB, optional)': {
+    am: 'የክፍል ኪራይ (ብር፣ አማራጭ)', om: 'Kiraa kutaa (ETB, filannoo)', ti: 'ክራይ ክፍሊ (ETB፣ ኣማራጺ)', so: 'Kirada qaybta (ETB, ikhtiyaari)', ar: 'إيجار الوحدة (ETB، اختياري)', sw: 'Kodi ya chumba (ETB, hiari)',
+  },
   'Financial Services': {
     am: 'የፋይናንስ አገልግሎቶች', om: 'Tajaajila Faayinaansii', ti: 'ኣገልግሎታት ፋይናንስ', so: 'Adeegyada Maaliyadda', ar: 'الخدمات المالية', sw: 'Huduma za Fedha',
   },
@@ -1148,19 +1271,24 @@ export function t(message, values = {}) {
   return translated.replace(/\{\{(\w+)\}\}/g, (_match, name) => String(values[name] ?? ''));
 }
 
+export function setLocalizedNodeText(textNode, message, values = {}) {
+  originalText.set(textNode, { message, values });
+  textNode.nodeValue = t(message, values);
+}
+
 function applyStaticTranslations(root = document.body) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let textNode;
   while ((textNode = walker.nextNode())) {
     const parent = textNode.parentElement;
     if (!parent || ['SCRIPT', 'STYLE'].includes(parent.tagName)) continue;
-    if (!originalText.has(textNode)) originalText.set(textNode, textNode.nodeValue);
-    const source = originalText.get(textNode);
-    const trimmed = source.trim();
+    if (!originalText.has(textNode)) originalText.set(textNode, { message: textNode.nodeValue, values: {} });
+    const { message, values } = originalText.get(textNode);
+    const trimmed = message.trim();
     if (!trimmed) continue;
-    const translation = t(trimmed);
-    const leading = source.match(/^\s*/)?.[0] ?? '';
-    const trailing = source.match(/\s*$/)?.[0] ?? '';
+    const translation = t(trimmed, values);
+    const leading = message.match(/^\s*/)?.[0] ?? '';
+    const trailing = message.match(/\s*$/)?.[0] ?? '';
     textNode.nodeValue = `${leading}${translation}${trailing}`;
   }
 
@@ -1176,6 +1304,10 @@ function applyStaticTranslations(root = document.body) {
       element.setAttribute(attribute, t(sources[attribute]));
     }
   });
+}
+
+export function translateContent(root) {
+  applyStaticTranslations(root);
 }
 
 export function initializeLocale(onChange) {

@@ -731,6 +731,26 @@ td, th { line-height: 1.5; }
   }
 }
 
+input[type="checkbox"],
+input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  flex: 0 0 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--green);
+}
+
+input[type="radio"] { border-radius: 50%; }
+
+label:not(.benefit-check):not(.subscription-service-option):has(> input[type="checkbox"]),
+label:not(.benefit-check):not(.subscription-service-option):has(> input[type="radio"]) {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
 @media (forced-colors: active) {
   :focus-visible { outline: 3px solid Highlight !important; }
   .button, .panel, .list-card, .stat-card, .mfi-record, .mfi-metric { border: 1px solid CanvasText; }

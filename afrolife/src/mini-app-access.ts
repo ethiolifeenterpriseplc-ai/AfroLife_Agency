@@ -62,7 +62,7 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
       return [
         'global_admin', 'super_admin', 'finance', 'finance_manager',
         'compliance', 'corporate_business_manager', 'master_agent',
-        'field_agent', 'property_owner', 'insurance_agent', 'insurance_broker',
+        'field_agent', 'property_owner', 'insurance_agent', 'insurance_broker', 'customer',
       ].includes(user.role);
     case 'commissions':
       return [
@@ -85,6 +85,7 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
 
 export function hasMiniAppAccess(user: AuthUser, module: MiniAppKey): boolean {
   return roleCanUseMiniApp(user, module)
+    && !(module === 'accounting' && user.role === 'customer' && user.miniAppAccessMode !== 'custom')
     && (user.miniAppAccessMode !== 'custom' || user.miniAppGrants?.includes(module) === true);
 }
 

@@ -532,6 +532,9 @@ The **Rent & deposits** workspace supports tenant and lease creation, rent recei
 - The Android API origin is entered on-device. Restrict `CORS_ORIGINS` to the app origins you intend to trust; do not use `*`.
 - The initial version is a pilot foundation, not a substitute for review of local labor, consumer, privacy, tax, payment, and real-estate requirements. Production payment settlement and personal-ID retention policies need their own implementation and approval.
 - Use [PRODUCTION_HARDENING.md](./PRODUCTION_HARDENING.md) as the production release gate and `.env.production.example` as a non-secret configuration template. Replace every example value and keep migration-only credentials out of the API runtime environment.
+- For Ethio telecom Cloud sizing, public catalogue options, network/storage/backup requirements, and provider quote questions, see [ETHIO_TELECOM_CLOUD_REQUIREMENTS.md](./ETHIO_TELECOM_CLOUD_REQUIREMENTS.md).
+- For a provider-ready deployment request with mandatory requirements, pilot/production options, quote format, and acceptance checks, see [ETHIO_TELECOM_PROVIDER_DEPLOYMENT_REQUIREMENTS.md](./ETHIO_TELECOM_PROVIDER_DEPLOYMENT_REQUIREMENTS.md).
+- For the AletCloud app, PostgreSQL, private object-storage, staging, production, domain, and rollback runbook, see [ALETCLOUD_DEPLOYMENT_GUIDE.md](./ALETCLOUD_DEPLOYMENT_GUIDE.md).
 
 ## One public Super App URL (Windows/IIS)
 
