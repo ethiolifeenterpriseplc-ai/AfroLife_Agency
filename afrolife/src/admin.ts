@@ -23,6 +23,10 @@ const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandle
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
 const MFA_STAFF = [...STAFF, 'corporate_business_manager'];
 const AGENT_ROLES = ['master_agent', 'field_agent'];
+const requireGlobalAdmin: RequestHandler = (req, _res, next) => {
+  if (req.user?.role !== 'global_admin') return next(new HttpError(403, 'Global Admin access is required.'));
+  return next();
+};
 const PROVISIONABLE_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner'] as const;
 const PLATFORM_SERVICE_KEYS = [
   'agency', 'workforce', 'staffing', 'property', 'marketplace', 'accounting', 'insurance',
@@ -414,7 +418,7 @@ adminRouter.patch('/marketplace/config', requireRole('global_admin', 'corporate_
   res.json(config);
 }));
 
-adminRouter.get('/platform/services', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.get('/platform/services', requireGlobalAdmin, h(async (req, res) => {
   const services = await withUser(req.user!, async (client) => (await client.query(
     `SELECT service_key, display_name, description, available, updated_at
      FROM platform_services ORDER BY display_name`,
@@ -422,7 +426,7 @@ adminRouter.get('/platform/services', requireRole('global_admin'), h(async (req,
   res.json(services);
 }));
 
-adminRouter.patch('/platform/services/:serviceKey', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.patch('/platform/services/:serviceKey', requireGlobalAdmin, h(async (req, res) => {
   const serviceKey = z.enum(PLATFORM_SERVICE_KEYS).parse(req.params.serviceKey);
   const body = z.object({
     display_name: z.string().trim().min(2).max(120),
@@ -443,7 +447,7 @@ adminRouter.patch('/platform/services/:serviceKey', requireRole('global_admin'),
   res.json(service);
 }));
 
-adminRouter.get('/platform/service-packages', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.get('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
   const packages = await withUser(req.user!, async (client) => (await client.query(
     `SELECT p.id, p.package_key, p.display_name, p.description, p.active, p.created_at, p.updated_at,
        COALESCE(array_agg(i.service_key ORDER BY i.service_key)
@@ -455,7 +459,7 @@ adminRouter.get('/platform/service-packages', requireRole('global_admin'), h(asy
   res.json(packages);
 }));
 
-adminRouter.post('/platform/service-packages', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.post('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
   const body = z.object({
     package_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
     display_name: z.string().trim().min(2).max(120),
@@ -487,7 +491,7 @@ adminRouter.post('/platform/service-packages', requireRole('global_admin'), h(as
   res.status(201).json(created);
 }));
 
-adminRouter.patch('/platform/service-packages/:packageId', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.patch('/platform/service-packages/:packageId', requireGlobalAdmin, h(async (req, res) => {
   const packageId = z.string().uuid().parse(req.params.packageId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(120),
@@ -525,7 +529,7 @@ adminRouter.patch('/platform/service-packages/:packageId', requireRole('global_a
   res.json(updated);
 }));
 
-adminRouter.get('/platform/tenants', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.get('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
   const tenants = await withUser(req.user!, async (client) => (await client.query(
     `SELECT t.id,t.tenant_key,t.display_name,t.status,t.hosting_mode,t.region,
        t.deployment_reference,t.deployment_status,t.config_version,t.created_at,t.updated_at,
@@ -626,7 +630,7 @@ adminRouter.get('/platform/my-business-tenant', requireRole('super_admin','maste
   res.json(tenants);
 }));
 
-adminRouter.post('/platform/tenants/:tenantId/admins', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.post('/platform/tenants/:tenantId/admins', requireGlobalAdmin, h(async (req, res) => {
   const tenantId = z.string().uuid().parse(req.params.tenantId);
   const { user_id } = z.object({ user_id: z.string().uuid() }).strict().parse(req.body);
   await withUser(req.user!, async (client) => {
@@ -644,7 +648,7 @@ adminRouter.post('/platform/tenants/:tenantId/admins', requireRole('global_admin
   res.sendStatus(204);
 }));
 
-adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requireGlobalAdmin, h(async (req, res) => {
   const tenantId = z.string().uuid().parse(req.params.tenantId);
   const userId = z.string().uuid().parse(req.params.userId);
   await withUser(req.user!, async (client) => {
@@ -655,7 +659,7 @@ adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requireRole('gl
   res.sendStatus(204);
 }));
 
-adminRouter.post('/platform/tenants', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.post('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
   const body = z.object({
     tenant_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9-]{1,79}$/),
     display_name: z.string().trim().min(2).max(160),
@@ -701,7 +705,7 @@ adminRouter.post('/platform/tenants', requireRole('global_admin'), h(async (req,
   res.status(201).json(tenant);
 }));
 
-adminRouter.patch('/platform/tenants/:tenantId', requireRole('global_admin', 'super_admin'), h(async (req, res) => {
+adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (req, res) => {
   const tenantId = z.string().uuid().parse(req.params.tenantId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(160).optional(),
@@ -801,7 +805,7 @@ adminRouter.patch('/platform/tenants/:tenantId', requireRole('global_admin', 'su
   res.json(updated);
 }));
 
-adminRouter.get('/platform/catalog-products', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.get('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
   const products = await withUser(req.user!, async (client) => (await client.query(
     `SELECT id,product_key,display_name,description,category,status,attributes,created_by,updated_by,created_at,updated_at
      FROM platform_catalog_products ORDER BY created_at DESC,product_key`,
@@ -809,7 +813,7 @@ adminRouter.get('/platform/catalog-products', requireRole('global_admin'), h(asy
   res.json(products);
 }));
 
-adminRouter.post('/platform/catalog-products', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.post('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
   const body = z.object({
     product_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
     display_name: z.string().trim().min(2).max(160),
@@ -839,7 +843,7 @@ adminRouter.post('/platform/catalog-products', requireRole('global_admin'), h(as
   res.status(201).json(product);
 }));
 
-adminRouter.patch('/platform/catalog-products/:productId', requireRole('global_admin'), h(async (req, res) => {
+adminRouter.patch('/platform/catalog-products/:productId', requireGlobalAdmin, h(async (req, res) => {
   const productId = z.string().uuid().parse(req.params.productId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(160),

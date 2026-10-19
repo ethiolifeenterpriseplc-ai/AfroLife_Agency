@@ -650,7 +650,7 @@ ops.get('/service-identities', requireRole('global_admin'), h(async (req, res) =
   )).rows));
 }));
 
-ops.post('/service-identities/:id/rotate', requireRole('global_admin'), h(async (req, res) => {
+ops.post('/service-identities/:id/rotate', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
   const b = z.object({
     secret_manager_reference: z.string().trim().regex(/^(vault|aws-sm|azure-kv):\/\/[A-Za-z0-9._/-]+$/),
     expiry_date: z.string().date(),
@@ -680,7 +680,7 @@ ops.post('/service-identities/:id/rotate', requireRole('global_admin'), h(async 
   }));
 }));
 
-ops.post('/service-identities/:id/retire', requireRole('global_admin'), h(async (req, res) => {
+ops.post('/service-identities/:id/retire', requireRole('super_admin', 'global_admin'), h(async (req, res) => {
   const { evidence } = z.object({ evidence: z.string().trim().min(10).max(2000) }).parse(req.body);
   res.json(await withUser(req.user!, async (c) => {
     const current = (await c.query('SELECT id,status,created_by FROM service_identities WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
@@ -762,7 +762,7 @@ ops.get('/finance/property-period-close', requireRole('finance','finance_manager
 }));
 
 // ----------------- Release approvals (record owner sign-off) -----------------
-ops.get('/readiness-evidence', requireRole('global_admin'), h(async (req, res) => {
+ops.get('/readiness-evidence', requireRole('super_admin','global_admin'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
     `SELECT e.id,e.module,e.category,e.status,e.owner_name,e.approver_name,
        e.evidence_reference,e.environment,e.notes,e.recorded_by_role,e.created_at,
@@ -773,7 +773,7 @@ ops.get('/readiness-evidence', requireRole('global_admin'), h(async (req, res) =
   )).rows));
 }));
 
-ops.post('/readiness-evidence', requireRole('global_admin'), h(async (req, res) => {
+ops.post('/readiness-evidence', requireRole('super_admin','global_admin'), h(async (req, res) => {
   const b = z.object({
     module: z.enum(['platform','workforce','insurance','mfi','edir','property','marketplace','agency']),
     category: z.enum([
