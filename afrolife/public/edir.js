@@ -81,6 +81,8 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}, 
     || me.staff_roles.some((role) => ['edir_admin', 'credit_manager', 'finance_manager', 'treasurer'].includes(role));
   const canAssessCredit = () => isAdmin
     || me.staff_roles.some((role) => ['edir_admin', 'credit_officer', 'credit_manager'].includes(role));
+  const canManageComplaints = () => isAdmin
+    || me.staff_roles.some((role) => ['edir_admin', 'member_support', 'compliance'].includes(role));
   let loading = true;
   let error = '';
   let notice = '';
@@ -94,6 +96,7 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}, 
   let financialAccounts = [];
   let financialTransactions = [];
   let credit = { membership: null, applications: [] };
+  let complaints = [];
   let memberDocuments = [];
   let pendingLoanDocuments = [];
   let creditPolicies = [];
@@ -162,6 +165,8 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}, 
       creditApplications = canReadCredit() ? await api('/edir/credit/applications') : [];
       memberLoans = await api('/edir/credit/loans/me');
       servicingLoans = canReadCredit() ? await api('/edir/credit/loans') : [];
+      complaints = me.membership?.status === 'active' || canManageComplaints()
+        ? await api('/edir/credit/complaints') : [];
     } catch (reason) {
       error = reason.message;
     } finally {
@@ -914,6 +919,86 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}, 
     }
     section.append(memberLoanList);
 
+    if (me.membership?.status === 'active') {
+      const complaintSection = node('div', undefined, 'list');
+      complaintSection.append(node('h3', 'Member support and complaints'));
+      complaintSection.append(node('p', 'Submit a private complaint about service, credit decisions, repayments, fees, privacy, or suspected fraud. Edir staff will track the case and provide a resolution.'));
+      const complaintForm = node('form', undefined, 'inline-form');
+      complaintForm.dataset.edirForm = 'complaint';
+      const categoryLabel = node('label', 'Complaint category');
+      const categorySelect = document.createElement('select');
+      categorySelect.name = 'category';
+      for (const [value, label] of [
+        ['service', 'Service'], ['loan_decision', 'Loan decision'], ['repayment', 'Repayment'],
+        ['fees', 'Fees'], ['privacy', 'Privacy'], ['fraud', 'Suspected fraud'], ['other', 'Other'],
+      ]) categorySelect.append(new Option(t(label), value));
+      categoryLabel.append(categorySelect);
+      complaintForm.append(categoryLabel, textInput('Subject', 'subject'));
+      const descriptionLabel = node('label', 'Describe the issue');
+      const description = document.createElement('textarea');
+      description.name = 'description';
+      description.required = true;
+      description.minLength = 10;
+      description.maxLength = 5000;
+      descriptionLabel.append(description);
+      complaintForm.append(descriptionLabel, submitButton('Submit private complaint'));
+      complaintSection.append(complaintForm);
+      if (!complaints.length) complaintSection.append(node('p', 'You have no submitted complaints.'));
+      for (const complaint of complaints) {
+        const item = card(`${complaint.subject} · ${complaint.reference}`,
+          `${complaint.category.replaceAll('_', ' ')} · ${complaint.status} · ${complaint.priority} · Due ${new Date(complaint.resolution_due_at).toLocaleDateString(document.documentElement.lang)}`,
+          complaint.status);
+        item.append(node('p', complaint.description));
+        if (complaint.resolution) item.append(node('p', `Resolution: ${complaint.resolution}`));
+        complaintSection.append(item);
+      }
+      section.append(complaintSection);
+    } else if (canManageComplaints()) {
+      const complaintQueue = node('div', undefined, 'list');
+      complaintQueue.append(node('h3', 'Member complaint queue'));
+      if (!complaints.length) complaintQueue.append(node('p', 'No Edir member complaints are open.'));
+      for (const complaint of complaints) {
+        const item = card(`${complaint.member_number} · ${complaint.subject} · ${complaint.reference}`,
+          `${complaint.category.replaceAll('_', ' ')} · ${complaint.priority} · Submitted ${new Date(complaint.created_at).toLocaleDateString(document.documentElement.lang)} · Due ${new Date(complaint.resolution_due_at).toLocaleDateString(document.documentElement.lang)}`,
+          complaint.status);
+        item.append(node('p', complaint.description));
+        if (complaint.resolution) item.append(node('p', `Resolution: ${complaint.resolution}`));
+        if (!['resolved', 'rejected'].includes(complaint.status)) {
+          const decisionForm = node('form', undefined, 'inline-form');
+          decisionForm.dataset.edirForm = 'complaint-decision';
+          decisionForm.dataset.complaintId = complaint.id;
+          const statusLabel = node('label', 'Update complaint status');
+          const statusSelect = document.createElement('select');
+          statusSelect.name = 'status';
+          for (const [value, label] of [
+            ['investigating', 'Investigating'], ['awaiting_customer', 'Awaiting member'],
+            ['resolved', 'Resolved'], ['rejected', 'Rejected'],
+          ]) statusSelect.append(new Option(t(label), value));
+          statusSelect.value = complaint.status === 'open' ? 'investigating' : complaint.status;
+          statusLabel.append(statusSelect);
+          const priorityLabel = node('label', 'Priority');
+          const prioritySelect = document.createElement('select');
+          prioritySelect.name = 'priority';
+          for (const value of ['low', 'normal', 'high', 'urgent']) prioritySelect.append(new Option(t(value), value));
+          prioritySelect.value = complaint.priority;
+          priorityLabel.append(prioritySelect);
+          const resolutionLabel = node('label', 'Resolution summary (required to close)');
+          const resolution = document.createElement('textarea');
+          resolution.name = 'resolution';
+          resolution.maxLength = 5000;
+          resolution.required = ['resolved', 'rejected'].includes(statusSelect.value);
+          statusSelect.addEventListener('change', () => {
+            resolution.required = ['resolved', 'rejected'].includes(statusSelect.value);
+          });
+          resolutionLabel.append(resolution);
+          decisionForm.append(statusLabel, priorityLabel, resolutionLabel, submitButton('Save complaint update'));
+          item.append(decisionForm);
+        }
+        complaintQueue.append(item);
+      }
+      section.append(complaintQueue);
+    }
+
     if (canReadCredit()) {
       const servicing = node('div', undefined, 'list');
       servicing.append(node('h3', 'Loan servicing and maker-checker queue'));
@@ -1085,6 +1170,26 @@ export function createEdirWorkspace(api, user, onOrganizationChange = () => {}, 
           }),
         });
         notice = 'Membership request submitted for independent review.';
+      } else if (form.dataset.edirForm === 'complaint') {
+        await api('/edir/credit/complaints', {
+          method: 'POST',
+          body: JSON.stringify({
+            category: values.category,
+            subject: values.subject,
+            description: values.description,
+          }),
+        });
+        notice = 'Your private Edir complaint was submitted for tracking.';
+      } else if (form.dataset.edirForm === 'complaint-decision') {
+        await api(`/edir/credit/complaints/${form.dataset.complaintId}/decision`, {
+          method: 'POST',
+          body: JSON.stringify({
+            status: values.status,
+            priority: values.priority,
+            ...(values.resolution.trim() ? { resolution: values.resolution } : {}),
+          }),
+        });
+        notice = 'Edir complaint status updated.';
       } else if (form.dataset.edirForm === 'credit-accept') {
         await api(`/edir/credit/applications/${form.dataset.applicationId}/accept`, {
           method: 'POST',

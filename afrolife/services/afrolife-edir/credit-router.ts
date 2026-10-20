@@ -56,9 +56,14 @@ export const edirCreditRouter = Router();
 
 edirCreditRouter.get('/complaints', h(async (req,res)=>{
   const rows=await withUser(req.user!,async(client)=>(await client.query(
-    `SELECT id,member_id,reference,category,subject,description,status,priority,resolution_due_at,
-            assigned_to,resolution,resolved_by,resolved_at,created_at,updated_at
-     FROM edir_customer_complaints ORDER BY created_at DESC LIMIT 200`,
+    `SELECT complaint.id,complaint.member_id,membership.member_number,membership.full_name,
+            complaint.reference,complaint.category,complaint.subject,complaint.description,complaint.status,
+            complaint.priority,complaint.resolution_due_at,
+            complaint.assigned_to,complaint.resolution,complaint.resolved_by,complaint.resolved_at,
+            complaint.created_at,complaint.updated_at
+     FROM edir_customer_complaints complaint
+     JOIN edir_memberships membership ON membership.id=complaint.member_id
+     ORDER BY complaint.created_at DESC LIMIT 200`,
   )).rows);
   res.json(rows);
 }));
@@ -215,13 +220,22 @@ edirCreditRouter.post('/complaints/:complaintId/decision',requireStaffRole(['edi
     if(!current)throw new HttpError(404,'Complaint not found');
     if(['resolved','rejected'].includes(current.status))throw new HttpError(409,'Closed complaints cannot be changed');
     if(['resolved','rejected'].includes(body.status)&&!body.resolution)throw new HttpError(422,'A resolution summary is required to close a complaint');
+    if(body.assigned_to){
+      const assignee=(await client.query(
+        `SELECT 1 FROM edir_staff WHERE user_id=$1 AND organization_id=$2 AND active
+         AND role IN ('edir_admin','member_support','compliance')`,
+        [body.assigned_to,current.organization_id],
+      )).rowCount;
+      if(!assignee)throw new HttpError(422,'Assign the complaint to an active Edir administrator, member-support officer, or Compliance officer');
+    }
     const updated=(await client.query(
-      `UPDATE edir_customer_complaints SET status=$2,priority=coalesce($3,priority),assigned_to=coalesce($4,assigned_to),
-        resolution=CASE WHEN $2 IN ('resolved','rejected') THEN $5 ELSE resolution END,
-        resolved_by=CASE WHEN $2 IN ('resolved','rejected') THEN $6::uuid ELSE null END,
+      `UPDATE edir_customer_complaints SET status=$2,priority=coalesce($3,priority),
+        assigned_to=CASE WHEN $4::boolean THEN $5::uuid ELSE assigned_to END,
+        resolution=CASE WHEN $2 IN ('resolved','rejected') THEN $6 ELSE resolution END,
+        resolved_by=CASE WHEN $2 IN ('resolved','rejected') THEN $7::uuid ELSE null END,
         resolved_at=CASE WHEN $2 IN ('resolved','rejected') THEN now() ELSE null END,updated_at=now()
        WHERE id=$1 RETURNING id,reference,status,priority,assigned_to,resolution,resolved_by,resolved_at,updated_at`,
-      [id,body.status,body.priority??null,body.assigned_to??null,body.resolution??null,req.user!.id],
+      [id,body.status,body.priority??null,body.assigned_to!==undefined,body.assigned_to??null,body.resolution??null,req.user!.id],
     )).rows[0];
     await audit(client,req.user!.id,'edir_complaint_updated',id,{prior_status:current.status,status:updated.status,reason:body.resolution??null});
     return updated;

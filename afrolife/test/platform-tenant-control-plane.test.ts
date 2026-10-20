@@ -2,12 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { adminRouter } from '../src/admin.js';
+import { workspaceModulesForServices } from '../src/runtime-config.js';
 
 const routes = adminRouter.stack.flatMap((layer) => (layer.route
-  ? [{ path: layer.route.path, methods: layer.route.methods, handlers: layer.route.stack.map((entry) => entry.handle.name) }]
+  ? [{
+    path: layer.route.path,
+    methods: layer.route.methods,
+    handlers: layer.route.stack.map((entry) => entry.handle.name),
+    middleware: layer.route.stack.map((entry) => entry.handle),
+  }]
   : []));
 
-test('platform control-plane endpoints exist and are guarded by the exact Global Admin role', () => {
+test('shared platform control-plane endpoints allow only Global System Admin', () => {
   const paths = [
     '/platform/services',
     '/platform/services/:serviceKey',
@@ -15,14 +21,45 @@ test('platform control-plane endpoints exist and are guarded by the exact Global
     '/platform/service-packages/:packageId',
     '/platform/tenants',
     '/platform/tenants/:tenantId',
+    '/platform/tenants/:tenantId/admins',
+    '/platform/tenants/:tenantId/admins/:userId',
     '/platform/catalog-products',
     '/platform/catalog-products/:productId',
+    '/platform/super-admins',
   ];
   for (const path of paths) {
     const route = routes.find((entry) => entry.path === path);
     assert.ok(route, `missing control-plane route ${path}`);
-    assert.equal(route.handlers[0], 'requireGlobalAdmin', `${path} must reject tenant-scoped administrators`);
+    assert.equal(route.handlers[0], 'requirePlatformControlPlaneAdmin', `${path} must enforce the explicit platform roles`);
+    for (const role of ['global_admin']) {
+      let denied: unknown;
+      route.middleware[0]({ user: { role } }, {}, (error?: unknown) => { denied = error; });
+      assert.equal(denied, undefined, `${role} should be allowed on ${path}`);
+    }
+    for (const role of ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'customer']) {
+      let denied: unknown;
+      route.middleware[0]({ user: { role } }, {}, (error?: unknown) => { denied = error; });
+      assert.equal((denied as { status?: number })?.status, 403, `${role} must be denied on ${path}`);
+    }
   }
+});
+
+test('Super Admin receives only assigned entity module configuration endpoints', () => {
+  const route = routes.find((entry) => entry.path === '/platform/my-tenants/:tenantId/modules');
+  assert.ok(route, 'missing scoped tenant module configuration route');
+  assert.equal(route.handlers[0], '', 'the route must begin with role-scoped middleware');
+  const registration = routes.find((entry) => entry.path === '/platform/my-tenants/:tenantId/registration');
+  assert.ok(registration, 'missing scoped deployment registration route');
+  assert.equal(registration.handlers[0], '', 'the route must begin with role-scoped middleware');
+});
+
+test('tenant package services restrict the caller deployment modules without elevation', () => {
+  const baseModules = ['leads', 'workers', 'requests', 'learning', 'properties', 'marketplace', 'accounting', 'global-bi'] as const;
+  assert.deepEqual(
+    workspaceModulesForServices(baseModules, ['agency', 'accounting']),
+    ['leads', 'accounting'],
+  );
+  assert.deepEqual(workspaceModulesForServices(baseModules, []), []);
 });
 
 test('tenant control-plane migration stores deployment references, never database credentials', async () => {
@@ -40,6 +77,36 @@ test('tenant control-plane migration stores deployment references, never databas
   assert.match(migration, /platform_tenant_events_immutable/);
   assert.match(migration, /platform_catalog_product_events_immutable/);
   assert.match(migration, /current_setting\('app\.role', true\) = 'global_admin'/);
+});
+
+test('Super Admin configuration stays scoped to assigned tenant modules', async () => {
+  const migration = await readFile(
+    new URL('../migrations/089_scoped_super_admin_modules.sql', import.meta.url),
+    'utf8',
+  );
+  assert.match(migration, /platform_services_global_admin/);
+  assert.match(migration, /current_setting\('app\.role',true\)='global_admin'/);
+  assert.match(migration, /current_setting\('app\.role',true\)='super_admin' AND EXISTS/);
+  assert.match(migration, /platform_tenant_module_config/);
+  assert.match(migration, /enabled_services text\[\]/);
+  for (const policy of [
+    'platform_packages_assigned_read',
+    'platform_package_items_assigned_read',
+    'platform_tenants_assigned_read',
+    'platform_tenants_assigned_registration_update',
+    'platform_tenant_packages_assigned_read',
+    'platform_tenant_events_assigned_insert',
+  ]) {
+    assert.match(migration, new RegExp(`DROP POLICY IF EXISTS ${policy}`));
+  }
+  assert.match(migration, /platform_tenant_admins_write ON platform_tenant_admins FOR ALL[\s\S]*?app\.role',true\)='global_admin'/);
+  assert.doesNotMatch(migration, /app\.platform_control_plane/);
+  assert.match(migration, /platform_services_assigned_read/);
+  const server = await readFile(new URL('../src/server.ts', import.meta.url), 'utf8');
+  assert.match(server, /platform_tenant_admins a[\s\S]*?a\.user_id=\$3/);
+  assert.match(server, /JOIN platform_tenant_packages tp[\s\S]*?p\.active[\s\S]*?t\.status='active'/);
+  assert.match(server, /platform_tenant_module_config[\s\S]*?enabled_services/);
+  assert.match(server, /req\.user!\.role === 'super_admin' && req\.query\.platform_tenant_id === undefined/);
 });
 
 test('global catalog explicitly excludes regulated financial-product definitions', async () => {

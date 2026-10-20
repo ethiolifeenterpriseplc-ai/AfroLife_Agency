@@ -38,6 +38,9 @@ const migrations = await Promise.all([
   ['afrolife-edir-v24-accounting-outbox', '024_accounting_outbox.sql'],
   ['afrolife-edir-v25-accounting-outbox-staff-scope', '025_accounting_outbox_access.sql'],
   ['afrolife-edir-v26-registration-documents', '026_registration_documents.sql'],
+  ['afrolife-edir-v27-active-member-financial-approval', '027_active_member_financial_approval.sql'],
+  ['afrolife-edir-v28-rls-safe-active-member-approval', '028_rls_safe_active_member_approval.sql'],
+  ['afrolife-edir-v29-restrict-active-member-guard', '029_restrict_active_member_guard.sql'],
 ].map(async ([version, filename]) => ({
   version,
   source: await readFile(join(process.cwd(), 'services', 'afrolife-edir', filename), 'utf8'),

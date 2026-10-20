@@ -87,9 +87,10 @@ async function startApi(port, env) {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
+  apiProcess.on('error', (error) => { apiLogs = (apiLogs + `API process failed to start: ${error.message}\n`).slice(-8000); });
   apiProcess.stdout.on('data', (chunk) => { apiLogs = (apiLogs + chunk.toString()).slice(-8000); });
   apiProcess.stderr.on('data', (chunk) => { apiLogs = (apiLogs + chunk.toString()).slice(-8000); });
-  for (let attempt = 0; attempt < 60; attempt++) {
+  for (let attempt = 0; attempt < 120; attempt++) {
     if (apiProcess.exitCode !== null) throw new Error(`Finance test API exited early: ${apiLogs}`);
     try {
       const response = await fetch(`http://127.0.0.1:${port}/healthz`);
@@ -149,6 +150,9 @@ try {
     DATABASE_URL: runtimeUrl.toString(),
     MIGRATION_DATABASE_URL: migrationUrl.toString(),
     TEST_DATABASE_URL: testDatabaseUrl,
+    NODE_ENV: 'development',
+    INSURANCE_BROKERAGE_MODE: 'sandbox',
+    MARKETPLACE_PAYMENT_MODE: 'mock',
     JWT_SECRET: process.env.JWT_SECRET ?? randomBytes(48).toString('base64url'),
     MFA_ENC_KEY: process.env.MFA_ENC_KEY ?? randomBytes(48).toString('base64url'),
     ACCOUNTING_SERVICE_URL: 'http://127.0.0.1:1',
@@ -239,6 +243,7 @@ try {
       windowsHide: true,
     },
   ).status ?? 1;
+  if (suiteExitCode !== 0) console.error(`Core API logs before E2E failure:\n${apiLogs}`);
   assert.equal(suiteExitCode, 0, 'Core HTTP integration suite failed');
   console.log('Finance E2E passed on a temporary database with a non-superuser runtime role.');
 } finally {

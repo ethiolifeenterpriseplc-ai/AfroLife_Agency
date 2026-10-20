@@ -49,6 +49,7 @@ const parent = Number((await db.query("INSERT INTO territories (level, name) VAL
 const areaA = Number((await db.query("INSERT INTO territories (parent_id, level, name) VALUES ($1,'sub_city',$2) RETURNING id", [parent, 'A' + run])).rows[0].id);
 const admin = await mkUser('super_admin', 1);
 const globalAdmin = await mkUser('global_admin', 12);
+const propertyReviewer = await mkUser('corporate_business_manager', 13);
 const compliance = await mkUser('compliance', 2);
 const complianceAlt = await mkUser('compliance', 8);
 const master = await mkUser('master_agent', 3);
@@ -77,10 +78,12 @@ let w1: any, w2: any, w3: any, request: any, match: any;
 test('workers: created by an agent; duplicate phone or national ID is rejected', async () => {
   const r = await call(fa, 'POST', '/workers', workerBody(1));
   assert.equal(r.status, 201);
+  assert.equal('national_id' in r.body, false);
   w1 = r.body;
   assert.equal(w1.verification, 'uploaded');
   assert.equal((await call(fb, 'POST', '/workers', workerBody(2, { phone: w1.phone }))).status, 409);
-  assert.equal((await call(fb, 'POST', '/workers', workerBody(3, { national_id: w1.national_id }))).status, 409);
+  assert.equal((await call(fb, 'POST', '/workers', workerBody(3, { national_id: workerBody(1).national_id }))).status, 409);
+  assert.equal((await call(fa, 'POST', '/workers', workerBody(4, { skills: Array(51).fill('skill') }))).status, 400);
 });
 
 test('data isolation: another agent cannot see the worker; the master can', async () => {
@@ -113,6 +116,7 @@ test('verification: refused without verified documents; uploading is not verific
   const ok = await call(compliance, 'POST', `/workers/${w1.id}/verify`);
   assert.equal(ok.status, 200);
   assert.equal(ok.body.verification, 'verified');
+  assert.equal('national_id' in ok.body, false);
 });
 
 test('worker document rejection requires and exposes corrective feedback', async () => {
@@ -148,6 +152,20 @@ test('verification: an expired police clearance does not count', async () => {
   const r = await call(compliance, 'POST', `/workers/${w2.id}/verify`);
   assert.equal(r.status, 409);
   assert.match(r.body.error, /police_clearance/);
+});
+
+test('worker directory marks a verified profile as expired when required evidence lapses', async () => {
+  const worker = (await call(fa, 'POST', '/workers', workerBody(9))).body;
+  const nationalId = await upload(fa, worker.id, 'national_id');
+  const clearance = await upload(fa, worker.id, 'police_clearance');
+  for (const document of [nationalId, clearance]) {
+    assert.equal(document.status, 201);
+    assert.equal((await call(compliance, 'POST', `/documents/${document.body.id}/review`, { decision: 'verified' })).status, 200);
+  }
+  assert.equal((await call(compliance, 'POST', `/workers/${worker.id}/verify`)).status, 200);
+  await db.query("UPDATE documents SET expires_on=current_date-1 WHERE id=$1", [clearance.body.id]);
+  const listedWorker = (await call(fa, 'GET', '/workers')).body.find((entry: any) => entry.id === worker.id);
+  assert.equal(listedWorker.verification, 'expired');
 });
 
 test('matching: agents can manage candidates only within their own team scope', async () => {
@@ -335,9 +353,9 @@ test('documents: wrong file types are refused; downloads are access-controlled',
   assert.ok((log.rowCount ?? 0) >= 2); // both downloads are audited
 });
 
-test('areas: anyone signed in can list them; only Super Admin can create them', async () => {
+test('areas: anyone signed in can list them; only Global Admin can create them', async () => {
   assert.equal((await call(fa, 'POST', '/territories', { level: 'city', name: 'Nope' })).status, 403);
-  const made = await call(admin, 'POST', '/territories', { level: 'city', name: 'Created ' + run });
+  const made = await call(globalAdmin, 'POST', '/territories', { level: 'city', name: 'Created ' + run });
   assert.equal(made.status, 201);
   assert.ok((await call(fa, 'GET', '/territories')).body.some((t: any) => t.id === made.body.id));
 });
@@ -346,6 +364,15 @@ test('properties: units are stored with the property; duplicates and cross-agent
   const address = `Bole Road Plot ${run}`;
   const p = await call(fa, 'POST', '/properties', { address, ptype: 'apartment_building', territory_id: areaA, units: [{ unit_no: '1A', floor: 1, rent: 15000 }, { unit_no: '1B', floor: 1, rent: 16000 }] });
   assert.equal(p.status, 201);
+  assert.equal(p.body.listing_review_status, 'pending_review');
+  assert.equal((await call(fa, 'POST', '/properties', {
+    address: `Sale only property ${run}`,
+    ptype: 'house',
+    listing_mode: 'sale',
+    sale_price: 1000000,
+    territory_id: areaA,
+    units: [{ unit_no: 'Sale-1', rent: 5000 }],
+  })).status, 422);
   const uploadPhoto = (u: U, content: Buffer, contentType = 'image/png') => fetch(
     `${API}/properties/${p.body.id}/photos/upload?caption=Front+entrance`,
     { method: 'POST', headers: { authorization: 'Bearer ' + u.token, 'content-type': contentType }, body: content },
@@ -427,6 +454,45 @@ test('buyers can read available listings and photos but cannot write or see inte
     [`Buyer hidden listing ${run}`, areaA, fa.id, fa.id],
   )).rows[0];
 
+  const beforeReview = await call(buyer, 'GET', '/properties');
+  assert.equal(beforeReview.status, 200);
+  assert.equal(beforeReview.body.some((item: any) => item.id === agentListing.body.id), false);
+  assert.equal((await call(buyer, 'GET', `/properties/${agentListing.body.id}/photos`)).status, 404);
+  const ownerListingForReview = (await call(propertyOwner, 'GET', '/properties')).body
+    .find((item: any) => item.address === `Owner property ${run}`);
+  assert.equal(ownerListingForReview.listing_review_status, 'pending_review');
+  assert.equal((await call(propertyOwner, 'PATCH', `/properties/${ownerListingForReview.id}/review`, {
+    decision: 'approve',
+  })).status, 403);
+  const approvedAgentListing = await call(propertyReviewer, 'PATCH', `/properties/${agentListing.body.id}/review`, {
+    decision: 'approve',
+  });
+  assert.equal(approvedAgentListing.status, 200);
+  assert.equal(approvedAgentListing.body.listing_review_status, 'approved');
+  assert.equal((await call(propertyReviewer, 'PATCH', `/properties/${ownerListingForReview.id}/review`, {
+    decision: 'reject',
+    note: 'No',
+  })).status, 422);
+  const returned = await call(propertyReviewer, 'PATCH', `/properties/${ownerListingForReview.id}/review`, {
+    decision: 'reject',
+    note: 'Please clarify the property access and unit details.',
+  });
+  assert.equal(returned.status, 200);
+  assert.equal(returned.body.listing_review_status, 'rejected');
+  assert.equal((await call(buyer, 'GET', '/properties')).body.some((item: any) => item.id === ownerListingForReview.id), false);
+  const resubmitted = await call(propertyOwner, 'PATCH', `/properties/${ownerListingForReview.id}/resubmit`, {
+    address: ownerListingForReview.address,
+    description: 'Updated property details following the review request.',
+    listing_mode: ownerListingForReview.listing_mode,
+    rent_period: ownerListingForReview.rent_period,
+  });
+  assert.equal(resubmitted.status, 200);
+  assert.equal(resubmitted.body.listing_review_status, 'pending_review');
+  assert.equal(resubmitted.body.listing_review_note, null);
+  assert.equal((await call(propertyReviewer, 'PATCH', `/properties/${ownerListingForReview.id}/review`, {
+    decision: 'approve',
+  })).status, 200);
+
   const visible = await call(buyer, 'GET', '/properties');
   assert.equal(visible.status, 200);
   const ownerListing = visible.body.find((item: any) => item.address === `Owner property ${run}`);
@@ -437,6 +503,7 @@ test('buyers can read available listings and photos but cannot write or see inte
   assert.equal('owner_user_id' in ownerListing, false);
   assert.equal('source_agent_id' in ownerListing, false);
   assert.equal('owner_lead_id' in ownerListing, false);
+  assert.equal('created_by' in ownerListing, false);
   assert.equal((await call(buyer, 'POST', '/properties', {
     address: `Buyer forbidden listing ${run}`,
     ptype: 'house',
@@ -444,6 +511,80 @@ test('buyers can read available listings and photos but cannot write or see inte
   })).status, 403);
   assert.equal((await call(buyer, 'POST', `/properties/${ownerListing.id}/units`, { unit_no: 'Buyer-1' })).status, 403);
   assert.equal((await call(buyer, 'POST', `/properties/${ownerListing.id}/photos/upload`, {})).status, 403);
+});
+
+test('marketplace listing media, independent moderation, buyer visibility, and sandbox checkout are end-to-end', async () => {
+  const listing = await call(propertyOwner, 'POST', '/marketplace/listings', {
+    domain: 'products',
+    category_key: 'electronics',
+    title: `LOCAL QA synthetic listing ${run}`,
+    description: 'Synthetic marketplace lifecycle coverage; no real product is offered.',
+    transaction_mode: 'sale',
+    price: 1250.5,
+    condition: 'good',
+    territory_id: areaA,
+  });
+  assert.equal(listing.status, 201, JSON.stringify(listing.body));
+  assert.equal(listing.body.status, 'draft');
+
+  const mediaResponse = await fetch(`${API}/marketplace/listings/${listing.body.id}/media/upload?caption=Synthetic+marketplace+fixture`, {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + propertyOwner.token, 'content-type': 'image/png' },
+    body: PNG,
+  });
+  assert.equal(mediaResponse.status, 201);
+  const media = await mediaResponse.json() as any;
+  const submitted = await call(propertyOwner, 'POST', `/marketplace/listings/${listing.body.id}/submit`, {});
+  assert.equal(submitted.status, 200);
+  assert.equal(submitted.body.status, 'pending_review');
+
+  const selfReview = await call(propertyOwner, 'PATCH', `/marketplace/listings/${listing.body.id}/review`, {
+    decision: 'publish',
+  });
+  assert.equal(selfReview.status, 403);
+  const published = await call(admin, 'PATCH', `/marketplace/listings/${listing.body.id}/review`, {
+    decision: 'publish',
+    note: 'Internal moderation-only note for the synthetic QA listing.',
+  });
+  assert.equal(published.status, 200);
+  assert.equal(published.body.status, 'published');
+
+  const customerListings = await call(buyer, 'GET', '/marketplace/listings');
+  assert.equal(customerListings.status, 200);
+  const customerListing = customerListings.body.find((item: any) => item.id === listing.body.id);
+  assert.ok(customerListing);
+  assert.equal(customerListing.seller_name, `property_owner-9`);
+  for (const field of ['seller_user_id', 'source_agent_id', 'created_by', 'review_note', 'reviewed_by', 'reviewed_at']) {
+    assert.equal(Object.hasOwn(customerListing, field), false, `Customer response must omit internal ${field}`);
+  }
+  assert.equal(customerListing.media.length, 1);
+  const mediaFile = await fetch(`${API}/marketplace/media/${media.id}/file`, {
+    headers: { authorization: 'Bearer ' + buyer.token },
+  });
+  const mediaFileBytes = Buffer.from(await mediaFile.arrayBuffer());
+  assert.equal(mediaFile.status, 200, `Marketplace media fetch returned ${mediaFile.status}: ${mediaFileBytes.toString().slice(0, 500)}`);
+  assert.deepEqual(mediaFileBytes, PNG);
+
+  const orderBody = { quantity: 2, idempotency_key: `marketplace-qa-${run}` };
+  const order = await call(buyer, 'POST', `/marketplace/listings/${listing.body.id}/sandbox-orders`, orderBody);
+  assert.equal(order.status, 201);
+  assert.equal(order.body.total, '2501.00');
+  const retry = await call(buyer, 'POST', `/marketplace/listings/${listing.body.id}/sandbox-orders`, orderBody);
+  assert.equal(retry.status, 201);
+  assert.equal(retry.body.id, order.body.id);
+  const conflictingRetry = await call(buyer, 'POST', `/marketplace/listings/${listing.body.id}/sandbox-orders`, {
+    ...orderBody,
+    quantity: 3,
+  });
+  assert.equal(conflictingRetry.status, 409);
+
+  const payment = await call(buyer, 'POST', `/marketplace/sandbox-orders/${order.body.id}/mock-payment`, {});
+  assert.equal(payment.status, 200);
+  assert.equal(payment.body.status, 'sandbox_paid');
+  assert.match(payment.body.notice, /no charge was made/i);
+  const repeatedPayment = await call(buyer, 'POST', `/marketplace/sandbox-orders/${order.body.id}/mock-payment`, {});
+  assert.equal(repeatedPayment.body.status, 'sandbox_paid');
+  assert.equal(repeatedPayment.body.payment_reference, payment.body.payment_reference);
 });
 
 test.after(() => db.end());

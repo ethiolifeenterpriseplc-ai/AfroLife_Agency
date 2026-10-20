@@ -233,14 +233,48 @@
           </section>
         </section>
         <section class="hub-section industry-news" aria-labelledby="industry-news-title">
-          <div class="hub-section-heading"><div><p class="eyebrow">INDUSTRY NEWS</p><h2 id="industry-news-title">Follow the sectors around you</h2></div><span class="hub-caption">Opens current reporting from external publishers</span></div>
-          <div class="news-grid">
-            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+housing+real+estate+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>PROPERTY</span><strong>Ethiopia housing &amp; real estate</strong><small>Latest coverage ↗</small></a>
-            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+jobs+labour+employment+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>WORK &amp; SKILLS</span><strong>Employment and workforce</strong><small>Latest coverage ↗</small></a>
-            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+business+finance+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>BUSINESS</span><strong>Business and finance</strong><small>Latest coverage ↗</small></a>
-            <a class="news-card" href="https://www.google.com/search?q=Ethiopia+digital+economy+technology+news&tbm=nws" target="_blank" rel="noopener noreferrer"><span>DIGITAL</span><strong>Technology and digital economy</strong><small>Latest coverage ↗</small></a>
+          <div class="news-masthead">
+            <div class="news-heading-copy">
+              <p class="eyebrow">THE AFROLIFE BRIEF · ETHIOPIA</p>
+              <h2 id="industry-news-title">Ethiopia, in the headlines</h2>
+              <p>Recent reporting across business, housing, work, and technology.</p>
+            </div>
+            <div class="news-feed-meta">
+              <span id="industry-news-status" class="news-status" role="status">Checking trusted news feeds…</span>
+              <span id="industry-news-updated" class="news-updated"></span>
+            </div>
           </div>
-          <p class="hub-disclaimer">News links are provided for convenience and are published by external sources. AfroLife does not endorse or verify third-party reporting.</p>
+          <nav class="news-filters" aria-label="Filter headlines by sector">
+            <button type="button" data-news-filter="all" aria-pressed="true">All sectors</button>
+            <button type="button" data-news-filter="business" aria-pressed="false">Business &amp; finance</button>
+            <button type="button" data-news-filter="property" aria-pressed="false">Property &amp; housing</button>
+            <button type="button" data-news-filter="workforce" aria-pressed="false">Workforce</button>
+            <button type="button" data-news-filter="technology" aria-pressed="false">Technology</button>
+          </nav>
+          <div id="industry-news-results" class="news-grid" aria-live="polite" aria-busy="true">
+            <p class="news-loading">Loading the latest headlines from selected publishers…</p>
+          </div>
+          <div id="industry-news-fallback" class="news-fallback" hidden>
+            <p id="industry-news-fallback-message">Live headlines are temporarily unavailable. Search current coverage from Google News:</p>
+            <div class="news-fallback-links">
+              <a href="https://www.google.com/search?q=Ethiopia+business+finance+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Business &amp; finance <span aria-hidden="true">↗</span></a>
+              <a href="https://www.google.com/search?q=Ethiopia+housing+real+estate+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Property &amp; housing <span aria-hidden="true">↗</span></a>
+              <a href="https://www.google.com/search?q=Ethiopia+jobs+labour+employment+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Workforce &amp; employment <span aria-hidden="true">↗</span></a>
+              <a href="https://www.google.com/search?q=Ethiopia+digital+economy+technology+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Technology &amp; digital <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+          <noscript>
+            <div class="news-fallback">
+              <p>Live headlines need JavaScript. Search current coverage from Google News:</p>
+              <div class="news-fallback-links">
+                <a href="https://www.google.com/search?q=Ethiopia+business+finance+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Business &amp; finance <span aria-hidden="true">↗</span></a>
+                <a href="https://www.google.com/search?q=Ethiopia+housing+real+estate+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Property &amp; housing <span aria-hidden="true">↗</span></a>
+                <a href="https://www.google.com/search?q=Ethiopia+jobs+labour+employment+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Workforce &amp; employment <span aria-hidden="true">↗</span></a>
+                <a href="https://www.google.com/search?q=Ethiopia+digital+economy+technology+news&amp;tbm=nws" target="_blank" rel="noopener noreferrer">Technology &amp; digital <span aria-hidden="true">↗</span></a>
+              </div>
+            </div>
+          </noscript>
+          <p class="hub-disclaimer">Headlines, publisher names, and publication times are supplied by external news feeds. AfroLife does not endorse or verify third-party reporting.</p>
         </section>
         <form id="edir-registration-form" class="panel form-card edir-registration-form" hidden>
           <p class="eyebrow">EDIR ONBOARDING</p>
@@ -284,30 +318,43 @@
           <div id="workspace-search-results" class="workspace-search-results" role="status" aria-live="polite" hidden></div>
         </form>
         <div id="stat-grid" class="stat-grid"></div>
-        <nav class="tabs" aria-label="Workspace sections">
-          <button class="tab active" data-panel="overview" type="button">Overview</button>
-          <button id="subscriptions-tab" class="tab" data-panel="subscriptions" type="button">Service subscriptions</button>
-          <button class="tab" data-panel="leads" type="button">Leads</button>
-          <button class="tab" data-panel="workers" type="button">Workers</button>
-          <button class="tab" data-panel="requests" type="button">Requests & matching</button>
-          <button id="learning-tab" class="tab" data-panel="learning" type="button" hidden>Training & support</button>
-          <button id="properties-tab" class="tab" data-panel="properties" type="button" hidden>Properties</button>
-          <button id="marketplace-tab" class="tab" data-panel="marketplace" type="button" hidden>Marketplace</button>
-          <button id="contracts-tab" class="tab" data-panel="contracts" type="button" hidden>Contracts</button>
-          <button id="commissions-tab" class="tab" data-panel="commissions" type="button" hidden>Commissions</button>
-          <button id="agents-tab" class="tab" data-panel="agents" type="button" hidden>Agent management</button>
-          <button id="rent-tab" class="tab" data-panel="rent" type="button" hidden>Rent & deposits</button>
-          <button id="mfi-tab" class="tab" data-panel="mfi" type="button" hidden>SACCO / MFI</button>
-          <button id="accounting-tab" class="tab" data-panel="accounting" type="button" hidden>Accounting &amp; Finance</button>
-          <button id="global-bi-tab" class="tab" data-panel="global-bi" type="button" hidden>Global BI</button>
-          <button id="edir-tab" class="tab" data-panel="edir" type="button" hidden>AfroLife Edir</button>
-          <button id="insurance-tab" class="tab" data-panel="insurance" type="button">Insurance</button>
-          <button id="privacy-tab" class="tab" data-panel="privacy" type="button">Privacy requests &amp; incidents</button>
-          <button class="tab" data-panel="security" type="button">Security</button>
-          <button id="admin-tab" class="tab" data-panel="admin" type="button" hidden>Admin & review</button>
-          <button id="status-tab" class="tab" data-panel="status" type="button">Service status</button>
-        </nav>
-        <section id="workspace" class="workspace" aria-labelledby="page-title"></section>
+        <div class="workspace-layout">
+          <nav class="tabs" aria-label="Workspace sections">
+          <section class="workspace-nav-group workspace-nav-core" aria-label="Core modules">
+            <h2>Core</h2>
+            <button class="tab active" data-panel="overview" type="button">Overview</button>
+            <button class="tab" data-panel="leads" type="button">Leads</button>
+            <button class="tab" data-panel="workers" type="button">Workers</button>
+            <button class="tab" data-panel="requests" type="button">Requests &amp; matching</button>
+          </section>
+          <div class="workspace-nav-groups">
+            <section class="workspace-nav-group workspace-nav-business" aria-label="Business modules">
+              <h2>Business</h2>
+              <button id="subscriptions-tab" class="tab" data-panel="subscriptions" type="button">Service subscriptions</button>
+              <button id="learning-tab" class="tab" data-panel="learning" type="button" hidden>Training &amp; support</button>
+              <button id="properties-tab" class="tab" data-panel="properties" type="button" hidden>Properties</button>
+              <button id="marketplace-tab" class="tab" data-panel="marketplace" type="button" hidden>Marketplace</button>
+              <button id="contracts-tab" class="tab" data-panel="contracts" type="button" hidden>Contracts</button>
+              <button id="commissions-tab" class="tab" data-panel="commissions" type="button" hidden>Commissions</button>
+              <button id="agents-tab" class="tab" data-panel="agents" type="button" hidden>Agent management</button>
+              <button id="rent-tab" class="tab" data-panel="rent" type="button" hidden>Rent &amp; deposits</button>
+              <button id="mfi-tab" class="tab" data-panel="mfi" type="button" hidden>SACCO / MFI</button>
+              <button id="accounting-tab" class="tab" data-panel="accounting" type="button" hidden>Accounting &amp; Finance</button>
+              <button id="global-bi-tab" class="tab" data-panel="global-bi" type="button" hidden>Global BI</button>
+              <button id="edir-tab" class="tab" data-panel="edir" type="button" hidden>AfroLife Edir</button>
+              <button id="insurance-tab" class="tab" data-panel="insurance" type="button">Insurance</button>
+              <button id="status-tab" class="tab" data-panel="status" type="button">Service status</button>
+            </section>
+            <section class="workspace-nav-group workspace-nav-configuration" aria-label="Configuration modules">
+              <h2>Configuration</h2>
+              <button id="privacy-tab" class="tab" data-panel="privacy" type="button">Privacy requests &amp; incidents</button>
+              <button class="tab" data-panel="security" type="button">Security</button>
+              <button id="admin-tab" class="tab" data-panel="admin" type="button" hidden>Admin &amp; review</button>
+            </section>
+          </div>
+          </nav>
+          <section id="workspace" class="workspace" aria-labelledby="page-title"></section>
+        </div>
         <nav id="mobile-workspace-nav" class="mobile-workspace-nav" aria-label="Quick workspace navigation" hidden></nav>
       </section>
     </main>

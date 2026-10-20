@@ -16,6 +16,10 @@ From `afrolife/`, run `npm run migrate:accounting` during local development and 
 
 The service serves its standalone web workspace at `/` and listens on port 3300 by default. `/healthz` reports database connectivity. The first implementation exposes entity hierarchy and membership management, chart-of-account management with a reviewed starter template, accounting periods, double-entry journal submission and maker-checker decisions, book dashboard totals, a 12-month entity-scoped posted-journal/volume trend, and read-only parent consolidation totals. Dashboard and reports remain restricted to the caller's Accounting entity memberships.
 
+## Local integrated development
+
+For local development only, `npm run db:accounting:local:setup` provisions a separate `afrolife_accounting_local` database with a restricted runtime role, writes local-only gateway credentials to `%LOCALAPPDATA%\AfroLife\afrolife.env`, and applies the Accounting migrations. The setup refuses to overwrite an existing unmatched role or database. Start the gateway-mode Accounting service on loopback port 3301 with `npm run start:accounting:local`, then restart the AfroLife core API so it loads `ACCOUNTING_SERVICE_URL` and the matching gateway secret from the local environment file. The main app exposes the integrated workspace to authorized roles at the Accounting mini-app; create the business entity and chart from that workspace. Do not use the local database or generated credentials in production.
+
 ## Connect AfroLife
 
 Set `ACCOUNTING_AUTH_MODE=gateway`, `ACCOUNTING_GATEWAY_SECRET` (32+ random characters), `ACCOUNTING_DATABASE_URL`, and `ACCOUNTING_MIGRATION_DATABASE_URL` on the service. Set `ACCOUNTING_SERVICE_URL` and the matching `ACCOUNTING_GATEWAY_SECRET` on AfroLife core. Core exposes the service under `/accounting` and signs short-lived identity assertions; the accounting service still checks its own entity memberships. Use HTTPS outside localhost. Do not expose the gateway-mode service directly to browsers.

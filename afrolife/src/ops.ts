@@ -955,32 +955,59 @@ ops.get('/rent-transactions/pending', requireAnyActivity('rent.transactions.view
 
 // ================= Maintenance =================
 ops.post('/maintenance', requireActivity('property.maintenance.manage'), h(async (req, res) => {
-  const b = z.object({ property_id: z.string().uuid(), unit_id: z.string().uuid().optional(), description: z.string().min(5), priority: z.enum(['low', 'normal', 'urgent']).default('normal') }).parse(req.body);
+  const b = z.object({ property_id: z.string().uuid(), unit_id: z.string().uuid().optional(), description: z.string().trim().min(5).max(2000), category: z.enum(['general','plumbing','electrical','appliance','structural','cleaning','safety','other']).default('general'), priority: z.enum(['low', 'normal', 'urgent']).default('normal') }).parse(req.body);
   const row = await withUser(req.user!, async (c) => {
     const p = (await c.query('SELECT source_agent_id FROM properties WHERE id = $1', [b.property_id])).rows[0];
     if (!p) throw new HttpError(404, 'Property not found');
     if (b.unit_id && !(await c.query('SELECT 1 FROM property_units WHERE id = $1 AND property_id = $2', [b.unit_id, b.property_id])).rowCount) throw new HttpError(422, 'That unit does not belong to this property');
-    const r = await c.query('INSERT INTO maintenance_requests (property_id, unit_id, description, priority, source_agent_id) VALUES ($1,$2,$3,$4,$5) RETURNING *', [b.property_id, b.unit_id ?? null, b.description, b.priority, p.source_agent_id]);
-    await audit(c, req.user!.id, 'maintenance_opened', 'maintenance', r.rows[0].id, null, { priority: b.priority });
+    const r = await c.query('INSERT INTO maintenance_requests (property_id, unit_id, description, category, priority, source_agent_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [b.property_id, b.unit_id ?? null, b.description, b.category, b.priority, p.source_agent_id]);
+    await c.query("INSERT INTO maintenance_request_events (maintenance_request_id,actor_id,event_type,to_status,note) VALUES ($1,$2,'opened','open',$3)", [r.rows[0].id, req.user!.id, b.description]);
+    await audit(c, req.user!.id, 'maintenance_opened', 'maintenance', r.rows[0].id, null, { priority: b.priority, category: b.category });
     return r.rows[0];
   });
   res.status(201).json(row);
 }));
 
-ops.get('/maintenance', h(async (req, res) => {
+ops.get('/maintenance', requireActivity('property.maintenance.manage'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
-    'SELECT m.*, p.address FROM maintenance_requests m JOIN properties p ON p.id = m.property_id ORDER BY (m.status IN (\'done\',\'cancelled\')), m.priority = \'urgent\' DESC, m.created_at DESC LIMIT 200')).rows));
+    `SELECT m.*, p.address, u.unit_no,
+       extract(epoch FROM (COALESCE(m.completed_at,now())-m.created_at))/3600 AS age_hours,
+       (SELECT count(*)::int FROM maintenance_request_events e WHERE e.maintenance_request_id=m.id) AS event_count
+     FROM maintenance_requests m JOIN properties p ON p.id = m.property_id LEFT JOIN property_units u ON u.id=m.unit_id
+     ORDER BY (m.status IN ('done','cancelled')), m.priority = 'urgent' DESC, m.created_at DESC LIMIT 200`)).rows));
+}));
+
+ops.get('/maintenance/metrics', requireActivity('property.maintenance.manage'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT count(*) FILTER (WHERE status IN ('open','assigned','in_progress'))::int AS open_count,
+       count(*) FILTER (WHERE status='open' AND priority='urgent')::int AS urgent_open_count,
+       count(*) FILTER (WHERE status='done' AND completed_at >= now()-interval '30 days')::int AS completed_last_30_days,
+       round(avg(extract(epoch FROM (completed_at-created_at))/3600) FILTER (WHERE completed_at >= now()-interval '30 days'),1) AS avg_resolution_hours_30d
+     FROM maintenance_requests`)).rows[0]));
+}));
+
+ops.get('/maintenance/:id/events', requireActivity('property.maintenance.manage'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT e.id,e.event_type,e.from_status,e.to_status,e.note,e.created_at
+     FROM maintenance_request_events e
+     WHERE e.maintenance_request_id=$1 ORDER BY e.created_at,e.id`, [req.params.id])).rows));
 }));
 
 const NEXT_MAINT: Record<string, string[]> = { open: ['assigned', 'cancelled'], assigned: ['in_progress', 'cancelled'], in_progress: ['done', 'cancelled'] };
-ops.post('/maintenance/:id/update', requireRole(...AGENT, 'super_admin', 'global_admin'), h(async (req, res) => {
-  const b = z.object({ status: z.enum(['assigned', 'in_progress', 'done', 'cancelled']), assigned_to: z.string().min(2).optional(), cost: z.number().nonnegative().optional() }).parse(req.body);
+ops.post('/maintenance/:id/update', requireActivity('property.maintenance.manage'), requireRole(...AGENT, 'super_admin', 'global_admin'), h(async (req, res) => {
+  const b = z.object({ status: z.enum(['assigned', 'in_progress', 'done', 'cancelled']), assigned_to: z.string().trim().min(2).max(200).optional(), cost: z.number().nonnegative().optional(), resolution_note: z.string().trim().min(5).max(1000).optional() }).parse(req.body);
   res.json(await withUser(req.user!, async (c) => {
     const m = (await c.query('SELECT * FROM maintenance_requests WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!m) throw new HttpError(404, 'Request not found');
     if (!NEXT_MAINT[m.status]?.includes(b.status)) throw new HttpError(409, `A ${m.status.replace('_', ' ')} request cannot move to ${b.status.replace('_', ' ')}`);
     if (b.status === 'assigned' && !(b.assigned_to ?? m.assigned_to)) throw new HttpError(422, 'Say who it is assigned to');
-    const r = await c.query('UPDATE maintenance_requests SET status = $2, assigned_to = COALESCE($3, assigned_to), cost = COALESCE($4, cost) WHERE id = $1 RETURNING *', [m.id, b.status, b.assigned_to ?? null, b.cost ?? null]);
+    if (b.status === 'done' && !b.resolution_note) throw new HttpError(422, 'Describe the completed work before closing the request');
+    const r = await c.query(`UPDATE maintenance_requests SET status=$2, assigned_to=COALESCE($3,assigned_to),
+      cost=COALESCE($4,cost), resolution_note=COALESCE($5,resolution_note),
+      completed_at=CASE WHEN $2='done' THEN now() ELSE completed_at END, updated_at=now()
+      WHERE id=$1 RETURNING *`, [m.id, b.status, b.assigned_to ?? null, b.cost ?? null, b.resolution_note ?? null]);
+    const eventType = b.status === 'done' ? 'completed' : b.status;
+    await c.query('INSERT INTO maintenance_request_events (maintenance_request_id,actor_id,event_type,from_status,to_status,note) VALUES ($1,$2,$3,$4,$5,$6)', [m.id, req.user!.id, eventType, m.status, b.status, b.resolution_note ?? (b.status === 'assigned' ? b.assigned_to : null)]);
     await audit(c, req.user!.id, 'maintenance_' + b.status, 'maintenance', m.id, { status: m.status }, { status: b.status, cost: b.cost ?? null });
     return r.rows[0];
   }));

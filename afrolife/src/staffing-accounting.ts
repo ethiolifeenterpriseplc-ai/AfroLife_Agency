@@ -34,6 +34,14 @@ staffingAccounting.get('/staffing-engagements',requireRole(...finance),h(async(r
     FROM staffing_engagements e JOIN leads l ON l.id=e.client_lead_id JOIN workers w ON w.id=e.worker_id ORDER BY e.created_at DESC LIMIT 500`)).rows));
 }));
 
+// Worker/client self-service uses the participant RLS policy added for party acceptance.
+staffingAccounting.get('/staffing-engagements/mine',requireRole('customer','worker'),h(async(req,res)=>{
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT id,status,billing_unit,client_rate::text,worker_rate::text,starts_on,ends_on,
+      (client_accepted_by IS NOT NULL) AS client_accepted,(worker_accepted_by IS NOT NULL) AS worker_accepted,
+      terms_approved_at,created_at
+    FROM staffing_engagements ORDER BY created_at DESC LIMIT 100`)).rows));
+}));
+
 staffingAccounting.post('/staffing-engagements/:id/terms-decision',requireRole(...reviewers),h(async(req,res)=>{
   const b=z.object({decision:z.enum(['approve','reject']),reason:z.string().trim().min(10).max(1000)}).strict().parse(req.body);
   const row=await withUser(req.user!,async c=>{

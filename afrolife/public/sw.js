@@ -1,4 +1,4 @@
-const CACHE = 'afrolife-shell-v25';
+const CACHE = 'afrolife-shell-v26';
 const SHELL = ['/', '/styles.css', '/financial-workspaces.css', '/app.js', '/api-errors.js', '/mfi.js', '/accounting.js', '/accounting-dashboard.js', '/accounting-operations.js', '/global-bi.js', '/mini-app-access.js', '/edir.js', '/privacy.js', '/i18n.js', '/workspace-navigation.js', '/workspace-search.js', '/manifest.webmanifest', '/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/ethio-life-icon-192.png', '/icons/ethio-life-icon-512.png',
   '/mini-apps/registry.js', '/mini-apps/accounting/manifest.js', '/mini-apps/workforce-management/manifest.js', '/mini-apps/staffing/manifest.js', '/mini-apps/property-management/manifest.js', '/mini-apps/marketplace/manifest.js',
   '/mini-apps/marketplace/logo.svg', '/mini-apps/property-management/logo.svg', '/mini-apps/staffing/logo.svg', '/mini-apps/workforce-management/logo.svg',

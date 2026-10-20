@@ -52,6 +52,8 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
     case 'rent':
       return hasAnyActivity(user, [
         'property.tenancy.manage',
+        'property.tenancy.approve',
+        'property.tenancy.execute',
         'rent.payments.submit',
         'rent.transactions.view',
         'rent.transactions.reconcile',
@@ -81,7 +83,7 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
       return !['customer', 'worker', 'property_owner'].includes(user.role);
     case 'global-bi':
       return [
-        'global_admin', 'super_admin', 'finance', 'finance_manager',
+        'global_admin', 'finance', 'finance_manager',
       ].includes(user.role);
     default:
       return true;

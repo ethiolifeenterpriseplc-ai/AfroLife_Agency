@@ -54,7 +54,7 @@ try{
   const finance=await login('finance');
   const financeManager=await login('finance_manager');
   const propertyOwner=await login('property_owner');
-  const outboxBefore=(await request('GET','/accounting-event-outbox/status',admin)).length;
+  const outboxBefore=(await request('GET','/accounting-event-outbox/status',financeManager)).length;
   const territories=await request('GET','/territories',admin);
   const territory=territories.find(item=>item.level==='sub_city');assert.ok(territory,'Synthetic territory seed is required');
   const suffix=Date.now().toString(36).toUpperCase();
@@ -77,7 +77,7 @@ try{
   assert.equal(vendors.find(item=>item.id===vendor.id)?.accounts_payable,'0.00');
   const bills=await request('GET','/property-vendor-bills',financeManager);
   assert.equal(bills.find(item=>item.id===bill.id)?.status,'paid');
-  const outboxAfter=(await request('GET','/accounting-event-outbox/status',admin)).length;
+  const outboxAfter=(await request('GET','/accounting-event-outbox/status',financeManager)).length;
   assert.equal(outboxAfter-outboxBefore,2,'Approved invoice and reconciled settlement each publish one Accounting event');
   console.log(JSON.stringify({result:'PASS',environment:'local synthetic identities and local PostgreSQL',cases:[
     'Mock Finance Manager created vendor and maintenance invoice',

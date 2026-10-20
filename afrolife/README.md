@@ -60,7 +60,7 @@ and `API_URL` set. Remove the temporary credential file afterward.
 
 Before a shared or production launch, provision at least two Super Admin accounts with distinct names and phone numbers using the seed procedure. Repeat the seed command with the second administrator's details; the phone number must be unique. Account setup is deliberately four-eyes: a Super Admin cannot activate an account they created, and cannot reset their own password or MFA. Keep both sets of seed credentials outside the repository and remove them after use.
 
-Global Admin is a separate, non-provisionable role for system-wide configuration and cross-module oversight. An active, MFA-enabled Super Admin can nominate another active, MFA-enabled Super Admin; a second, different eligible Super Admin must approve the request with a reason. Request and decision events are recorded in the audit log. Global Admin access does not bypass financial maker-checker approvals, and ordinary Super Admins cannot directly create or alter Global Admin accounts.
+Global Admin is the Global System Admin role and is the only role for platform-wide configuration: tenant onboarding, service and package definitions, platform module availability, Super Admin onboarding and assignment, global identity, role templates, and operations controls. A Super Admin can administer only assigned business entities, choose a subset of the modules and services approved for each active entity, register its deployment reference, and onboard Master Agents or Field Agents they created. A Super Admin cannot create tenants, change shared service packages, alter global role templates, assign other Super Admins, or administer another tenant. Without an assigned active entity context, a Super Admin receives no business modules. Business Admin (`corporate_business_manager`) is limited to business-entity operations and agent onboarding; system configuration remains unavailable. Super Admin and Business Admin user lists are limited to accounts they created. An active, MFA-enabled Super Admin can nominate another active, MFA-enabled Super Admin; a second, different eligible Super Admin must approve the request with a reason. Request and decision events are recorded in the audit log. No role bypasses financial maker-checker approvals.
 
 The initial database migration creates a starter Ethiopia → Addis Ababa → Bole territory path and default pricing/matching rules. Additional territories are managed through the API by a Super Admin.
 The `/healthz` endpoint checks PostgreSQL connectivity and returns HTTP 500 if the database is unavailable.
@@ -81,8 +81,16 @@ deployment configuration resolves to Overview rather than bypassing access
 checks. `AFROLIFE_ENABLED_MODULES` optionally accepts a comma-separated list of
 module panel IDs (for example `leads,workers,requests,marketplace`). Omit it or
 leave it empty to show all modules. Overview, account security, and service
-status remain in the shell; Admin remains subject to its existing role policy.
-This deployment-level navigation switch is not an API authorization control.
+status remain in the shell; Admin remains subject to its role policy. This
+deployment-level navigation switch is not an API authorization control. The
+Global System Admin assigns each deployment its package; an assigned Super
+Admin may further narrow that entity's available services but cannot add
+services outside the approved package. Super Admin feature access requires an
+assigned active deployment context, and the API verifies that assignment and
+intersects package availability, entity configuration, and role/mini-app access
+on every feature request. These settings never replace service-level API
+authorization. Business Admin has business operations only and cannot access
+the Global System Admin configuration surface.
 
 The Super App uses one authenticated user identity across its mini-apps and
 services. Platform Admins can keep a user's role-default app visibility or set

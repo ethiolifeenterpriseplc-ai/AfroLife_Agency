@@ -27,8 +27,11 @@ app.get('/healthz', async (_req, res, next) => {
 app.post('/api/v1/edir/credit/documents/:documentType', express.raw({ type: () => true, limit: '10mb' }));
 app.use('/api/v1/edir', authenticateGateway, edirRouter);
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  const candidate = error as { status?: number; message?: string; flatten?: () => unknown };
-  const status = candidate.status ?? (typeof candidate.flatten === 'function' ? 400 : 500);
+  const candidate = error as { code?: string; status?: number; message?: string; flatten?: () => unknown };
+  const databaseStatus = candidate.code === '22P02' ? 400
+    : candidate.code === '23505' ? 409
+      : ['P0001', '23514'].includes(candidate.code ?? '') ? 422 : undefined;
+  const status = candidate.status ?? databaseStatus ?? (typeof candidate.flatten === 'function' ? 400 : 500);
   if (status >= 500) console.error('Local Edir UAT request failed:', error);
   res.status(status).json({ error: status === 500 ? 'Internal error' : candidate.message, ...(typeof candidate.flatten === 'function' ? { details: candidate.flatten() } : {}) });
 });
@@ -579,7 +582,7 @@ try {
   assert.equal(Number(reconciliation.repaid) - Number(reconciliationBefore.repaid), 250);
   passed.push('Partial repayment, remaining-principal write-off, schedule waiver, loss journal, portfolio, balanced trial balance, and reconciliation reports');
 
-  const complaint = await call<{ id: string; reference: string; status: string; resolution_due_at: string }>(member, 'POST', '/credit/complaints', {
+  const complaint = await call<{ id: string; reference: string; status: string; resolution_due_at: string; assigned_to: string | null }>(member, 'POST', '/credit/complaints', {
     category: 'service', subject: 'Synthetic UAT complaint', description: 'Synthetic complaint used to validate Edir complaint intake and resolution.',
   }, 201);
   assert.equal(complaint.status, 'open');
@@ -593,8 +596,20 @@ try {
   passed.push('Complaint is private to its member, and an unrelated member cannot manage it');
 
   await call(admin, 'POST', `/credit/complaints/${complaint.id}/decision`, { status: 'resolved' }, 422);
-  const investigating = await call<{ status: string }>(admin, 'POST', `/credit/complaints/${complaint.id}/decision`, { status: 'investigating', priority: 'high' });
+  await call(admin, 'POST', `/credit/complaints/${complaint.id}/decision`, {
+    status: 'investigating', assigned_to: randomUUID(),
+  }, 422);
+  const supportUserId = randomUUID();
+  await call(admin, 'POST', '/staff', { user_id: supportUserId, role: 'member_support' }, 201);
+  const assignedComplaint = await call<{ assigned_to: string }>(admin, 'POST', `/credit/complaints/${complaint.id}/decision`, {
+    status: 'investigating', priority: 'high', assigned_to: supportUserId,
+  });
+  assert.equal(assignedComplaint.assigned_to, supportUserId);
+  const investigating = await call<{ status: string; assigned_to: string | null }>(admin, 'POST', `/credit/complaints/${complaint.id}/decision`, {
+    status: 'investigating', assigned_to: null,
+  });
   assert.equal(investigating.status, 'investigating');
+  assert.equal(investigating.assigned_to, null);
   const resolved = await call<{ status: string; resolution: string; resolved_by: string }>(admin, 'POST', `/credit/complaints/${complaint.id}/decision`, {
     status: 'resolved', resolution: 'Synthetic UAT resolution; no real member complaint exists.',
   });
@@ -602,7 +617,25 @@ try {
   assert.equal(resolved.resolved_by, adminId);
   const finalComplaints = await call<Array<{ id: string; status: string; resolution: string }>>(member, 'GET', '/credit/complaints');
   assert.equal(finalComplaints.find((row) => row.id === complaint.id)?.status, 'resolved');
-  passed.push('Staff tracks a complaint through investigation and requires a resolution summary to close it');
+  passed.push('Complaint assignment is active-staff and tenant scoped, can be cleared, and closure requires a resolution summary');
+
+  const deferredDeposit = await call<{ id: string }>(admin, 'POST', '/finance/transactions', {
+    member_account_id: savingsAccount.id, direction: 'deposit', amount: '1.00', idempotency_key: randomUUID(),
+  }, 201);
+  await call(admin, 'POST', `/memberships/${enrollment.id}/lifecycle`, {
+    status: 'suspended', reason: 'Synthetic suspension to verify pending financial control rechecks.',
+  });
+  await call(treasurer, 'POST', `/finance/transactions/${deferredDeposit.id}/decision`, {
+    decision: 'approved', reason: 'This approval must be blocked while the member is suspended.',
+  }, 422);
+  await call(admin, 'POST', `/memberships/${enrollment.id}/lifecycle`, {
+    status: 'active', reason: 'Restore synthetic member access after the control check.',
+  });
+  const resumedDeposit = await call<{ status: string }>(treasurer, 'POST', `/finance/transactions/${deferredDeposit.id}/decision`, {
+    decision: 'approved', reason: 'Independent approval after the synthetic member is active again.',
+  });
+  assert.equal(resumedDeposit.status, 'approved');
+  passed.push('Financial approval rechecks membership lifecycle and blocks a pending transaction during suspension');
 
   const audit = await call<Array<{ action: string; entity_id: string }>>(admin, 'GET', '/audit');
   assert(audit.some((event) => event.action === 'edir_complaint_opened' && event.entity_id === complaint.id));

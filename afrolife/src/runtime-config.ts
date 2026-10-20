@@ -17,6 +17,33 @@ export const WORKSPACE_MODULES = [
 ] as const;
 export type WorkspaceModule = typeof WORKSPACE_MODULES[number];
 
+const WORKSPACE_MODULE_SERVICES: Readonly<Record<WorkspaceModule, string>> = Object.freeze({
+  leads: 'agency',
+  workers: 'workforce',
+  requests: 'staffing',
+  learning: 'learning',
+  properties: 'property',
+  marketplace: 'marketplace',
+  contracts: 'agency',
+  commissions: 'agency',
+  agents: 'agency',
+  rent: 'property',
+  mfi: 'sacco_mfi',
+  accounting: 'accounting',
+  edir: 'edir',
+  insurance: 'insurance',
+  privacy: 'privacy',
+  'global-bi': 'global_bi',
+});
+
+export function workspaceModulesForServices(
+  enabledModules: readonly WorkspaceModule[],
+  serviceKeys: readonly string[],
+): WorkspaceModule[] {
+  const services = new Set(serviceKeys);
+  return enabledModules.filter((module) => services.has(WORKSPACE_MODULE_SERVICES[module]));
+}
+
 const isPlaceholder = (value: string) => /^(replace|change|example|your[_-])/i.test(value);
 
 export function enabledWorkspaceModules(env: Environment): WorkspaceModule[] {

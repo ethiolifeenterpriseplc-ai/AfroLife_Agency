@@ -6,6 +6,7 @@ import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from '../public/works
 import { normalizeGlobalBiDashboard } from '../public/global-bi.js';
 import { buildMiniAppAccessPayload } from '../public/mini-app-access.js';
 import { normalizeAccountingTrendRows } from '../public/accounting-dashboard.js';
+import { paginateRows } from '../public/row-pagination.js';
 
 test('workspace deep links retain the current URL and only resolve visible panels', () => {
   assert.equal(panelFromUrl('https://agency.test/?panel=rent', new Set(['overview', 'rent'])), 'rent');
@@ -124,4 +125,15 @@ test('API metrics aggregate by route template and bound stored cardinality', () 
   assert.equal(metrics.snapshot().length, 3);
   metrics.record('GET', '/api/v1/new-route', 200, 2, now);
   assert.equal(metrics.snapshot().length, 3);
+});
+
+
+test('row pagination supports page sizes and clamps page boundaries', () => {
+  const rows = Array.from({ length: 51 }, (_, index) => index);
+  assert.deepEqual(paginateRows(rows, 10, 2), { page: 2, pageSize: 10, pageCount: 6, start: 10, end: 20 });
+  assert.deepEqual(paginateRows(rows, 25, 9), { page: 3, pageSize: 25, pageCount: 3, start: 50, end: 51 });
+  assert.deepEqual(paginateRows(rows, 50, 0), { page: 1, pageSize: 50, pageCount: 2, start: 0, end: 50 });
+  assert.deepEqual(paginateRows(rows, 100, 1), { page: 1, pageSize: 100, pageCount: 1, start: 0, end: 51 });
+  assert.deepEqual(paginateRows([], 10, 2), { page: 1, pageSize: 10, pageCount: 1, start: 0, end: 0 });
+  assert.equal(paginateRows(rows, 17).pageSize, 10);
 });

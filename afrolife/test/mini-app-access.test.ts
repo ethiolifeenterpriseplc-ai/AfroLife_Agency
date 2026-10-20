@@ -29,6 +29,13 @@ test('custom mini-app grants narrow but never elevate role access', () => {
   assert.equal(hasMiniAppAccess(user('finance', 'custom', []), 'accounting'), false);
   assert.equal(hasMiniAppAccess(user('finance', 'custom', ['global-bi']), 'global-bi'), true);
   assert.equal(hasMiniAppAccess(user('worker', 'custom', ['global-bi']), 'global-bi'), false);
+  assert.equal(hasMiniAppAccess(user('super_admin'), 'global-bi'), false);
+});
+
+test('lease approvers and executors can reach the property and rent workflow', () => {
+  assert.equal(hasMiniAppAccess(user('compliance'), 'rent'), true);
+  assert.equal(hasMiniAppAccess(user('corporate_business_manager'), 'rent'), true);
+  assert.equal(hasMiniAppAccess(user('field_agent'), 'rent'), true);
 });
 
 test('allowed mini-apps intersect role ceiling, deployment modules and user grants', () => {

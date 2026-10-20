@@ -13,11 +13,13 @@ import { h, AGENT, num, requireListingPlan } from '../../src/supply-common.js';
 export const router = Router();
 // ================= Worker management =================
 const WorkerIn = z.object({
-  name: z.string().min(2), phone: Phone, national_id: z.string().min(5).optional(),
-  sector: z.string().min(2), skills: z.array(z.string()).default([]), languages: z.array(z.string()).default([]),
+  name: z.string().trim().min(2).max(200), phone: Phone, national_id: z.string().trim().min(5).max(100).optional(),
+  sector: z.string().trim().min(2).max(100),
+  skills: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  languages: z.array(z.string().trim().min(1).max(80)).max(30).default([]),
   experience_years: z.number().int().min(0).default(0), rate_expected: z.number().nonnegative(),
   availability: z.enum(['immediate', 'within_2_weeks', 'later', 'unavailable']).default('immediate'),
-  territory_id: z.number().int(),
+  territory_id: z.number().int().positive(),
 });
 
 router.post('/workers', requireActivity('workforce.workers.register'), h(async (req, res) => {
@@ -25,7 +27,9 @@ router.post('/workers', requireActivity('workforce.workers.register'), h(async (
   const row = await withUser(req.user!, async (c) => {
     const r = await c.query(
       `INSERT INTO workers (name, phone, national_id, sector, skills, languages, experience_years, rate_expected, availability, territory_id, source_agent_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING id, name, phone, sector, skills, languages, experience_years, rate_expected,
+                 availability, verification, territory_id, source_agent_id, created_at`,
       [b.name, b.phone, b.national_id ?? null, b.sector, b.skills, b.languages, b.experience_years, b.rate_expected, b.availability, b.territory_id, req.user!.id],
     );
     await audit(c, req.user!.id, 'worker_created', 'worker', r.rows[0].id, null, { name: b.name, sector: b.sector });
@@ -35,9 +39,16 @@ router.post('/workers', requireActivity('workforce.workers.register'), h(async (
 }));
 router.get('/workers', requireActivity('workforce.workers.view'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
-    `SELECT id, name, phone, sector, skills, languages, experience_years, rate_expected,
-            availability, verification, territory_id, source_agent_id, created_at
-     FROM workers ORDER BY created_at DESC LIMIT 200`,
+    `SELECT w.id, w.name, w.phone, w.sector, w.skills, w.languages, w.experience_years, w.rate_expected,
+            w.availability,
+            CASE WHEN app_has_permission('workforce.documents.view') AND w.verification = 'verified' AND (
+              NOT EXISTS (SELECT 1 FROM documents d WHERE d.worker_id=w.id AND d.doc_type='national_id'
+                AND d.status='verified' AND (d.expires_on IS NULL OR d.expires_on > current_date))
+              OR NOT EXISTS (SELECT 1 FROM documents d WHERE d.worker_id=w.id AND d.doc_type='police_clearance'
+                AND d.status='verified' AND (d.expires_on IS NULL OR d.expires_on > current_date))
+            ) THEN 'expired' ELSE w.verification END AS verification,
+            w.territory_id, w.source_agent_id, w.created_at
+     FROM workers w ORDER BY w.created_at DESC LIMIT 200`,
   )).rows));
 }));
 
@@ -105,12 +116,12 @@ router.post('/documents/:id/review', requireActivity('workforce.documents.review
 
 router.post('/workers/:id/verify', requireActivity('workforce.workers.verify'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => {
-    const w = (await c.query('SELECT * FROM workers WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
+    const w = (await c.query('SELECT id, name, source_agent_id, verification FROM workers WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!w) throw new HttpError(404, 'Worker not found');
     const have = (await c.query("SELECT doc_type FROM documents WHERE worker_id = $1 AND status = 'verified' AND (expires_on IS NULL OR expires_on > current_date)", [w.id])).rows.map((x) => x.doc_type);
     const missing = ['national_id', 'police_clearance'].filter((x) => !have.includes(x));
     if (missing.length) throw new HttpError(409, 'Missing verified documents: ' + missing.join(', '));
-    const r = await c.query("UPDATE workers SET verification = 'verified' WHERE id = $1 RETURNING *", [w.id]);
+    const r = await c.query("UPDATE workers SET verification = 'verified' WHERE id = $1 RETURNING id, name, verification", [w.id]);
     await audit(c, req.user!.id, 'worker_verified', 'worker', w.id, { verification: w.verification }, { verification: 'verified' });
     await notify(c, w.source_agent_id, 'worker_verified', { name: w.name });
     return r.rows[0];

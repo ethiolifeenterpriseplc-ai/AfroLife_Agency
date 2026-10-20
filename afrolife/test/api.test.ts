@@ -65,8 +65,10 @@ async function callFile(u: Pick<U, 'token'>, path: string, file: Buffer, content
 // ---- Setup: one user per role; two field agents under one master ----
 const tid = (await db.query("INSERT INTO territories (level, name) VALUES ('city', $1) RETURNING id", ['Test ' + run])).rows[0].id;
 const admin = await mkUser('super_admin', 1);
+const unassignedSuperAdmin = await mkUser('super_admin', 14);
 const globalAdmin = await mkUser('global_admin', 10);
 const compliance = await mkUser('compliance', 2);
+const complianceAlt = await mkUser('compliance', 13);
 const fin1 = await mkUser('finance', 3);
 const fin2 = await mkUser('finance_manager', 4);
 const learningManager = await mkUser('corporate_business_manager', 11);
@@ -172,18 +174,23 @@ test('Insurance Agent referrals require opt-in and remain within the assigned Ag
   ]);
 });
 
-test('Global Admin control plane enforces tenant verification and excludes financial products', async () => {
-  assert.equal((await call(admin, 'GET', '/platform/services')).status, 403);
+test('Global System Admin controls shared platform configuration while Super Admin configures assigned modules only', async () => {
+  assert.equal((await call(compliance, 'GET', '/platform/services')).status, 403);
   const services = await call(globalAdmin, 'GET', '/platform/services');
   assert.equal(services.status, 200);
   assert.ok(services.body.some((service: any) => service.service_key === 'agency'));
+  assert.equal((await call(admin, 'GET', '/platform/services')).status, 403);
+  assert.equal((await call(admin, 'GET', '/platform/service-packages')).status, 403);
+  assert.equal((await call(admin, 'GET', '/platform/tenants')).status, 403);
+  assert.equal((await call(admin, 'GET', '/platform/catalog-products')).status, 403);
+  assert.equal((await call(admin, 'GET', '/platform/super-admins')).status, 403);
 
   const packageKey = `test-control-${run}`;
   const packageResponse = await call(globalAdmin, 'POST', '/platform/service-packages', {
     package_key: packageKey,
     display_name: `Test Control Package ${run}`,
     description: 'Synthetic package for control-plane integration coverage.',
-    services: ['agency'],
+    services: ['agency', 'workforce'],
   });
   assert.equal(packageResponse.status, 201, JSON.stringify(packageResponse.body));
 
@@ -197,6 +204,25 @@ test('Global Admin control plane enforces tenant verification and excludes finan
   assert.equal(tenantResponse.status, 201, JSON.stringify(tenantResponse.body));
   assert.equal(tenantResponse.body.status, 'provisioning');
   assert.equal(tenantResponse.body.deployment_status, 'not_registered');
+  assert.equal((await call(unassignedSuperAdmin, 'GET', `/features?platform_tenant_id=${tenantResponse.body.id}`)).status, 403);
+  assert.equal((await call(unassignedSuperAdmin, 'PATCH', `/platform/my-tenants/${tenantResponse.body.id}/modules`, {
+    services: ['agency'],
+  })).status, 404);
+  assert.equal((await call(globalAdmin, 'POST', `/platform/tenants/${tenantResponse.body.id}/admins`, {
+    user_id: admin.id,
+  })).status, 204);
+  const assignedTenants = await call(admin, 'GET', '/platform/my-tenants');
+  assert.equal(assignedTenants.status, 200);
+  assert.deepEqual(assignedTenants.body[0].available_services, ['agency', 'workforce']);
+  assert.equal((await call(admin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
+    status: 'active',
+  })).status, 403);
+
+  const registration = await call(admin, 'PATCH', `/platform/my-tenants/${tenantResponse.body.id}/registration`, {
+    deployment_status: 'registered',
+    deployment_reference: `super-admin-registration-${run}`,
+  });
+  assert.equal(registration.status, 200, JSON.stringify(registration.body));
 
   const activateWithoutVerification = await call(globalAdmin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
     status: 'active',
@@ -221,6 +247,26 @@ test('Global Admin control plane enforces tenant verification and excludes finan
   });
   assert.equal(active.status, 200, JSON.stringify(active.body));
   assert.equal(active.body.status, 'active');
+
+  const unscopedFeatures = await call(admin, 'GET', '/features');
+  const scopedFeatures = await call(admin, 'GET', `/features?platform_tenant_id=${tenantResponse.body.id}`);
+  assert.deepEqual(unscopedFeatures.body.enabledModules, []);
+  assert.equal(scopedFeatures.status, 200, JSON.stringify(scopedFeatures.body));
+  assert.equal(scopedFeatures.body.platformTenantId, tenantResponse.body.id);
+  assert.deepEqual(
+    scopedFeatures.body.enabledModules,
+    ['leads', 'workers', 'contracts', 'commissions', 'agents'],
+  );
+  const narrowed = await call(admin, 'PATCH', `/platform/my-tenants/${tenantResponse.body.id}/modules`, {
+    services: ['workforce'],
+  });
+  assert.equal(narrowed.status, 200, JSON.stringify(narrowed.body));
+  const narrowedFeatures = await call(admin, 'GET', `/features?platform_tenant_id=${tenantResponse.body.id}`);
+  assert.deepEqual(narrowedFeatures.body.enabledModules, ['workers']);
+  const outOfPackage = await call(admin, 'PATCH', `/platform/my-tenants/${tenantResponse.body.id}/modules`, {
+    services: ['property'],
+  });
+  assert.equal(outOfPackage.status, 422);
 
   const unsafeDeploymentChange = await call(globalAdmin, 'PATCH', `/platform/tenants/${tenantResponse.body.id}`, {
     region: 'another-region',
@@ -277,38 +323,38 @@ async function drive(agent: U, contractId: string, amount: number) {
 let A: Awaited<ReturnType<typeof newContract>>;
 
 test('role access and learning content work through the restricted API runtime', async () => {
-  const roleAccess = await call(admin, 'GET', '/role-access');
+  const roleAccess = await call(globalAdmin, 'GET', '/role-access');
   assert.equal(roleAccess.status, 200);
   assert.equal(roleAccess.body.roles.find((role: any) => role.key === 'super_admin').editable, false);
-  assert.equal((await call(globalAdmin, 'GET', '/role-access')).status, 403);
+  assert.equal((await call(admin, 'GET', '/role-access')).status, 403);
   const accessHistoryUser = await mkUser('customer', 92);
-  assert.equal((await call(admin, 'POST', `/users/${accessHistoryUser.id}/deactivate`, {
+  assert.equal((await call(globalAdmin, 'POST', `/users/${accessHistoryUser.id}/deactivate`, {
     reason: 'Synthetic UAT account deactivation for access history verification',
   })).status, 200);
   await new Promise((resolve) => setTimeout(resolve, 20));
   const inactiveAt = new Date(Date.now() - 10).toISOString();
-  assert.equal((await call(admin, 'POST', `/users/${accessHistoryUser.id}/activate`, {
+  assert.equal((await call(globalAdmin, 'POST', `/users/${accessHistoryUser.id}/activate`, {
     reason: 'Synthetic UAT account reactivation after access history verification',
   })).status, 200);
-  const accessHistory = await call(admin, 'GET', `/users/${accessHistoryUser.id}/access-history`);
+  const accessHistory = await call(globalAdmin, 'GET', `/users/${accessHistoryUser.id}/access-history`);
   assert.equal(accessHistory.status, 200);
   assert.equal(accessHistory.body.history[0].current_active, true);
-  assert.equal(accessHistory.body.history[0].actor_id, admin.id);
+  assert.equal(accessHistory.body.history[0].actor_id, globalAdmin.id);
   assert.ok(accessHistory.body.history.some((event: any) =>
     event.current_active === false
-    && event.actor_id === admin.id
+    && event.actor_id === globalAdmin.id
     && event.reason === 'Synthetic UAT account deactivation for access history verification'));
-  const historicalState = await call(admin, 'GET',
+  const historicalState = await call(globalAdmin, 'GET',
     `/users/${accessHistoryUser.id}/access-history?at=${encodeURIComponent(inactiveAt)}`);
   assert.equal(historicalState.status, 200);
   assert.equal(historicalState.body.state_at_time.active, false);
   assert.equal((await call(accessHistoryUser, 'GET', `/users/${accessHistoryUser.id}/access-history`)).status, 403);
-  assert.equal((await call(admin, 'GET', '/role-access/history?limit=1')).status, 200);
-  assert.equal((await call(admin, 'PATCH', '/role-access', {
+  assert.equal((await call(globalAdmin, 'GET', '/role-access/history?limit=1')).status, 200);
+  assert.equal((await call(globalAdmin, 'PATCH', '/role-access', {
     changes: [{ role: 'super_admin', activity: 'learning.content.view', enabled: false }],
   })).status, 422);
 
-  const denied = await call(admin, 'PATCH', '/role-access', {
+  const denied = await call(globalAdmin, 'PATCH', '/role-access', {
     changes: [{ role: 'customer', activity: 'learning.content.view', enabled: false }],
   });
   assert.equal(denied.status, 200);
@@ -323,7 +369,7 @@ test('role access and learning content work through the restricted API runtime',
     status: 'published',
   })).status, 403);
 
-  const restored = await call(admin, 'PATCH', '/role-access', {
+  const restored = await call(globalAdmin, 'PATCH', '/role-access', {
     changes: [{ role: 'customer', activity: 'learning.content.view', enabled: true }],
   });
   assert.equal(restored.status, 200);
@@ -522,7 +568,10 @@ test('worker sign-up uploads private KYC documents and requires separate complia
   assert.equal(replacedIdentity.id, identityDocument.id);
   assert.equal(replacedIdentity.status, 'uploaded');
   assert.equal(replacedIdentity.review_note, null);
-  assert.equal((await call(compliance, 'POST', `/users/${user.id}/kyc`, { decision: 'verified' })).status, 409);
+  assert.equal((await call(complianceAlt, 'POST', `/users/${user.id}/kyc`, {
+    decision: 'verified',
+    reason: 'Required identity evidence must be verified first.',
+  })).status, 409);
   const documents = await call(compliance, 'GET', `/users/${user.id}/documents`);
   assert.equal(documents.status, 200);
   assert.deepEqual(documents.body.map((doc: any) => doc.doc_type).sort(), ['national_id', 'police_clearance']);
@@ -536,8 +585,14 @@ test('worker sign-up uploads private KYC documents and requires separate complia
     assert.equal(downloaded.headers.get('cache-control'), 'private, no-store');
     assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), PNG);
   }
-  assert.equal((await call(compliance, 'POST', `/users/${user.id}/kyc`, { decision: 'verified' })).status, 200);
-  assert.equal((await call(admin, 'POST', `/users/${user.id}/activate`)).status, 200);
+  const finalKyc = await call(complianceAlt, 'POST', `/users/${user.id}/kyc`, {
+    decision: 'verified',
+    reason: 'Required identity evidence has passed independent review.',
+  });
+  assert.equal(finalKyc.status, 200, JSON.stringify(finalKyc.body));
+  assert.equal((await call(globalAdmin, 'POST', `/users/${user.id}/activate`, {
+    reason: 'Synthetic KYC-complete test account activation.',
+  })).status, 200);
 });
 
 test('property-owner sign-up completes national-ID review and remains an owner role', async () => {
@@ -576,8 +631,14 @@ test('property-owner sign-up completes national-ID review and remains an owner r
   assert.equal(documents.status, 200);
   assert.equal(documents.body.length, 1);
   assert.equal((await call(compliance, 'POST', `/users/${owner.id}/documents/${documents.body[0].id}/review`, { decision: 'verified' })).status, 200);
-  assert.equal((await call(compliance, 'POST', `/users/${owner.id}/kyc`, { decision: 'verified' })).status, 200);
-  assert.equal((await call(admin, 'POST', `/users/${owner.id}/activate`)).status, 200);
+  const ownerKyc = await call(complianceAlt, 'POST', `/users/${owner.id}/kyc`, {
+    decision: 'verified',
+    reason: 'The property owner identity document has passed review.',
+  });
+  assert.equal(ownerKyc.status, 200, JSON.stringify(ownerKyc.body));
+  assert.equal((await call(globalAdmin, 'POST', `/users/${owner.id}/activate`, {
+    reason: 'Synthetic property owner identity verification is complete.',
+  })).status, 200);
 });
 
 test('Gate 3: lead is attributed to its agent; duplicate phone is rejected', async () => {
@@ -1018,7 +1079,7 @@ test('owner rent statement CSV is scoped and reconciled totals match recorded ev
 });
 
 test('service identity inventory requires independent administrators for rotation and retirement', async () => {
-  const created = await call(admin, 'POST', '/service-identities', {
+  const created = await call(globalAdmin, 'POST', '/service-identities', {
     name: `staging-recon-${run}`,
     purpose: 'Staging ledger reconciliation test identity',
     environment: 'staging',
@@ -1026,20 +1087,20 @@ test('service identity inventory requires independent administrators for rotatio
     evidence: 'Approved staging service identity inventory entry.',
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
-  assert.equal((await call(admin, 'POST', `/service-identities/${created.body.id}/rotate`, {
+  assert.equal((await call(globalAdmin, 'POST', `/service-identities/${created.body.id}/rotate`, {
     secret_manager_reference: `vault://afrolife/test/${run}/rotated`,
     expiry_date: '2030-01-01',
     evidence: 'Rotated in the staging secret manager and independently verified.',
   })).status, 403);
-  const rotated = await call(globalAdmin, 'POST', `/service-identities/${created.body.id}/rotate`, {
+  const rotated = await call(admin, 'POST', `/service-identities/${created.body.id}/rotate`, {
     secret_manager_reference: `vault://afrolife/test/${run}/rotated`,
     expiry_date: '2030-01-01',
     evidence: 'Rotated in the staging secret manager and independently verified.',
   });
   assert.equal(rotated.status, 200, JSON.stringify(rotated.body));
   assert.equal(rotated.body.status, 'active');
-  assert.equal(rotated.body.last_rotated_by, globalAdmin.id);
-  const retired = await call(globalAdmin, 'POST', `/service-identities/${created.body.id}/retire`, {
+  assert.equal(rotated.body.last_rotated_by, admin.id);
+  const retired = await call(admin, 'POST', `/service-identities/${created.body.id}/retire`, {
     evidence: 'Staging identity retired after test completion.',
   });
   assert.equal(retired.status, 200, JSON.stringify(retired.body));

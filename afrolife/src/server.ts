@@ -7,7 +7,7 @@ import helmet from 'helmet';
 import { z } from 'zod';
 import { Phone } from './validators.js';
 import { pool, withUser, authenticate, requireRole, HttpError, JWT_SECRET, assertRuntimeDatabaseSafety } from './core.js';
-import { loadRuntimeConfig } from './runtime-config.js';
+import { loadRuntimeConfig, workspaceModulesForServices } from './runtime-config.js';
 import { apiMetricsMiddleware, checkWorkspaceServices, getApiMetrics } from './workspace-status.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
 import { audit, feeSnapshot, loadRules, post, transition } from './domain.js';
@@ -30,6 +30,7 @@ import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
 import { allowedMiniApps, hasMiniAppAccess, requireAnyMiniAppAccess, requireMiniAppAccess } from './mini-app-access.js';
 import { subscriptionRouter } from './subscriptions.js';
+import { createIndustryNewsProvider } from './industry-news.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
@@ -73,6 +74,11 @@ if (!staticDirs.length) throw new Error('Web assets were not found; expected a p
 for (const dir of staticDirs) app.use(express.static(dir));
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
+const industryNewsProvider = createIndustryNewsProvider();
+app.get('/api/public/industry-news', h(async (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.json(await industryNewsProvider.getLatest());
+}));
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
 const AGENT = ['master_agent', 'field_agent'];
 const api = express.Router();
@@ -107,7 +113,18 @@ api.post(
 
 api.use(authenticate);
 api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
-api.use(['/requests', '/matches', '/staffing-engagements', '/staffing-work-periods', '/staffing-settlements'], requireMiniAppAccess('requests'));
+api.use(['/requests', '/matches'], requireMiniAppAccess('requests'));
+api.use('/staffing-engagements', (req, res, next) => {
+  const partyAcceptance = req.method === 'POST'
+    && /\/staffing-engagements\/[^/]+\/accept(?:\?|$)/.test(req.originalUrl)
+    && ['customer', 'worker'].includes(req.user!.role);
+  if (partyAcceptance) return next();
+  return requireAnyMiniAppAccess('requests', 'accounting')(req, res, next);
+});
+api.use(
+  ['/staffing-work-periods', '/staffing-settlements'],
+  requireAnyMiniAppAccess('requests', 'accounting'),
+);
 api.use(['/properties'], requireMiniAppAccess('properties'));
 api.use('/marketplace', requireMiniAppAccess('marketplace'));
 api.use('/accounting', (req, _res, next) => {
@@ -137,7 +154,7 @@ api.use(
   ['/tenants', '/leases', '/lease-signature-documents', '/releases', '/rent-transactions'],
   requireAnyMiniAppAccess('properties', 'rent'),
 );
-api.use(['/maintenance'], requireMiniAppAccess('properties'));
+api.use(['/maintenance'], requireAnyMiniAppAccess('properties', 'accounting'));
 api.use((req, _res, next) => {
   const organizationId = req.get('x-afrolife-edir-id');
   if (organizationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) {
@@ -163,7 +180,50 @@ api.use((req, _res, next) => {
 });
 api.use('/subscriptions', subscriptionRouter);
 api.get('/features', h(async (req, res) => {
-  const enabledModules = runtimeConfig.enabledModules;
+  let enabledModules = runtimeConfig.enabledModules;
+  let platformTenantId: string | null = null;
+  if (req.user!.role === 'super_admin' && req.query.platform_tenant_id === undefined) {
+    enabledModules = [];
+  }
+  if (req.query.platform_tenant_id !== undefined) {
+    if (!['global_admin', 'super_admin'].includes(req.user!.role)) {
+      throw new HttpError(403, 'Only Super Admins and Global Admins may select a platform tenant context.');
+    }
+    platformTenantId = z.string().uuid().parse(req.query.platform_tenant_id);
+    const tenant = await withUser(req.user!, async (client) => {
+      const permitted = await client.query(
+        `SELECT t.id,t.status FROM platform_tenants t
+         WHERE t.id=$1 AND (
+           $2::text='global_admin' OR EXISTS (
+             SELECT 1 FROM platform_tenant_admins a
+             WHERE a.tenant_id=t.id AND a.user_id=$3
+           )
+         )`,
+        [platformTenantId, req.user!.role, req.user!.id],
+      );
+      if (!permitted.rowCount) throw new HttpError(403, 'This platform tenant is not assigned to your account.');
+      const services = await client.query(
+        `SELECT DISTINCT s.service_key
+         FROM platform_tenants t
+         JOIN platform_tenant_packages tp ON tp.tenant_id=t.id
+         JOIN platform_service_packages p ON p.id=tp.package_id AND p.active
+         JOIN platform_service_package_items i ON i.package_id=p.id
+         JOIN platform_services s ON s.service_key=i.service_key AND s.available
+         WHERE t.id=$1 AND t.status='active'
+           AND (
+             NOT EXISTS (SELECT 1 FROM platform_tenant_module_config c WHERE c.tenant_id=t.id)
+             OR s.service_key=ANY(COALESCE((
+               SELECT c.enabled_services FROM platform_tenant_module_config c WHERE c.tenant_id=t.id
+             ),ARRAY[]::text[]))
+           )`,
+        [platformTenantId],
+      );
+      return { status: permitted.rows[0].status as string, services: services.rows.map((row) => row.service_key as string) };
+    });
+    enabledModules = tenant.status === 'active'
+      ? workspaceModulesForServices(enabledModules, tenant.services)
+      : [];
+  }
   const subscriberRole = ['customer','property_owner'].includes(req.user!.role);
   const accountingServiceAvailable = subscriberRole
     ? Boolean(process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL)
@@ -187,6 +247,7 @@ api.get('/features', h(async (req, res) => {
   insuranceBrokerageSandboxEnabled: isInsuranceBrokerageSandboxEnabled(),
   enabledModules,
   allowedModules,
+  platformTenantId,
   });
 }));
 api.get('/system/status', h(async (_req, res) => {

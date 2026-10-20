@@ -4,7 +4,6 @@ import { enqueueAccountingEvent } from './accounting-outbox.js';
 import { HttpError, requireRole, withUser } from './core.js';
 
 const services = [
-  { key: 'accounting', name: 'Accounting & Finance' },
   { key: 'property_management', name: 'Property Management' },
   { key: 'workforce_management', name: 'Workforce Management' },
   { key: 'super_agent', name: 'Super Agent' },
@@ -16,7 +15,6 @@ const services = [
 ] as const;
 
 const serviceKeys = [
-  'accounting',
   'property_management', 'workforce_management', 'super_agent', 'edir',
   'insurance_brokerage', 'agent', 'landlord', 'seller',
 ] as const;
@@ -182,7 +180,7 @@ subscriptionRouter.post('/review/:subscriptionId', requireRole(...financeRoles),
         await client.query(
           `INSERT INTO platform_service_subscription_audit
              (subscription_id,actor_id,action,previous_status,next_status,details)
-           VALUES($1,$2,'payment_rejected','payment_review','rejected',jsonb_build_object('reason',$3))`,
+           VALUES($1,$2,'payment_rejected','payment_review','rejected',jsonb_build_object('reason',$3::text))`,
           [subscription.id, req.user!.id, parsed.data.reason],
         );
         return rejected.rows[0];

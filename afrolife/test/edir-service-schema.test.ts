@@ -27,6 +27,9 @@ const organizationLedgerBootstrapMigration = await readFile(new URL('../services
 const memberCreditControlLockMigration = await readFile(new URL('../services/afrolife-edir/022_member_credit_control_lock.sql', import.meta.url), 'utf8');
 const memberCreditControlPostingRolesMigration = await readFile(new URL('../services/afrolife-edir/023_member_credit_control_posting_roles.sql', import.meta.url), 'utf8');
 const registrationDocumentsMigration = await readFile(new URL('../services/afrolife-edir/026_registration_documents.sql', import.meta.url), 'utf8');
+const activeMemberFinancialApprovalMigration = await readFile(new URL('../services/afrolife-edir/027_active_member_financial_approval.sql', import.meta.url), 'utf8');
+const rlsSafeActiveMemberApprovalMigration = await readFile(new URL('../services/afrolife-edir/028_rls_safe_active_member_approval.sql', import.meta.url), 'utf8');
+const restrictActiveMemberGuardMigration = await readFile(new URL('../services/afrolife-edir/029_restrict_active_member_guard.sql', import.meta.url), 'utf8');
 const creditRouter = await readFile(new URL('../services/afrolife-edir/credit-router.ts', import.meta.url), 'utf8');
 const edirUi = await readFile(new URL('../public/edir.js', import.meta.url), 'utf8');
 const complaintIntakeRoute = creditRouter.split("edirCreditRouter.post('/complaints'")[1]?.split("edirCreditRouter.post('/complaints/:complaintId/decision'")[0] ?? '';
@@ -92,6 +95,19 @@ test('Edir finance requires independent review and immutable balanced journals',
   assert.doesNotMatch(financeMigration, /^\s*END\n\$\$;/m);
 });
 
+test('Edir financial approval rechecks active membership under a row lock', () => {
+  assert.match(migrationRunner, /afrolife-edir-v27-active-member-financial-approval/);
+  assert.match(migrationRunner, /afrolife-edir-v28-rls-safe-active-member-approval/);
+  assert.match(migrationRunner, /afrolife-edir-v29-restrict-active-member-guard/);
+  assert.match(activeMemberFinancialApprovalMigration, /BEFORE UPDATE OF status ON edir_financial_transactions/);
+  assert.match(activeMemberFinancialApprovalMigration, /membership\.organization_id=account\.organization_id/);
+  assert.match(activeMemberFinancialApprovalMigration, /FOR UPDATE OF membership/);
+  assert.match(activeMemberFinancialApprovalMigration, /membership_status IS DISTINCT FROM 'active'/);
+  assert.match(rlsSafeActiveMemberApprovalMigration, /LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp/);
+  assert.match(restrictActiveMemberGuardMigration, /REVOKE ALL ON FUNCTION edir_require_active_member_for_financial_approval\(\) FROM PUBLIC/);
+  assert.match(restrictActiveMemberGuardMigration, /GRANT EXECUTE ON FUNCTION edir_require_active_member_for_financial_approval\(\) TO "\{\{role\}\}"/);
+});
+
 test('Edir organization migration scopes every service record to one immutable tenant', () => {
   assert.match(hierarchyMigration, /CREATE TABLE edir_organizations/);
   assert.match(hierarchyMigration, /CREATE TABLE edir_registration_applications/);
@@ -141,7 +157,9 @@ test('Edir customer complaints support private member submission and tracked sta
   assert.match(creditApplicationRoute, /parseEdirMoney\(body\.monthly_expenses, true\)/);
   assert.match(creditApplicationRoute, /parseEdirMoney\(body\.monthly_debt, true\)/);
   assert.doesNotMatch(loanDocumentUploadRoute, /edir_memberships WHERE user_id=\$1 AND status='active' FOR UPDATE/);
-  assert.match(creditRouter, /resolved_by=CASE WHEN \$2 IN \('resolved','rejected'\) THEN \$6::uuid ELSE null END/);
+  assert.match(creditRouter, /role IN \('edir_admin','member_support','compliance'\)/);
+  assert.match(creditRouter, /assigned_to=CASE WHEN \$4::boolean THEN \$5::uuid ELSE assigned_to END/);
+  assert.match(creditRouter, /resolved_by=CASE WHEN \$2 IN \('resolved','rejected'\) THEN \$7::uuid ELSE null END/);
 });
 
 test('Edir risk holds require independent review and block member credit actions', () => {

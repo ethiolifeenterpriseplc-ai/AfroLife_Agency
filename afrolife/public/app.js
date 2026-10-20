@@ -14,6 +14,7 @@ import { propertyDashboardMetrics, staffingDashboardMetrics, workforceDashboardM
 import { normalizeMySubscriptions, normalizeSubscriptionCatalog, PUBLIC_SUBSCRIPTION_SERVICES, subscriptionRequestPayload } from './subscriptions.js';
 import { propertyOfferTerms } from './property-offers.js';
 import { marketplaceListingPayload } from './marketplace-form.js';
+import { paginateRows } from './row-pagination.js';
 
 const WEB_API_ROOT = '/api/v1';
 let API_ROOT = WEB_API_ROOT;
@@ -37,7 +38,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], requests: [], staffingEngagements: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
@@ -65,11 +66,11 @@ function apiRoot() {
 function roleLabel(role) {
   const labels = {
     global_admin: 'Global Admin',
-    super_admin: 'Super Agent / Super Admin',
+    super_admin: 'Super Admin',
     compliance: 'Compliance',
     finance: 'Finance',
     finance_manager: 'Finance manager',
-    corporate_business_manager: 'Corporate Business Manager',
+    corporate_business_manager: 'Business Admin',
     master_agent: 'Master agent',
     field_agent: 'Field agent',
     customer: 'Buyer / customer',
@@ -106,6 +107,138 @@ function showAlert(message, error = false, values = {}) {
   box.classList.toggle('error', error);
   box.hidden = !message;
 }
+
+const INDUSTRY_NEWS_CATEGORIES = {
+  business: 'Business & finance',
+  property: 'Property & housing',
+  workforce: 'Workforce & employment',
+  technology: 'Technology & digital',
+};
+
+function formatNewsTime(value, options = {}) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  return new Intl.DateTimeFormat(undefined, options).format(date);
+}
+
+function setIndustryNewsStatus(message, modifier = '') {
+  const status = $('#industry-news-status');
+  status.textContent = message;
+  status.className = `news-status${modifier ? ` news-status--${modifier}` : ''}`;
+}
+
+function renderIndustryNews(articles) {
+  const results = $('#industry-news-results');
+  const selectedCategory = document.querySelector('[data-news-filter][aria-pressed="true"]')?.dataset.newsFilter ?? 'all';
+  const visibleArticles = selectedCategory === 'all'
+    ? articles
+    : articles.filter((article) => article.category === selectedCategory);
+  results.replaceChildren();
+  if (!visibleArticles.length) {
+    const empty = document.createElement('p');
+    empty.className = 'news-empty';
+    empty.textContent = selectedCategory === 'all'
+      ? 'No current headlines are available from these feeds.'
+      : `No recent headlines are available for ${INDUSTRY_NEWS_CATEGORIES[selectedCategory] ?? 'this sector'}.`;
+    results.append(empty);
+    return;
+  }
+  visibleArticles.forEach((article, index) => {
+    if (!INDUSTRY_NEWS_CATEGORIES[article.category] || typeof article.title !== 'string'
+      || typeof article.source !== 'string' || typeof article.publishedAt !== 'string') return;
+    let url;
+    try {
+      url = new URL(article.url);
+      if (url.protocol !== 'https:' || url.username || url.password) return;
+    } catch {
+      return;
+    }
+    const story = document.createElement('article');
+    story.className = `news-story${index === 0 ? ' news-story--lead' : ''}`;
+    const category = document.createElement('p');
+    category.className = 'news-story-category';
+    category.textContent = INDUSTRY_NEWS_CATEGORIES[article.category];
+    const heading = document.createElement('h3');
+    const link = document.createElement('a');
+    link.href = url.toString();
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = article.title;
+    heading.append(link);
+    const attribution = document.createElement('div');
+    attribution.className = 'news-story-attribution';
+    const source = document.createElement('span');
+    source.textContent = article.source;
+    const published = document.createElement('time');
+    published.dateTime = article.publishedAt;
+    published.textContent = formatNewsTime(article.publishedAt, { dateStyle: 'medium' });
+    attribution.append(source, published);
+    story.append(category, heading, attribution);
+    results.append(story);
+  });
+  if (!results.childElementCount) {
+    const empty = document.createElement('p');
+    empty.className = 'news-empty';
+    empty.textContent = 'No headlines are available for this sector.';
+    results.append(empty);
+  }
+}
+
+async function loadPublicIndustryNews() {
+  const results = $('#industry-news-results');
+  const fallback = $('#industry-news-fallback');
+  if (!results || !fallback) return;
+  document.querySelectorAll('[data-news-filter]').forEach((button) => button.addEventListener('click', () => {
+    document.querySelectorAll('[data-news-filter]').forEach((filter) => {
+      const selected = filter === button;
+      filter.setAttribute('aria-pressed', String(selected));
+    });
+    if (Array.isArray(loadPublicIndustryNews.articles)) renderIndustryNews(loadPublicIndustryNews.articles);
+  }));
+  results.setAttribute('aria-busy', 'true');
+  try {
+    const response = await fetch('/api/public/industry-news', {
+      headers: { accept: 'application/json' },
+      credentials: 'omit',
+    });
+    if (!response.ok) throw new Error(`Industry news request failed (${response.status})`);
+    const payload = await response.json();
+    if (!Array.isArray(payload.articles)) throw new Error('Industry news response was invalid');
+    const articles = payload.articles;
+    loadPublicIndustryNews.articles = articles;
+    renderIndustryNews(articles);
+    const updated = $('#industry-news-updated');
+    updated.textContent = payload.updatedAt
+      ? `Updated ${formatNewsTime(payload.updatedAt, { dateStyle: 'medium', timeStyle: 'short' })}`
+      : '';
+    fallback.hidden = articles.length > 0;
+    if (articles.length === 0) {
+      $('#industry-news-fallback-message').textContent = payload.updatedAt
+        ? 'No headlines were found in the selected feeds during the past 30 days. Search current coverage from Google News:'
+        : 'Live headlines are temporarily unavailable. Search current coverage from Google News:';
+      setIndustryNewsStatus(payload.updatedAt ? 'No recent headlines' : 'Feeds unavailable', payload.updatedAt ? 'empty' : 'error');
+    } else if (payload.stale) {
+      setIndustryNewsStatus('Showing last successful update', 'stale');
+    } else if (payload.status === 'partial') {
+      setIndustryNewsStatus('Some feeds unavailable', 'partial');
+    } else {
+      setIndustryNewsStatus('Feeds updated', 'ready');
+    }
+  } catch (error) {
+    console.warn('AfroLife industry news could not be loaded.', error);
+    fallback.hidden = false;
+    $('#industry-news-fallback-message').textContent = 'Live headlines are temporarily unavailable. Search current coverage from Google News:';
+    results.replaceChildren();
+    const empty = document.createElement('p');
+    empty.className = 'news-empty';
+    empty.textContent = 'We could not connect to the news feeds just now.';
+    results.append(empty);
+    setIndustryNewsStatus('Feeds unavailable', 'error');
+  } finally {
+    results.setAttribute('aria-busy', 'false');
+  }
+}
+loadPublicIndustryNews.articles = null;
 
 async function api(path, options = {}) {
   const headers = new Headers(options.headers ?? {});
@@ -838,18 +971,19 @@ function signOut({ revoke = true, message = '' } = {}) {
   workspaceSearchSequence += 1;
   loadedPanels.clear();
   Object.assign(state, {
-    leads: [], workers: [], requests: [], properties: [], ownerStatements: [], territories: [],
+    leads: [], workers: [], requests: [], staffingEngagements: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, ownerStatements: [], territories: [],
     commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
     roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
-    platformServices: [], platformServicePackages: [], platformTenants: [], platformCatalogProducts: [], businessTenants: [],
+    platformServices: [], platformServicePackages: [], platformTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], businessTenants: [],
     marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
     insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [],
     edirMe: null, mfaSetup: null,
     serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null,
     insuranceSandboxStatus: null, insuranceSandboxCases: [],
     serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '',
-    workspaceDataErrors: [],
+    workspaceDataErrors: [], workspaceDataOmitted: [],
   });
+  state.platformTenantContextId = null;
   state.features = { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] };
   $('#workspace-search-input').value = '';
   $('#workspace-search-results').replaceChildren();
@@ -875,7 +1009,33 @@ function signOut({ revoke = true, message = '' } = {}) {
 async function loadWorkspace() {
   state.user = await api('/auth/me');
   startSessionActivity(state.user.session_idle_timeout_minutes ?? 30);
-  state.features = await getOptional('/features', { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] });
+  const featureFallback = { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] };
+  if (state.user.role === 'super_admin') {
+    state.tenantAdminTenants = await api('/platform/my-tenants');
+    const activeTenantIds = state.tenantAdminTenants
+      .filter((tenant) => tenant.status === 'active')
+      .map((tenant) => tenant.id);
+    if (!activeTenantIds.includes(state.platformTenantContextId)) {
+      state.platformTenantContextId = activeTenantIds.length === 1 ? activeTenantIds[0] : null;
+    }
+  }
+  const featurePath = state.platformTenantContextId
+    ? `/features?platform_tenant_id=${encodeURIComponent(state.platformTenantContextId)}`
+    : '/features';
+  if (state.platformTenantContextId) {
+    try {
+      state.features = await api(featurePath);
+    } catch {
+      state.features = {
+        ...featureFallback,
+        enabledModules: [],
+        allowedModules: [],
+        platformTenantId: state.platformTenantContextId,
+      };
+    }
+  } else {
+    state.features = await getOptional('/features', featureFallback);
+  }
   state.edirMe = null;
   $('#login-view').hidden = true;
   $('#public-hub').hidden = true;
@@ -951,7 +1111,8 @@ async function loadWorkspace() {
       if (tab) tab.hidden = false;
     }
   }
-  const enabledModules = Array.isArray(state.features.enabledModules) && state.features.enabledModules.length
+  const enabledModules = Array.isArray(state.features.enabledModules)
+      && (state.features.platformTenantId || state.user.role === 'super_admin' || state.features.enabledModules.length)
     ? state.features.enabledModules
     : [...KNOWN_PANELS];
   for (const tab of document.querySelectorAll('.tab[data-panel]')) {
@@ -968,6 +1129,7 @@ async function loadWorkspace() {
     state.panel = 'overview';
     history.replaceState(null, '', panelUrl(window.location.href, state.panel));
   }
+  updateWorkspaceNavigationGroups();
   renderMobileWorkspaceNav();
   if (state.user.must_change_password) {
     state.panel = 'password';
@@ -994,10 +1156,15 @@ async function getOptional(path, fallback) {
 
 async function loadPanelData(panel) {
   state.workspaceDataErrors = [];
+  state.workspaceDataOmitted = [];
   const safeGet = async (path, fallback) => {
     try {
-      return await getOptional(path, fallback);
+      return await api(path);
     } catch (error) {
+      if (error instanceof ApiError && [403, 404].includes(error.status)) {
+        state.workspaceDataOmitted.push(path);
+        return fallback;
+      }
       console.error(`Workspace panel ${panel} could not load ${path}.`, error);
       state.workspaceDataErrors.push(path);
       return fallback;
@@ -1013,6 +1180,8 @@ async function loadPanelData(panel) {
       state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
         ? await safeGet('/reports/summary', null)
         : state.user.enterprise_features_enabled ? await safeGet('/reports/me', null) : null;
+      state.staffingEngagements = ['customer','worker'].includes(state.user.role)
+        ? await safeGet('/staffing-engagements/mine', []) : [];
       break;
     case 'leads':
       await load('leads', '/leads');
@@ -1038,6 +1207,11 @@ async function loadPanelData(panel) {
       state.marketplaceSellers = ['global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)
         ? await safeGet('/marketplace/sellers', []) : [];
       if (hasActivity('property.listings.view')) state.properties = await safeGet('/properties', []);
+      if (hasActivity('property.maintenance.manage')) {
+        [state.maintenanceRequests, state.maintenanceMetrics] = await Promise.all([
+          safeGet('/maintenance', []), safeGet('/maintenance/metrics', null),
+        ]);
+      }
       state.ownerStatements = state.user.role === 'property_owner'
         ? (await safeGet('/owner/statements', { statements: [] })).statements ?? [] : [];
       break;
@@ -1087,7 +1261,7 @@ async function loadPanelData(panel) {
         ? await safeGet('/edir/me', null) : null;
       break;
     case 'admin':
-      state.users = ['global_admin', 'compliance','corporate_business_manager'].includes(state.user.role)
+      state.users = ['global_admin', 'compliance','corporate_business_manager','super_admin'].includes(state.user.role)
         ? await safeGet('/users', []) : [];
       [state.territories, state.serviceIdentities, state.readinessEvidence, state.globalAdminPromotions] = await Promise.all([
         safeGet('/territories', []),
@@ -1097,18 +1271,18 @@ async function loadPanelData(panel) {
       ]);
       state.businessRules = state.user.role === 'global_admin' ? await safeGet('/business-rules', []) : [];
       state.roleAccess = state.user.role === 'global_admin' ? await safeGet('/role-access', null) : null;
-      state.tenantAdminTenants = state.user.role === 'super_admin' ? await safeGet('/platform/my-tenants', []) : [];
       state.summary = ['global_admin', 'finance', 'finance_manager'].includes(state.user.role)
         ? await safeGet('/reports/summary', null) : null;
       if (['global_admin', 'super_admin', 'finance', 'finance_manager'].includes(state.user.role)) {
         state.propertyAccountingTemplate = await safeGet('/finance/property-chart-of-accounts-template', null);
       }
       if (state.user.role === 'global_admin') {
-        [state.platformServices, state.platformServicePackages, state.platformTenants, state.platformCatalogProducts, state.businessTenants] = await Promise.all([
+        [state.platformServices, state.platformServicePackages, state.platformTenants, state.platformSuperAdmins, state.platformCatalogProducts] = await Promise.all([
           safeGet('/platform/services', []), safeGet('/platform/service-packages', []),
-          safeGet('/platform/tenants', []), safeGet('/platform/catalog-products', []),
-          safeGet('/platform/business-tenants', []),
+          safeGet('/platform/tenants', []), safeGet('/platform/super-admins', []),
+          safeGet('/platform/catalog-products', []),
         ]);
+        state.businessTenants = await safeGet('/platform/business-tenants', []);
       }
       break;
     case 'status':
@@ -1234,19 +1408,30 @@ function renderWorkspaceSearchResults() {
 function renderStats() {
   const grid = $('#stat-grid');
   grid.replaceChildren();
+  const visible = (panel) => !document.querySelector('.tab[data-panel="' + panel + '"]')?.hidden;
+  const unavailable = (path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path);
   const stats = [
-    ['My leads', state.leads.length],
-    ['Workers', state.workers.length],
-    ['Open requests', state.requests.filter((item) => item.status === 'open').length],
-    ['Commission events', state.commissions.length],
+    { group: 'Core activity', panel: 'leads', label: 'Lead records available', value: state.leads.length, path: '/leads' },
+    { group: 'Core activity', panel: 'workers', label: 'Worker records available', value: state.workers.length, path: '/workers' },
+    { group: 'Core activity', panel: 'requests', label: 'Open requests in your view', value: state.requests.filter((item) => item.status === 'open').length, path: '/requests' },
+    { group: 'Business activity', panel: 'commissions', label: 'Commission events in your view', value: state.commissions.length, path: '/commissions' },
   ];
-  for (const [label, value] of stats) {
-    const card = node('article', undefined, 'stat-card');
-    card.append(node('span', label), node('strong', value));
-    grid.append(card);
+  const availableStats = stats.filter((metric) => visible(metric.panel) && !unavailable(metric.path));
+  if (!availableStats.length) return;
+  grid.append(node('p', 'Counts reflect records currently available to your account.', 'stat-grid-caption'));
+  for (const groupName of [...new Set(availableStats.map((metric) => metric.group))]) {
+    const group = node('section', undefined, 'dashboard-metric-group');
+    group.append(node('h2', groupName));
+    const cards = node('div', undefined, 'dashboard-metric-cards');
+    for (const metric of availableStats.filter((item) => item.group === groupName)) {
+      const card = node('article', undefined, 'stat-card');
+      card.append(node('span', metric.label), node('strong', metric.value.toLocaleString(document.documentElement.lang)));
+      cards.append(card);
+    }
+    group.append(cards);
+    grid.append(group);
   }
 }
-
 function card(title, details, status) {
   const wrapper = node('article', undefined, 'list-card');
   const copy = node('div');
@@ -1271,6 +1456,20 @@ function renderOverview() {
     wrap.append(notice);
   }
   wrap.append(renderServiceLauncher());
+  if (['customer','worker'].includes(state.user.role) && state.staffingEngagements.length) {
+    const selfService = node('section', undefined, 'panel');
+    selfService.append(sectionHeading('Staffing offers', 'Review approved engagement terms and record your own acceptance. An engagement becomes active only after both parties accept.'));
+    const list = node('div', undefined, 'list');
+    for (const engagement of state.staffingEngagements) {
+      const pendingAcceptance = engagement.status === 'terms_approved'
+        && !(state.user.role === 'customer' ? engagement.client_accepted : engagement.worker_accepted);
+      const ownRate = state.user.role === 'customer' ? engagement.client_rate : engagement.worker_rate;
+      const item = card(`Engagement ${engagement.id.slice(0, 8)}`, `${engagement.billing_unit} · ETB ${Number(ownRate).toLocaleString(document.documentElement.lang)} · ${engagement.starts_on}${engagement.ends_on ? ` to ${engagement.ends_on}` : ''} · client ${engagement.client_accepted ? 'accepted' : 'pending'} · worker ${engagement.worker_accepted ? 'accepted' : 'pending'}`, engagement.status);
+      if (pendingAcceptance) item.append(button('Review and accept terms', 'staffing-engagement-accept', 'button button-primary', { id: engagement.id }));
+      list.append(item);
+    }
+    selfService.append(list); wrap.append(selfService);
+  }
   if (loadedPanels.has('edir') && state.user.kyc_status === 'verified' && state.features.edirEnabled && !state.edirMe?.membership) {
     const offer = node('section', undefined, 'panel form-card edir-offer');
     offer.append(node('p', 'ETHIOLIFE EDIR · MEMBERSHIP OFFER', 'eyebrow'));
@@ -1764,6 +1963,12 @@ function createWorkspaceNavLink(tab, className = 'workspace-nav-link') {
   return link;
 }
 
+function updateWorkspaceNavigationGroups() {
+  document.querySelectorAll('.workspace-nav-group').forEach((group) => {
+    group.hidden = !group.querySelector('.tab:not([hidden])');
+  });
+}
+
 function renderMobileWorkspaceNav() {
   const nav = $('#mobile-workspace-nav');
   const moreNav = $('#workspace-more-nav');
@@ -1839,7 +2044,7 @@ function renderAppDashboard({ title, description, source, metrics, statusTitle, 
   section.append(node('h2', title));
   section.lastElementChild.id = 'app-dashboard-title';
   section.append(node('p', description, 'muted'));
-  const unavailable = state.workspaceDataErrors.includes(source);
+  const unavailable = state.workspaceDataErrors.includes(source) || state.workspaceDataOmitted.includes(source);
   if (unavailable) {
     const notice = node('p', 'Dashboard information could not be loaded. Select Refresh to try again.', 'alert error');
     notice.setAttribute('role', 'status');
@@ -2109,9 +2314,14 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
       territory: state.territories.find((area) => area.id === property.territory_id)?.name ?? property.territory_id,
       units: property.units?.length ?? 0,
     });
-    const item = card(property.address, [details, propertyOfferSummary(property)].filter(Boolean).join(' · '), property.status);
+    const reviewStatus = property.listing_review_status ?? 'approved';
+    const statusLabel = reviewStatus === 'pending_review'
+      ? 'Pending review'
+      : reviewStatus === 'rejected' ? 'Changes requested' : property.status;
+    const item = card(property.address, [details, propertyOfferSummary(property)].filter(Boolean).join(' · '), t(statusLabel));
     item.classList.add('property-card');
     item.dataset.property = property.id;
+    if (property.listing_review_note) item.append(node('p', property.listing_review_note, 'form-error'));
     if (property.units?.length) {
       const unitSummary = node('p', property.units.map((unit) => `${unit.unit_no}${unit.rent == null ? '' : ` · ETB ${Number(unit.rent).toLocaleString(document.documentElement.lang)}`}`).join('  |  '));
       unitSummary.className = 'property-unit-summary';
@@ -2120,6 +2330,52 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
     const actions = node('div', undefined, 'property-actions');
     actions.append(button('Photos & video', 'property-photos', 'button button-outline', { id: property.id }));
     if (canManage) actions.append(button('Add media', 'property-upload', 'button button-outline', { id: property.id }));
+    if (reviewStatus === 'pending_review'
+      && ['super_admin', 'corporate_business_manager'].includes(state.user.role)
+      && property.created_by !== state.user.id) {
+      actions.append(
+        button('Approve listing', 'property-review', 'button button-primary', { id: property.id, decision: 'approve' }),
+        button('Return for changes', 'property-review', 'button button-outline', { id: property.id, decision: 'reject' }),
+      );
+    }
+    if (reviewStatus === 'rejected' && property.created_by === state.user.id && canManage) {
+      const form = node('form', undefined, 'inline-form property-resubmit');
+      form.dataset.form = 'property-resubmit';
+      form.dataset.property = property.id;
+      const address = field('Street address', 'address');
+      address.input.value = property.address;
+      const description = field('Description', 'description', 'textarea', false, { maxlength: 5000, rows: 3 });
+      description.input.value = property.description ?? '';
+      const listingMode = field('Listing transaction', 'listing_mode', 'select');
+      for (const [value, label] of [['sale', 'For sale'], ['rent', 'For rent'], ['sale_or_rent', 'Sale or rent']]) {
+        const option = node('option', label);
+        option.value = value;
+        listingMode.input.append(option);
+      }
+      listingMode.input.value = property.listing_mode;
+      const salePrice = field('Sale price (ETB)', 'sale_price', 'number', false, { min: 0.01, step: '0.01' });
+      salePrice.input.value = property.sale_price ?? '';
+      const rentPeriod = field('Rental period', 'rent_period', 'select', false);
+      for (const item of state.marketplaceConfig.rentals?.periods ?? [{ key: 'month', label: 'Monthly', enabled: true }]) {
+        if (!item.enabled) continue;
+        const option = node('option', item.label);
+        option.value = item.key;
+        rentPeriod.input.append(option);
+      }
+      rentPeriod.input.value = property.rent_period ?? 'month';
+      const syncOfferFields = () => {
+        const includesSale = listingMode.input.value !== 'rent';
+        salePrice.label.hidden = !includesSale;
+        salePrice.input.disabled = !includesSale;
+        salePrice.input.required = includesSale;
+        if (!includesSale) salePrice.input.value = '';
+      };
+      listingMode.input.addEventListener('change', syncOfferFields);
+      syncOfferFields();
+      form.append(address.label, description.label, listingMode.label, salePrice.label, rentPeriod.label);
+      form.append(button('Update and resubmit for review', 'submit', 'button button-primary'));
+      item.append(form);
+    }
     item.append(actions);
     listings.append(item);
   }
@@ -2145,6 +2401,7 @@ function renderProperties() {
     emptyMessage: 'No property listings are currently available for this dashboard.',
     values: (data) => [['Property listings', data.totalListings], ['Units in listed properties', data.totalUnits]],
   }));
+  if (hasActivity('property.maintenance.manage')) wrap.append(renderMaintenanceOperations());
   const columns = node('div', undefined, 'columns');
   if (canManage) {
     const form = node('form', undefined, 'panel form-card inline-form');
@@ -2220,6 +2477,64 @@ function renderProperties() {
     wrap.append(statements);
   }
   return wrap;
+}
+
+function renderMaintenanceOperations() {
+  const section = node('section', undefined, 'panel');
+  section.append(sectionHeading('Maintenance operations', 'Track requests from intake through assigned work and documented completion. Cost entered here is an estimate only; vendor invoices use the separate Finance approval and reconciliation workflow.'));
+  const metrics = state.maintenanceMetrics ?? {};
+  const summary = node('div', undefined, 'maintenance-metrics');
+  for (const [label, value] of [
+    ['Open requests', metrics.open_count ?? 0], ['Urgent open', metrics.urgent_open_count ?? 0],
+    ['Completed in 30 days', metrics.completed_last_30_days ?? 0],
+    ['Average resolution hours (30d)', metrics.avg_resolution_hours_30d ?? '—'],
+  ]) {
+    const item = node('article', undefined, 'maintenance-metric');
+    item.append(node('span', label), node('strong', String(value)));
+    summary.append(item);
+  }
+  section.append(summary);
+  const form = node('form', undefined, 'panel form-card inline-form');
+  form.dataset.form = 'maintenance';
+  form.append(node('h3', 'Open a maintenance request'));
+  const property = field('Property', 'property_id', 'select');
+  const placeholder = node('option', 'Choose a property'); placeholder.value = ''; placeholder.disabled = true; placeholder.selected = true; property.input.append(placeholder);
+  for (const item of state.properties) { const option = node('option', item.address); option.value = item.id; property.input.append(option); }
+  form.append(property.label);
+  const unit = field('Unit (optional)', 'unit_id', 'select', false);
+  const noUnit = node('option', 'Common area / property'); noUnit.value = ''; unit.input.append(noUnit);
+  for (const item of state.properties.flatMap((p) => (p.units ?? []).map((u) => ({ ...u, property_id: p.id })))) {
+    const option = node('option', `${item.unit_no} · ${state.properties.find((p) => p.id === item.property_id)?.address ?? ''}`);
+    option.value = item.id; option.dataset.property = item.property_id; unit.input.append(option);
+  }
+  property.input.addEventListener('change', () => { for (const option of unit.input.options) if (option.value) option.hidden = option.dataset.property !== property.input.value; unit.input.value = ''; });
+  form.append(unit.label);
+  const category = field('Category', 'category', 'select');
+  for (const [value, label] of [['general','General'],['plumbing','Plumbing'],['electrical','Electrical'],['appliance','Appliance'],['structural','Structural'],['cleaning','Cleaning'],['safety','Safety'],['other','Other']]) { const option = node('option', label); option.value = value; category.input.append(option); }
+  const priority = field('Priority', 'priority', 'select');
+  for (const [value, label] of [['normal','Normal'],['low','Low'],['urgent','Urgent']]) { const option = node('option', label); option.value = value; priority.input.append(option); }
+  form.append(category.label, priority.label, field('Describe the issue', 'description', 'textarea', true, { minlength: 5, maxlength: 2000, rows: 3 }).label, button('Submit request', 'submit', 'button button-primary'));
+  section.append(form);
+  const list = node('div', undefined, 'list');
+  if (!state.maintenanceRequests.length) list.append(empty('No maintenance requests are recorded for your account.'));
+  const mayUpdate = ['master_agent','field_agent','super_admin','global_admin'].includes(state.user.role);
+  for (const request of state.maintenanceRequests) {
+    const item = card(`${request.address}${request.unit_no ? ` · ${request.unit_no}` : ''}`, `${request.category} · ${request.priority} priority · opened ${new Date(request.created_at).toLocaleDateString(document.documentElement.lang)} · ${Math.floor(Number(request.age_hours ?? 0))}h old`, request.status);
+    item.dataset.maintenance = request.id;
+    item.append(node('p', request.description));
+    if (request.assigned_to) item.append(node('p', `Assigned to: ${request.assigned_to}`));
+    if (request.resolution_note) item.append(node('p', `Completion: ${request.resolution_note}`));
+    if (request.cost != null) item.append(node('p', `Cost estimate: ETB ${Number(request.cost).toLocaleString(document.documentElement.lang)} (not an approved invoice)`));
+    const actions = node('div', undefined, 'property-actions');
+    actions.append(button('History', 'maintenance-events', 'button button-outline', { id: request.id }));
+    if (mayUpdate && request.status === 'open') actions.append(button('Assign', 'maintenance-update', 'button button-outline', { id: request.id, status: 'assigned' }));
+    if (mayUpdate && request.status === 'assigned') actions.append(button('Start work', 'maintenance-update', 'button button-outline', { id: request.id, status: 'in_progress' }));
+    if (mayUpdate && request.status === 'in_progress') actions.append(button('Complete', 'maintenance-update', 'button button-primary', { id: request.id, status: 'done' }));
+    if (mayUpdate && ['open','assigned','in_progress'].includes(request.status)) actions.append(button('Cancel', 'maintenance-update', 'button button-outline', { id: request.id, status: 'cancelled' }));
+    item.append(actions); list.append(item);
+  }
+  section.append(list);
+  return section;
 }
 
 function renderMarketplace() {
@@ -3006,7 +3321,18 @@ function renderPlatformControlPlane() {
   const section = node('section', undefined, 'panel form-card');
   section.style.marginTop = '20px';
   section.append(node('h3', 'Tenant and service control plane'));
-  section.append(node('p', 'Manage tenant registry, deployment references, service packages, and non-financial catalog products. Tenant database credentials and infrastructure secrets are never stored here. Tenant data remains authoritative in the tenant deployment. A separate read-only BI projection is a planned component and is not connected yet.'));
+  section.append(node('p', 'Manage platform services, packages, tenant deployments, assignments, and non-financial catalog products. Tenant database credentials and infrastructure secrets are never stored here. Package availability affects workspace modules only when an authorized platform-tenant context is selected; it does not replace user role, activity, or service checks.'));
+  const contextTenants = (state.user.role === 'super_admin' ? state.tenantAdminTenants : state.platformTenants)
+    .filter((tenant) => tenant.status === 'active');
+  const tenantContext = field('Active platform tenant context', 'platform_tenant_context', 'select');
+  tenantContext.input.dataset.platformTenantContext = 'true';
+  const noContext = node('option', 'No tenant package context'); noContext.value = ''; tenantContext.input.append(noContext);
+  for (const tenant of contextTenants) {
+    const option = node('option', `${tenant.display_name} · ${tenant.tenant_key}`); option.value = tenant.id;
+    tenantContext.input.append(option);
+  }
+  tenantContext.input.value = state.platformTenantContextId ?? '';
+  section.append(tenantContext.label);
 
   const packageForm = node('form', undefined, 'inline-form');
   packageForm.dataset.form = 'platform-service-package';
@@ -3104,19 +3430,21 @@ function renderPlatformControlPlane() {
   }
   section.append(serviceList);
 
-  const businessTenants = node('div', undefined, 'list');
-  businessTenants.append(node('h3', 'Agent and Super Admin business tenants'));
-  businessTenants.append(node('p', 'These are business workspaces in the Global Platform. They are separate from deployment tenants, which track hosting and infrastructure. Master Agents own agent-network tenants; their Field Agents join through the registered parent relationship. Tenant Super Admins have their own tenant boundary.'));
-  if (!state.businessTenants.length) businessTenants.append(empty('No Agent Network or Super Admin business tenants are registered.'));
-  for (const tenant of state.businessTenants) {
-    const item = card(`${tenant.display_name} · ${tenant.tenant_key}`, `${tenant.tenant_type.replaceAll('_', ' ')} · ${tenant.owner_role} · ${tenant.status} · owner ${tenant.owner_active ? 'active' : 'inactive'} · KYC ${tenant.owner_kyc_status}`, tenant.status);
-    item.append(node('p', `Owner: ${tenant.owner_name} · ${tenant.owner_phone} · configuration v${tenant.config_version}`));
-    for (const member of tenant.members ?? []) {
-      item.append(node('p', `${member.legal_name} · ${member.role.replaceAll('_', ' ')} · ${member.status} · ${member.phone}`));
+  if (state.user.role === 'global_admin') {
+    const businessTenants = node('div', undefined, 'list');
+    businessTenants.append(node('h3', 'Agent and Super Admin business tenants'));
+    businessTenants.append(node('p', 'These are business workspaces in the Global Platform. They are separate from deployment tenants, which track hosting and infrastructure. Master Agents own agent-network tenants; their Field Agents join through the registered parent relationship. Tenant Super Admins have their own tenant boundary.'));
+    if (!state.businessTenants.length) businessTenants.append(empty('No Agent Network or Super Admin business tenants are registered.'));
+    for (const tenant of state.businessTenants) {
+      const item = card(`${tenant.display_name} · ${tenant.tenant_key}`, `${tenant.tenant_type.replaceAll('_', ' ')} · ${tenant.owner_role} · ${tenant.status} · owner ${tenant.owner_active ? 'active' : 'inactive'} · KYC ${tenant.owner_kyc_status}`, tenant.status);
+      item.append(node('p', `Owner: ${tenant.owner_name} · ${tenant.owner_phone} · configuration v${tenant.config_version}`));
+      for (const member of tenant.members ?? []) {
+        item.append(node('p', `${member.legal_name} · ${member.role.replaceAll('_', ' ')} · ${member.status} · ${member.phone}`));
+      }
+      businessTenants.append(item);
     }
-    businessTenants.append(item);
+    section.append(businessTenants);
   }
-  section.append(businessTenants);
 
   const tenants = node('div', undefined, 'list');
   if (!state.platformTenants.length) tenants.append(empty('No tenant deployments are registered yet.'));
@@ -3142,8 +3470,8 @@ function renderPlatformControlPlane() {
     assignmentForm.dataset.tenantId = tenant.id;
     const adminField = field('Assign Super Admin', 'user_id', 'select');
     const adminPlaceholder = node('option', 'Choose an active Super Admin'); adminPlaceholder.value = ''; adminField.input.append(adminPlaceholder);
-    for (const user of state.users.filter((candidate) => candidate.active && candidate.role === 'super_admin'
-      && !(tenant.admins ?? []).some((assigned) => assigned.id === candidate.id))) {
+    for (const user of state.platformSuperAdmins.filter((candidate) =>
+      !(tenant.admins ?? []).some((assigned) => assigned.id === candidate.id))) {
       const option = node('option', `${user.legal_name} · ${user.phone}`); option.value = user.id; adminField.input.append(option);
     }
     assignmentForm.append(adminField.label, button('Grant this tenant scope', 'submit', 'button button-outline'));
@@ -3224,22 +3552,57 @@ function renderPlatformControlPlane() {
 function renderTenantAdminWorkspace() {
   const section = node('section', undefined, 'panel form-card');
   section.style.marginTop = '20px';
-  section.append(node('h3', 'Assigned tenant deployments'));
-  section.append(node('p', 'Your Global System Admin assignments define which tenant deployments you can register. Service packages and available services are set centrally; only deployment references and registration status can be submitted here. Global verification and activation remain centrally controlled.'));
+  section.append(node('h3', 'Assigned business entities'));
+  section.append(node('p', 'Configure business modules only within entities assigned by the Global System Admin. Global System Admin controls tenant onboarding, service packages, platform-wide module availability, and Super Admin assignments.'));
   if (!state.tenantAdminTenants.length) {
-    section.append(empty('No tenant deployment has been assigned to this Super Admin. Ask the Global System Admin to assign a tenant.'));
+    section.append(empty('No tenant entity has been assigned to this Super Admin. Ask the Global System Admin to assign an entity.'));
     return section;
+  }
+  const activeTenants = state.tenantAdminTenants.filter((tenant) => tenant.status === 'active');
+  if (activeTenants.length > 0) {
+    const context = field('Active business entity', 'platform_tenant_context', 'select');
+    context.input.dataset.platformTenantContext = 'true';
+    const placeholder = node('option', 'Select an assigned entity'); placeholder.value = ''; context.input.append(placeholder);
+    for (const tenant of activeTenants) {
+      const option = node('option', `${tenant.display_name} · ${tenant.tenant_key}`);
+      option.value = tenant.id;
+      context.input.append(option);
+    }
+    context.input.value = state.platformTenantContextId ?? '';
+    section.append(context.label);
+    if (!state.platformTenantContextId) {
+      section.append(node('p', 'Choose an assigned active entity to open its approved business modules.'));
+    }
   }
   for (const tenant of state.tenantAdminTenants) {
     const item = card(`${tenant.display_name} · ${tenant.tenant_key}`,
       `${tenant.hosting_mode.replaceAll('_', ' ')} · ${tenant.region ?? 'region not set'} · ${tenant.status}`,
       `deployment ${tenant.deployment_status}`);
     for (const configured of tenant.configured_packages ?? []) {
-      item.append(node('p', `Global configuration: ${configured.display_name} · ${(configured.services ?? []).join(', ') || 'No services'}`));
+      item.append(node('p', `Global System Admin package: ${configured.display_name} · ${(configured.services ?? []).join(', ') || 'No services'}`));
     }
     if (tenant.status === 'active') {
-      item.append(node('p', 'This tenant is active. Contact the Global System Admin to change its deployment registration.'));
-    } else {
+      const form = node('form', undefined, 'inline-form');
+      form.dataset.form = 'tenant-module-config';
+      form.dataset.tenantId = tenant.id;
+      const services = node('fieldset', undefined, 'span-2');
+      services.append(node('legend', 'Enabled business modules'));
+      const selected = new Set(tenant.enabled_services ?? []);
+      for (const service of tenant.available_services ?? []) {
+        const label = node('label', service.replaceAll('_', ' '));
+        const check = node('input');
+        check.type = 'checkbox';
+        check.name = 'services';
+        check.value = service;
+        check.checked = selected.has(service);
+        label.prepend(check);
+        services.append(label);
+      }
+      form.append(services, button('Save entity modules', 'submit', 'button button-primary span-2'));
+      item.append(form);
+    }
+    if (tenant.status !== 'active') {
+      item.append(node('p', 'Global System Admin must activate this entity before its business modules can be used.'));
       const form = node('form', undefined, 'inline-form');
       form.dataset.form = 'tenant-deployment-registration';
       form.dataset.tenantId = tenant.id;
@@ -3264,8 +3627,8 @@ function renderAdmin() {
   const isAdmin = isPlatformAdmin();
   const isGlobalAdmin = state.user.role === 'global_admin';
   const isBusinessManager=state.user.role==='corporate_business_manager';
-  const canProvisionAgents = isGlobalAdmin || isBusinessManager;
-  wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global System Administration' : 'Tenant administration' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Configure platform-wide templates, tenant boundaries, identity, access, and operations.' : 'Manage only tenant deployments assigned by the Global System Admin.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
+  const canProvisionAgents = isGlobalAdmin || state.user.role === 'super_admin' || isBusinessManager;
+  wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global System Administration' : 'Super Admin · Assigned entity management' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Configure platform services, packages, tenant boundaries, global identity, access, and operations.' : 'Manage only assigned business entities and the modules approved for them by the Global System Admin.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
   if (isNativeApp && canChangeServer(state.user.role)) {
     const serverTools = node('section', undefined, 'panel form-card admin-server-tools');
     serverTools.append(node('h3', 'Connection settings'));
@@ -3290,7 +3653,7 @@ function renderAdmin() {
   if (isGlobalAdmin) wrap.append(renderPlatformControlPlane());
   if (isGlobalAdmin) wrap.append(renderGlobalAdminPromotions());
   if (isGlobalAdmin) wrap.append(renderReadinessEvidence());
-  if (canProvisionAgents) {
+  if (isGlobalAdmin) {
     const identities = node('section', undefined, 'panel form-card');
     identities.style.marginTop = '20px';
     identities.append(node('h3', 'Service identity inventory'));
@@ -3339,13 +3702,16 @@ function renderAdmin() {
     }
     wrap.append(identities);
   }
-  if (isGlobalAdmin || isBusinessManager) {
+  if (canProvisionAgents) {
     const form = node('form', undefined, 'panel form-card inline-form');
     form.dataset.form = 'user';
-    const title = node('h3', isBusinessManager ? 'Onboard a direct agent' : 'Create an account'); title.className = 'span-2'; form.append(title);
+    const title = node('h3', isGlobalAdmin ? 'Create a platform account' : 'Onboard an agent'); title.className = 'span-2'; form.append(title);
     form.append(field('Legal name', 'legal_name').label, field('Phone', 'phone', 'tel', true, { placeholder: '0911 234 567' }).label);
     const role = field('Role', 'role', 'select');
-    for (const [value, label] of (isBusinessManager ? [['master_agent','Master agent'],['field_agent','Field agent']] : [['super_admin','Super Agent / Super Admin'],['corporate_business_manager','Corporate Business Manager'],['master_agent','Master agent'],['field_agent','Field agent'],['compliance','Compliance'],['finance','Finance'],['finance_manager','Finance manager'],['customer','Customer'],['worker','Worker'],['property_owner','Property owner']])) {
+    const accountRoles = isGlobalAdmin
+      ? [['super_admin','Super Admin'],['corporate_business_manager','Business Admin'],['master_agent','Master agent'],['field_agent','Field agent'],['compliance','Compliance'],['finance','Finance'],['finance_manager','Finance manager'],['customer','Customer'],['worker','Worker'],['property_owner','Property owner']]
+      : [['master_agent','Master agent'],['field_agent','Field agent']];
+    for (const [value, label] of accountRoles) {
       const option = node('option', label); option.value = value; role.input.append(option);
     }
     form.append(role.label);
@@ -3363,7 +3729,7 @@ function renderAdmin() {
     form.append(agentPlan.label);
     const parent = field('Master agent (required for field agents)', 'parent_agent_id', 'select', false);
     const parentEmpty = node('option', 'Choose master agent'); parentEmpty.value = ''; parent.input.append(parentEmpty);
-    for (const user of state.users.filter((item) => item.role === 'master_agent' && item.active && (!isBusinessManager || user.created_by === state.user.id))) { const option = node('option', user.legal_name); option.value = user.id; parent.input.append(option); }
+    for (const user of state.users.filter((item) => item.role === 'master_agent' && item.active && (isGlobalAdmin || item.created_by === state.user.id))) { const option = node('option', user.legal_name); option.value = user.id; parent.input.append(option); }
     form.append(parent.label);
     form.append(field('Email', 'email', 'email', false).label);
     form.append(button('Create account', 'submit', 'button button-primary span-2'));
@@ -3456,6 +3822,62 @@ function renderSecurity() {
   return wrap;
 }
 
+function addRowPagination(container, getRowElements) {
+  const pager = node('div', undefined, 'row-pagination');
+  pager.setAttribute('role', 'group');
+  pager.setAttribute('aria-label', t('Rows per page'));
+  const label = node('label', t('Rows per page'));
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', t('Rows per page'));
+  for (const size of [10, 25, 50, 100]) {
+    const option = document.createElement('option');
+    option.value = String(size);
+    option.textContent = String(size);
+    select.append(option);
+  }
+  select.value = '10';
+  label.append(select);
+  const summary = node('span', '', 'row-pagination-summary');
+  summary.setAttribute('aria-live', 'polite');
+  const previous = button('Previous', 'pagination-previous', 'button button-outline');
+  const next = button('Next', 'pagination-next', 'button button-outline');
+  pager.append(label, summary, previous, next);
+  container.parentNode.insertBefore(pager, container);
+  let page = 1;
+  const update = () => {
+    const elements = getRowElements();
+    const result = paginateRows(elements, Number(select.value), page);
+    page = result.page;
+    elements.forEach((row, index) => { row.hidden = index < result.start || index >= result.end; });
+    const first = elements.length ? result.start + 1 : 0;
+    const last = Math.min(result.end, elements.length);
+    summary.textContent = elements.length ? t('Showing {{from}} - {{to}} of {{total}}', { from: first, to: last, total: elements.length }) : t('No rows');
+    previous.disabled = page <= 1;
+    next.disabled = page >= result.pageCount;
+  };
+  select.addEventListener('change', () => { page = 1; update(); });
+  previous.addEventListener('click', () => { page -= 1; update(); });
+  next.addEventListener('click', () => { page += 1; update(); });
+  update();
+}
+
+function applyWorkspacePagination() {
+  const root = $('#workspace');
+  root.querySelectorAll('.list').forEach((list) => {
+    const rows = [...list.children].filter((row) => !row.hidden && !row.classList.contains('empty-state') && !row.matches('.row-pagination'));
+    if (rows.length) addRowPagination(list, () => rows);
+  });
+  root.querySelectorAll('table').forEach((table) => {
+    const rows = [...table.tBodies].flatMap((body) => [...body.rows]).filter((row) => !row.hidden);
+    if (rows.length) addRowPagination(table, () => rows);
+  });
+}
+
+function finishWorkspaceRender() {
+  translateContent($('#workspace'));
+  applyWorkspacePagination();
+}
+
 function renderPanel() {
   $('#workspace').dataset.panel = state.panel;
   $('.page-heading').dataset.panel = state.panel;
@@ -3513,17 +3935,17 @@ function renderPanel() {
   $('#stat-grid').hidden = state.panel !== 'overview';
   if (state.panel === 'mfi') {
     $('#workspace').replaceChildren(createMfiWorkspace(api, state.user));
-    translateContent($('#workspace'));
+    finishWorkspaceRender();
     return;
   }
   if (state.panel === 'accounting') {
     $('#workspace').replaceChildren(createAccountingWorkspace(api,state.user));
-    translateContent($('#workspace'));
+    finishWorkspaceRender();
     return;
   }
   if (state.panel === 'global-bi') {
     $('#workspace').replaceChildren(createGlobalBiWorkspace(api));
-    translateContent($('#workspace'));
+    finishWorkspaceRender();
     return;
   }
   if (state.panel === 'edir') {
@@ -3533,12 +3955,12 @@ function renderPanel() {
       localStorage.setItem(EDIR_ORGANIZATION_KEY, organizationId);
       renderPanel();
     }, downloadAuthenticatedFile));
-    translateContent($('#workspace'));
+    finishWorkspaceRender();
     return;
   }
   if (state.panel === 'privacy') {
     $('#workspace').replaceChildren(createPrivacyWorkspace(api, state.user));
-    translateContent($('#workspace'));
+    finishWorkspaceRender();
     return;
   }
   const renderer = {
@@ -3561,7 +3983,7 @@ function renderPanel() {
     security: renderSecurity,
   }[state.panel] ?? renderOverview;
   $('#workspace').replaceChildren(renderer());
-  translateContent($('#workspace'));
+  finishWorkspaceRender();
 }
 
 function navigateToPanel(panel, { replace = false } = {}) {
@@ -3581,6 +4003,16 @@ function navigateToPanel(panel, { replace = false } = {}) {
 
 async function submitForm(form) {
   const values = formData(form);
+  if (form.dataset.form === 'maintenance') {
+    await api('/maintenance', { method: 'POST', body: JSON.stringify({
+      property_id: values.property_id, unit_id: values.unit_id || undefined,
+      category: values.category, priority: values.priority, description: values.description.trim(),
+    }) });
+    form.reset();
+    await refresh();
+    showAlert('Maintenance request recorded.');
+    return;
+  }
   if (form.dataset.form === 'subscription-payment-reference') {
     const subscriptionId = form.dataset.subscriptionId;
     if (!subscriptionId) throw new Error(t('The subscription request is missing its identifier.'));
@@ -3669,11 +4101,22 @@ async function submitForm(form) {
     const reference = String(values.deployment_reference ?? '').trim();
     const payload = { deployment_status: values.deployment_status };
     if (reference) payload.deployment_reference = reference;
-    await api(`/platform/tenants/${encodeURIComponent(form.dataset.tenantId)}`, {
+    await api(`/platform/my-tenants/${encodeURIComponent(form.dataset.tenantId)}/registration`, {
       method: 'PATCH', body: JSON.stringify(payload),
     });
     await refresh();
     showAlert('Deployment registration submitted to the Global System Admin.');
+    return;
+  }
+  if (form.dataset.form === 'tenant-module-config') {
+    const services = [...form.querySelectorAll('input[name="services"]:checked')]
+      .map((input) => input.value);
+    await api(`/platform/my-tenants/${encodeURIComponent(form.dataset.tenantId)}/modules`, {
+      method: 'PATCH',
+      body: JSON.stringify({ services }),
+    });
+    await refresh();
+    showAlert('Assigned entity modules saved.');
     return;
   }
   if (form.dataset.form === 'platform-service') {
@@ -3920,9 +4363,27 @@ async function submitForm(form) {
       showAlert(t('Property listing was saved, but picture upload failed: {{error}} Use Add pictures to retry.', { error: error.message }), true);
       return;
     }
+    if (form.dataset.form === 'property-resubmit') {
+      const payload = {
+        address: values.address.trim(),
+        description: values.description.trim(),
+        listing_mode: values.listing_mode,
+        sale_price: values.sale_price ? number(values.sale_price) : undefined,
+        rent_period: values.rent_period,
+      };
+      await api(`/properties/${form.dataset.property}/resubmit`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      await refresh();
+      showAlert('Updated property listing submitted for independent review.');
+      return;
+    }
     form.reset();
     await refresh();
-    showAlert('Property listing saved successfully.');
+    showAlert(property.listing_review_status === 'pending_review'
+      ? 'Property listing submitted for independent review.'
+      : 'Property listing saved successfully.');
     return;
   }
   if (form.dataset.form === 'property-photos') {
@@ -4266,6 +4727,13 @@ async function uploadPropertyPhotos(propertyId, files, caption = '') {
     if (!response.ok) throw new Error(t(result?.error ?? 'Picture upload failed ({{status}})', { status: response.status }));
   }
 }
+
+document.addEventListener('change', (event) => {
+  const contextSelect = event.target.closest('select[data-platform-tenant-context]');
+  if (!contextSelect) return;
+  state.platformTenantContextId = contextSelect.value || null;
+  loadWorkspace().catch((error) => showAlert(error.message, true));
+});
 
 document.addEventListener('submit', (event) => {
   const form = event.target.closest('form[data-form]');
@@ -4673,6 +5141,71 @@ document.addEventListener('click', async (event) => {
   if(name==='marketplace-review'){
     let note;if(action.dataset.decision==='reject'){note=window.prompt(t('Explain what the seller needs to change (at least 10 characters).'));if(!note||note.trim().length<10)return;}
     try{await api(`/marketplace/listings/${id}/review`,{method:'PATCH',body:JSON.stringify({decision:action.dataset.decision,...(note?{note:note.trim()}:{})})});await refresh();showAlert(action.dataset.decision==='publish'?'Listing published.':'Listing returned for changes.');}catch(error){showAlert(error.message,true);}return;
+  }
+  if (name === 'property-review') {
+    let note;
+    if (action.dataset.decision === 'reject') {
+      note = window.prompt(t('Explain what needs to change in this property listing (at least 10 characters).'));
+      if (!note || note.trim().length < 10) return;
+    }
+    try {
+      await api(`/properties/${id}/review`, {
+        method: 'PATCH',
+        body: JSON.stringify({ decision: action.dataset.decision, ...(note ? { note: note.trim() } : {}) }),
+      });
+      await refresh();
+      showAlert(action.dataset.decision === 'approve' ? 'Property listing approved.' : 'Property listing returned for changes.');
+    } catch (error) {
+      showAlert(error.message, true);
+    }
+    return;
+  }
+  if (name === 'maintenance-update') {
+    let assigned_to; let resolution_note; let cost;
+    if (action.dataset.status === 'assigned') {
+      assigned_to = window.prompt(t('Enter the person or vendor assigned to this request.'));
+      if (!assigned_to?.trim()) return;
+    }
+    if (action.dataset.status === 'done') {
+      resolution_note = window.prompt(t('Describe the completed work (at least 5 characters).'));
+      if (!resolution_note || resolution_note.trim().length < 5) return;
+      const estimate = window.prompt(t('Optional cost estimate in ETB. Leave blank if unknown.'));
+      if (estimate?.trim()) {
+        cost = Number(estimate);
+        if (!Number.isFinite(cost) || cost < 0) { showAlert('Enter a valid non-negative estimate.', true); return; }
+      }
+    }
+    try {
+      await api(`/maintenance/${encodeURIComponent(id)}/update`, { method: 'POST', body: JSON.stringify({
+        status: action.dataset.status, ...(assigned_to ? { assigned_to: assigned_to.trim() } : {}),
+        ...(resolution_note ? { resolution_note: resolution_note.trim() } : {}),
+        ...(cost !== undefined ? { cost } : {}),
+      }) });
+      await refresh(); showAlert('Maintenance request updated.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'maintenance-events') {
+    const host = action.closest('[data-maintenance]');
+    let timeline = host?.querySelector('.maintenance-timeline');
+    if (timeline) { timeline.remove(); return; }
+    timeline = node('div', undefined, 'maintenance-timeline list');
+    host?.append(timeline);
+    try {
+      const events = await api(`/maintenance/${encodeURIComponent(id)}/events`);
+      if (!events.length) timeline.append(empty('No event history is available.'));
+      for (const item of events) timeline.append(node('p', `${item.event_type.replace('_',' ')} · ${item.actor_name ?? 'Team member'} · ${new Date(item.created_at).toLocaleString(document.documentElement.lang)}${item.note ? ` · ${item.note}` : ''}`));
+    } catch (error) { timeline.append(empty(error.message)); }
+    return;
+  }
+  if (name === 'staffing-engagement-accept') {
+    const reason = window.prompt(t('Confirm you reviewed the engagement terms. Enter a reason (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      await api(`/staffing-engagements/${encodeURIComponent(id)}/accept`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
+      await refresh(); showAlert('Your acceptance was recorded. The engagement is active when both parties accept.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
   }
   if (name === 'user-documents') { void showUserDocuments(id, container); return; }
   if (name === 'user-document-review') {

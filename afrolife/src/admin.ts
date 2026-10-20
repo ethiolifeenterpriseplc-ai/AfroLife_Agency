@@ -27,10 +27,16 @@ const requireGlobalAdmin: RequestHandler = (req, _res, next) => {
   if (req.user?.role !== 'global_admin') return next(new HttpError(403, 'Global Admin access is required.'));
   return next();
 };
+const requirePlatformControlPlaneAdmin: RequestHandler = (req, _res, next) => {
+  if (req.user?.role !== 'global_admin') {
+    return next(new HttpError(403, 'Global System Admin access is required.'));
+  }
+  return next();
+};
 const PROVISIONABLE_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner'] as const;
 const PLATFORM_SERVICE_KEYS = [
   'agency', 'workforce', 'staffing', 'property', 'marketplace', 'accounting', 'insurance',
-  'sacco_mfi', 'edir', 'learning', 'privacy', 'operations',
+  'sacco_mfi', 'edir', 'learning', 'privacy', 'operations', 'global_bi',
 ] as const;
 const requireEnterprisePlan: RequestHandler = (req, _res, next) => {
   pool.query(
@@ -418,7 +424,7 @@ adminRouter.patch('/marketplace/config', requireRole('global_admin', 'corporate_
   res.json(config);
 }));
 
-adminRouter.get('/platform/services', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/services', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const services = await withUser(req.user!, async (client) => (await client.query(
     `SELECT service_key, display_name, description, available, updated_at
      FROM platform_services ORDER BY display_name`,
@@ -426,7 +432,7 @@ adminRouter.get('/platform/services', requireGlobalAdmin, h(async (req, res) => 
   res.json(services);
 }));
 
-adminRouter.patch('/platform/services/:serviceKey', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/services/:serviceKey', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const serviceKey = z.enum(PLATFORM_SERVICE_KEYS).parse(req.params.serviceKey);
   const body = z.object({
     display_name: z.string().trim().min(2).max(120),
@@ -447,7 +453,7 @@ adminRouter.patch('/platform/services/:serviceKey', requireGlobalAdmin, h(async 
   res.json(service);
 }));
 
-adminRouter.get('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/service-packages', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const packages = await withUser(req.user!, async (client) => (await client.query(
     `SELECT p.id, p.package_key, p.display_name, p.description, p.active, p.created_at, p.updated_at,
        COALESCE(array_agg(i.service_key ORDER BY i.service_key)
@@ -459,7 +465,7 @@ adminRouter.get('/platform/service-packages', requireGlobalAdmin, h(async (req, 
   res.json(packages);
 }));
 
-adminRouter.post('/platform/service-packages', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.post('/platform/service-packages', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const body = z.object({
     package_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
     display_name: z.string().trim().min(2).max(120),
@@ -491,7 +497,7 @@ adminRouter.post('/platform/service-packages', requireGlobalAdmin, h(async (req,
   res.status(201).json(created);
 }));
 
-adminRouter.patch('/platform/service-packages/:packageId', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/service-packages/:packageId', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const packageId = z.string().uuid().parse(req.params.packageId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(120),
@@ -529,7 +535,7 @@ adminRouter.patch('/platform/service-packages/:packageId', requireGlobalAdmin, h
   res.json(updated);
 }));
 
-adminRouter.get('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/tenants', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const tenants = await withUser(req.user!, async (client) => (await client.query(
     `SELECT t.id,t.tenant_key,t.display_name,t.status,t.hosting_mode,t.region,
        t.deployment_reference,t.deployment_status,t.config_version,t.created_at,t.updated_at,
@@ -548,11 +554,38 @@ adminRouter.get('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
   res.json(tenants);
 }));
 
+adminRouter.get('/platform/super-admins', requirePlatformControlPlaneAdmin, h(async (req, res) => {
+  const admins = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,legal_name,phone FROM users
+     WHERE role='super_admin' AND active ORDER BY legal_name,phone`,
+  )).rows);
+  res.json(admins);
+}));
+
 adminRouter.get('/platform/my-tenants', requireRole('super_admin'), h(async (req, res) => {
   const tenants = await withUser(req.user!, async (client) => (await client.query(
     `SELECT t.id,t.tenant_key,t.display_name,t.status,t.hosting_mode,t.region,
        t.deployment_reference,t.deployment_status,t.config_version,t.updated_at,
        a.assigned_at,
+       COALESCE((
+         SELECT array_agg(DISTINCT s.service_key ORDER BY s.service_key)
+         FROM platform_tenant_packages tp
+         JOIN platform_service_packages p ON p.id=tp.package_id AND p.active
+         JOIN platform_service_package_items i ON i.package_id=p.id
+         JOIN platform_services s ON s.service_key=i.service_key AND s.available
+         WHERE tp.tenant_id=t.id
+       ),ARRAY[]::text[]) AS available_services,
+       COALESCE((
+         SELECT c.enabled_services FROM platform_tenant_module_config c
+         WHERE c.tenant_id=t.id
+       ),(
+         SELECT array_agg(DISTINCT s.service_key ORDER BY s.service_key)
+         FROM platform_tenant_packages tp
+         JOIN platform_service_packages p ON p.id=tp.package_id AND p.active
+         JOIN platform_service_package_items i ON i.package_id=p.id
+         JOIN platform_services s ON s.service_key=i.service_key AND s.available
+         WHERE tp.tenant_id=t.id
+       ),ARRAY[]::text[]) AS enabled_services,
        COALESCE(jsonb_agg(DISTINCT jsonb_build_object('package_key',p.package_key,'display_name',p.display_name,
          'services',COALESCE((SELECT jsonb_agg(i.service_key ORDER BY i.service_key)
            FROM platform_service_package_items i WHERE i.package_id=p.id),'[]'::jsonb)))
@@ -564,6 +597,101 @@ adminRouter.get('/platform/my-tenants', requireRole('super_admin'), h(async (req
     [req.user!.id],
   )).rows);
   res.json(tenants);
+}));
+
+adminRouter.patch('/platform/my-tenants/:tenantId/registration', requireRole('super_admin'), h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const body = z.object({
+    deployment_reference: z.string().trim().min(2).max(200).optional(),
+    deployment_status: z.enum(['not_registered','registered']).optional(),
+  }).strict().refine((value) => Object.keys(value).length > 0).parse(req.body);
+  if (body.deployment_reference
+    && (/(password|secret|token|credential)/i.test(body.deployment_reference) || body.deployment_reference.includes('://'))) {
+    throw new HttpError(422, 'Deployment references must not contain credentials or connection URLs.');
+  }
+  const updated = await withUser(req.user!, async (client) => {
+    const tenant = (await client.query(
+      `SELECT t.id,t.status,t.deployment_reference,t.deployment_status
+       FROM platform_tenants t JOIN platform_tenant_admins a ON a.tenant_id=t.id
+       WHERE t.id=$1 AND a.user_id=$2 FOR UPDATE OF t`,
+      [tenantId, req.user!.id],
+    )).rows[0];
+    if (!tenant) throw new HttpError(404, 'Assigned tenant not found.');
+    if (tenant.status === 'active') throw new HttpError(409, 'Active tenant registrations can only be changed by the Global System Admin.');
+    const reference = body.deployment_reference ?? tenant.deployment_reference;
+    const deploymentStatus = body.deployment_status ?? (body.deployment_reference ? 'registered' : tenant.deployment_status);
+    if (deploymentStatus === 'registered' && !reference) {
+      throw new HttpError(422, 'A non-secret deployment reference is required for registration.');
+    }
+    const row = (await client.query(
+      `UPDATE platform_tenants
+       SET deployment_reference=$2,deployment_status=$3,config_version=config_version+1,updated_at=now()
+       WHERE id=$1
+       RETURNING id,tenant_key,display_name,deployment_reference,deployment_status,config_version,updated_at`,
+      [tenantId, reference ?? null, deploymentStatus],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO platform_tenant_events(tenant_id,actor_id,event_type,event_data)
+       VALUES($1,$2,'deployment_registered',$3)`,
+      [tenantId, req.user!.id, JSON.stringify({ deployment_status: deploymentStatus })],
+    );
+    await audit(client, req.user!.id, 'platform_tenant_deployment_registered', 'platform_tenant', tenantId, null, {
+      deployment_reference: reference ?? null,
+      deployment_status: deploymentStatus,
+    });
+    return row;
+  });
+  res.json(updated);
+}));
+
+adminRouter.patch('/platform/my-tenants/:tenantId/modules', requireRole('super_admin'), h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const body = z.object({
+    services: z.array(z.enum(PLATFORM_SERVICE_KEYS)).max(PLATFORM_SERVICE_KEYS.length),
+  }).strict().parse(req.body);
+  if (new Set(body.services).size !== body.services.length) {
+    throw new HttpError(422, 'A service may only appear once in a tenant configuration.');
+  }
+  const updated = await withUser(req.user!, async (client) => {
+    const tenant = (await client.query(
+      `SELECT t.id,t.status FROM platform_tenants t
+       JOIN platform_tenant_admins a ON a.tenant_id=t.id
+       WHERE t.id=$1 AND a.user_id=$2 FOR UPDATE OF t`,
+      [tenantId, req.user!.id],
+    )).rows[0];
+    if (!tenant) throw new HttpError(404, 'Assigned tenant not found.');
+    if (tenant.status !== 'active') throw new HttpError(409, 'Only active assigned tenants can configure module availability.');
+    const available = (await client.query(
+      `SELECT DISTINCT s.service_key
+       FROM platform_tenant_packages tp
+       JOIN platform_service_packages p ON p.id=tp.package_id AND p.active
+       JOIN platform_service_package_items i ON i.package_id=p.id
+       JOIN platform_services s ON s.service_key=i.service_key AND s.available
+       WHERE tp.tenant_id=$1`,
+      [tenantId],
+    )).rows.map((row) => row.service_key as string);
+    if (body.services.some((service) => !available.includes(service))) {
+      throw new HttpError(422, 'Tenant modules must be selected from the services enabled by the Global System Admin.');
+    }
+    const row = (await client.query(
+      `INSERT INTO platform_tenant_module_config(tenant_id,enabled_services,updated_by)
+       VALUES($1,$2,$3)
+       ON CONFLICT(tenant_id) DO UPDATE
+       SET enabled_services=EXCLUDED.enabled_services,updated_by=EXCLUDED.updated_by,updated_at=now()
+       RETURNING tenant_id,enabled_services,updated_at`,
+      [tenantId, body.services, req.user!.id],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO platform_tenant_events(tenant_id,actor_id,event_type,event_data)
+       VALUES($1,$2,'tenant_modules_updated',$3)`,
+      [tenantId, req.user!.id, JSON.stringify({ services: body.services })],
+    );
+    await audit(client, req.user!.id, 'platform_tenant_modules_updated', 'platform_tenant', tenantId, null, {
+      services: body.services,
+    });
+    return row;
+  });
+  res.json(updated);
 }));
 
 adminRouter.get('/platform/business-tenants', requireRole('global_admin'), h(async (req, res) => {
@@ -630,7 +758,7 @@ adminRouter.get('/platform/my-business-tenant', requireRole('super_admin','maste
   res.json(tenants);
 }));
 
-adminRouter.post('/platform/tenants/:tenantId/admins', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.post('/platform/tenants/:tenantId/admins', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const tenantId = z.string().uuid().parse(req.params.tenantId);
   const { user_id } = z.object({ user_id: z.string().uuid() }).strict().parse(req.body);
   await withUser(req.user!, async (client) => {
@@ -648,7 +776,7 @@ adminRouter.post('/platform/tenants/:tenantId/admins', requireGlobalAdmin, h(asy
   res.sendStatus(204);
 }));
 
-adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const tenantId = z.string().uuid().parse(req.params.tenantId);
   const userId = z.string().uuid().parse(req.params.userId);
   await withUser(req.user!, async (client) => {
@@ -659,7 +787,7 @@ adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requireGlobalAd
   res.sendStatus(204);
 }));
 
-adminRouter.post('/platform/tenants', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.post('/platform/tenants', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const body = z.object({
     tenant_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9-]{1,79}$/),
     display_name: z.string().trim().min(2).max(160),
@@ -705,7 +833,7 @@ adminRouter.post('/platform/tenants', requireGlobalAdmin, h(async (req, res) => 
   res.status(201).json(tenant);
 }));
 
-adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/tenants/:tenantId', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const tenantId = z.string().uuid().parse(req.params.tenantId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(160).optional(),
@@ -718,13 +846,6 @@ adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (re
     package_id: z.string().uuid().optional(),
   }).strict().refine((value) => Object.keys(value).length > 0);
   const changes = body.parse(req.body);
-  if (req.user!.role === 'super_admin') {
-    const allowedKeys = new Set(['deployment_reference', 'deployment_status']);
-    if (Object.keys(changes).some((key) => !allowedKeys.has(key))
-      || (changes.deployment_status !== undefined && !['registered', 'not_registered'].includes(changes.deployment_status))) {
-      throw new HttpError(403, 'Tenant Super Admins may only register deployment details allowed by their Global Admin assignment.');
-    }
-  }
   if (changes.deployment_reference && (/(password|secret|token|credential)/i.test(changes.deployment_reference) || changes.deployment_reference.includes('://'))) {
     throw new HttpError(422, 'Deployment references must not contain credentials or connection URLs.');
   }
@@ -736,7 +857,7 @@ adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (re
   const updated = await withUser(req.user!, async (client) => {
     const prior = (await client.query(
       `SELECT t.* FROM platform_tenants t
-       WHERE t.id=$1 AND ($2::text='global_admin' OR EXISTS(
+       WHERE t.id=$1 AND ($2::text IN ('global_admin','super_admin') OR EXISTS(
          SELECT 1 FROM platform_tenant_admins a WHERE a.tenant_id=t.id AND a.user_id=$3
        )) FOR UPDATE`,
       [tenantId, req.user!.role, req.user!.id],
@@ -772,6 +893,9 @@ adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (re
         [tenantId, changes.package_id, req.user!.id],
       );
     }
+    if (req.user!.role === 'super_admin') {
+      await client.query("SELECT set_config('app.platform_control_plane','true',true)");
+    }
     const row = (await client.query(
       `UPDATE platform_tenants SET
          display_name=COALESCE($2,display_name),status=$3,hosting_mode=COALESCE($4,hosting_mode),
@@ -805,7 +929,7 @@ adminRouter.patch('/platform/tenants/:tenantId', requireGlobalAdmin, h(async (re
   res.json(updated);
 }));
 
-adminRouter.get('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.get('/platform/catalog-products', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const products = await withUser(req.user!, async (client) => (await client.query(
     `SELECT id,product_key,display_name,description,category,status,attributes,created_by,updated_by,created_at,updated_at
      FROM platform_catalog_products ORDER BY created_at DESC,product_key`,
@@ -813,7 +937,7 @@ adminRouter.get('/platform/catalog-products', requireGlobalAdmin, h(async (req, 
   res.json(products);
 }));
 
-adminRouter.post('/platform/catalog-products', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.post('/platform/catalog-products', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const body = z.object({
     product_key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{1,79}$/),
     display_name: z.string().trim().min(2).max(160),
@@ -843,7 +967,7 @@ adminRouter.post('/platform/catalog-products', requireGlobalAdmin, h(async (req,
   res.status(201).json(product);
 }));
 
-adminRouter.patch('/platform/catalog-products/:productId', requireGlobalAdmin, h(async (req, res) => {
+adminRouter.patch('/platform/catalog-products/:productId', requirePlatformControlPlaneAdmin, h(async (req, res) => {
   const productId = z.string().uuid().parse(req.params.productId);
   const body = z.object({
     display_name: z.string().trim().min(2).max(160),
@@ -1203,7 +1327,7 @@ adminRouter.patch('/auth/preferences', h(async (req, res) => {
 }));
 
 // ================= Users: create, verify, activate (two different people) =================
-adminRouter.get('/users', requireRole('global_admin', 'compliance', 'corporate_business_manager'), h(async (_req, res) => {
+adminRouter.get('/users', requireRole('global_admin', 'compliance', 'corporate_business_manager', 'super_admin'), h(async (_req, res) => {
   const users = await withUser(_req.user!, async (c) => (await c.query(
     `SELECT u.id, u.legal_name, u.phone, u.role, u.kyc_status, u.active, u.mfa_enabled, u.created_at, u.created_by,
             s.account_type AS signup_account_type, s.requested_plan, s.payment_status AS signup_payment_status,
@@ -1394,7 +1518,7 @@ adminRouter.patch('/business-rules', requireRole('global_admin'), h(async (req, 
   res.json(result);
 }));
 
-adminRouter.post('/users', requireRole('global_admin','corporate_business_manager'), h(async (req, res) => {
+adminRouter.post('/users', requireRole('global_admin','super_admin','corporate_business_manager'), h(async (req, res) => {
   const b = z.object({
     legal_name: z.string().min(2), phone: Phone, email: z.string().email().optional(),
     role: z.enum(PROVISIONABLE_ROLES), territory_id: z.number().int().optional(), parent_agent_id: z.string().uuid().optional(),
@@ -1403,6 +1527,9 @@ adminRouter.post('/users', requireRole('global_admin','corporate_business_manage
   }).parse(req.body);
   if (req.user!.role === 'corporate_business_manager' && !['master_agent','field_agent'].includes(b.role)) {
     throw new HttpError(403, 'Business Admins may onboard direct Master Agents and Field Agents only.');
+  }
+  if (req.user!.role === 'super_admin' && !['master_agent','field_agent'].includes(b.role)) {
+    throw new HttpError(403, 'Super Admins may onboard Master Agents and Field Agents only.');
   }
   if (AGENT_ROLES.includes(b.role) && !b.territory_id) throw new HttpError(422, 'Agents need an area');
   if (b.role === 'field_agent' && !b.parent_agent_id) throw new HttpError(422, 'A field agent needs a master agent');
@@ -1415,7 +1542,7 @@ adminRouter.post('/users', requireRole('global_admin','corporate_business_manage
       const parent = (await c.query(
         `SELECT a.id FROM agents a JOIN users u ON u.id=a.id
          WHERE a.id=$1 AND a.agent_type='master' AND u.role='master_agent' AND u.active=true AND a.territory_id=$2
-           AND ($3::text <> 'corporate_business_manager' OR u.created_by=$4)`,
+           AND ($3::text NOT IN ('corporate_business_manager','super_admin') OR u.created_by=$4)`,
         [b.parent_agent_id,b.territory_id,req.user!.role,req.user!.id],
       )).rows[0];
       if (!parent) throw new HttpError(422, 'Choose an active Master Agent in the selected territory.');
