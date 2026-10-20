@@ -1,0 +1,81 @@
+name: afrolife-qa
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: afrolife
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${AFROLIFE_DB_ADMIN_PASSWORD:?Run npm run qa:docker:up to create .env.docker}
+      AFROLIFE_APP_PASSWORD: ${AFROLIFE_DB_APP_PASSWORD:?Run npm run qa:docker:up to create .env.docker}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - qa_database:/var/lib/postgresql
+      - ./docker/qa-init.sql:/docker-entrypoint-initdb.d/10-afrolife-qa.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d afrolife"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://afrolife_app:${AFROLIFE_DB_APP_PASSWORD}@db:5432/afrolife
+      MIGRATION_DATABASE_URL: postgres://postgres:${AFROLIFE_DB_ADMIN_PASSWORD}@db:5432/afrolife
+    command: ["node", "dist/src/migrate.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  grant-runtime:
+    image: postgres:18-alpine
+    environment:
+      MIGRATION_DATABASE_URL: postgres://postgres:${AFROLIFE_DB_ADMIN_PASSWORD}@db:5432/afrolife
+    command:
+      - sh
+      - -ec
+      - |
+        psql "$$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+        GRANT USAGE ON SCHEMA public TO afrolife_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO afrolife_app;
+        GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO afrolife_app;
+        GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO afrolife_app;
+        SQL
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgres://afrolife_app:${AFROLIFE_DB_APP_PASSWORD}@db:5432/afrolife
+      JWT_SECRET: ${JWT_SECRET:?Run npm run qa:docker:up to create .env.docker}
+      MFA_ENC_KEY: ${MFA_ENC_KEY:?Run npm run qa:docker:up to create .env.docker}
+      FILE_STORAGE_DIR: /app/afrolife/data/private-files
+      MFI_PILOT_ENABLED: "1"
+      INSURANCE_BROKERAGE_MODE: sandbox
+    ports:
+      - "127.0.0.1:${AFROLIFE_HTTP_PORT:-3000}:3000"
+    volumes:
+      - qa_private_files:/app/afrolife/data/private-files
+    depends_on:
+      db:
+        condition: service_healthy
+      grant-runtime:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  qa_database:
+  qa_private_files:

@@ -6,12 +6,14 @@ import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import pg from 'pg';
 
-const localEnv = join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'afrolife.env');
-if (!process.env.LOCALAPPDATA || !existsSync(localEnv)) {
-  throw new Error('The isolated local AfroLife environment file is required. Run npm run db:local:setup first.');
+const localEnv = process.env.AFROLIFE_ENV_FILE
+  ?? join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'afrolife.env');
+if (!existsSync(localEnv)) {
+  throw new Error('The isolated local AfroLife environment file is required. Run the local database setup first.');
 }
 dotenv.config({ path: localEnv });
 const disposableDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
+const dockerQaMode = process.env.AFROLIFE_DOCKER_QA === '1';
 const connectionString = disposableDatabaseUrl ?? process.env.MIGRATION_DATABASE_URL;
 const credentialPath = process.env.AFROLIFE_TEST_USERS_FILE
   ?? join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
@@ -25,6 +27,7 @@ const localUrl = new URL(connectionString);
 const databaseName = decodeURIComponent(localUrl.pathname.replace(/^\/+/, ''));
 if (!['127.0.0.1', 'localhost', '::1'].includes(localUrl.hostname)
   || localUrl.port !== '5433'
+  || (dockerQaMode && disposableDatabaseUrl)
   || (disposableDatabaseUrl
     ? !/^afrolife_test_[a-z0-9_-]+$/i.test(databaseName)
     : databaseName !== 'afrolife')) {
@@ -47,7 +50,16 @@ try {
     && !identity.is_superuser && identity.bypasses_rls;
   const allowedExistingLocalSetup = !disposableDatabaseUrl && databaseName === 'afrolife'
     && identity.database_user === 'postgres' && identity.is_superuser;
-  if (!['127.0.0.1', '::1'].includes(identity.address) || Number(identity.port) !== 5433
+  const loopbackPostgres = ['127.0.0.1', '::1'].includes(identity.address)
+    && Number(identity.port) === 5433;
+  const dockerPrivateAddress = identity.address && (
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(identity.address)
+    || /^192\.168\.\d{1,3}\.\d{1,3}$/.test(identity.address)
+    || /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(identity.address)
+    || /^(fc|fd)[0-9a-f:]*$/i.test(identity.address)
+  );
+  const dockerPostgres = dockerQaMode && dockerPrivateAddress && Number(identity.port) === 5432;
+  if ((!loopbackPostgres && !dockerPostgres)
     || (!allowedFixtureRole && !allowedExistingLocalSetup)) {
     throw new Error(`Refusing to seed users: unexpected local database identity ${JSON.stringify(identity)}.`);
   }

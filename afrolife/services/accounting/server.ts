@@ -28,7 +28,7 @@ app.use((error:unknown,req:express.Request,res:express.Response,_next:express.Ne
   }
   console.error(`Accounting service request failed [${id}]`,error);return send(500,{error:'Internal error'});
 });
-const port=Number(process.env.PORT??3300);
+const port=Number(process.env.PORT??3301);
 await assertServiceDatabaseSafety();
 const server=app.listen(port,process.env.HOST??'0.0.0.0',()=>console.log(`Accounting service listening on ${port}`));
 for(const signal of ['SIGTERM','SIGINT'] as const)server.once(signal,()=>server.close(()=>pool.end().finally(()=>process.exit(0))));

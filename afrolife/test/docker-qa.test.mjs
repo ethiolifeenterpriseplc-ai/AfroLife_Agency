@@ -1,0 +1,53 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const compose = readFileSync(new URL('../compose.qa.yaml', import.meta.url), 'utf8');
+const initSql = readFileSync(new URL('../docker/qa-init.sql', import.meta.url), 'utf8');
+const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
+const dockerIgnore = readFileSync(new URL('../.dockerignore', import.meta.url), 'utf8');
+const gitIgnore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8');
+const seedUsers = readFileSync(new URL('../scripts/seed-local-test-users.ts', import.meta.url), 'utf8');
+const qaScript = readFileSync(new URL('../scripts/docker-qa.ps1', import.meta.url), 'utf8');
+const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+
+test('Docker QA exposes one app port and keeps PostgreSQL on loopback', () => {
+  assert.match(compose, /127\.0\.0\.1:\$\{AFROLIFE_HTTP_PORT:-3000\}:3000/);
+  assert.match(compose, /127\.0\.0\.1:5433:5432/);
+  assert.match(compose, /qa_database:\/var\/lib\/postgresql/);
+  assert.match(compose, /qa_private_files:\/app\/afrolife\/data\/private-files/);
+  assert.doesNotMatch(compose, /(?:\.\/|\.\.\/)data(?:\/|:)/);
+});
+
+test('Docker QA migrations run as database owner and the app uses a restricted runtime role', () => {
+  assert.match(initSql, /CREATE ROLE afrolife_app LOGIN PASSWORD .*NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS/s);
+  assert.match(compose, /MIGRATION_DATABASE_URL: postgres:\/\/postgres:/);
+  assert.match(compose, /DATABASE_URL: postgres:\/\/afrolife_app:/);
+  assert.match(compose, /condition: service_completed_successfully/);
+});
+
+test('Docker image includes migration inputs and generated QA credentials stay untracked', () => {
+  assert.match(dockerfile, /COPY migrations \.\/migrations/);
+  assert.match(dockerfile, /COPY scripts\/copy-migrations\.mjs \.\/scripts\/copy-migrations\.mjs/);
+  assert.match(dockerIgnore, /!scripts\/copy-migrations\.mjs/);
+  assert.match(gitIgnore, /^\.env\.docker$/m);
+  assert.match(gitIgnore, /^\.local-qa\/$/m);
+});
+
+test('Docker QA user seeding is explicit and verifies loopback host mapping and private container identity', () => {
+  assert.match(qaScript, /\$env:AFROLIFE_DOCKER_QA = '1'/);
+  assert.match(seedUsers, /process\.env\.AFROLIFE_DOCKER_QA === '1'/);
+  assert.match(seedUsers, /dockerQaMode && disposableDatabaseUrl/);
+  assert.match(seedUsers, /dockerQaMode && dockerPrivateAddress && Number\(identity\.port\) === 5432/);
+  assert.match(seedUsers, /localUrl\.hostname/);
+  assert.match(seedUsers, /identity\.database_user === 'postgres' && identity\.is_superuser/);
+  assert.match(qaScript, /MIGRATION_DATABASE_URL/);
+  assert.match(qaScript, /Remove-Item Env:TEST_DATABASE_URL/);
+});
+
+test('Docker QA stop preserves its named volumes and local app entrypoint is documented', () => {
+  assert.match(qaScript, /Invoke-Compose -Arguments @\('down'\)/);
+  assert.doesNotMatch(qaScript, /Arguments @\('down',\s*'-v'/);
+  assert.match(compose, /^name: afrolife-qa$/m);
+  assert.match(readme, /http:\/\/localhost:3000/);
+});

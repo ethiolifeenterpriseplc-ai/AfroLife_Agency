@@ -90,6 +90,22 @@ test('Global BI gateway requires an explicitly ready, unique service configurati
   );
 });
 
+test('private service port defaults do not overlap between MFI and Accounting instances', () => {
+  const accountingServer = readFileSync(new URL('../services/accounting/server.ts', import.meta.url), 'utf8');
+  const mfiServer = readFileSync(new URL('../services/sacco-mfi/server.ts', import.meta.url), 'utf8');
+  const accountingEnv = readFileSync(new URL('../deploy/accounting-service.env.example', import.meta.url), 'utf8');
+  const subscriberAccountingEnv = readFileSync(new URL('../deploy/accounting-subscriber-service.env.example', import.meta.url), 'utf8');
+  const defaultPort = (source: string) => Number(source.match(/process\.env\.PORT\s*\?\?\s*(\d+)/)?.[1]);
+  const envPort = (source: string) => Number(source.match(/^PORT=(\d+)$/m)?.[1]);
+  const mfiPort = defaultPort(mfiServer);
+  const accountingPort = defaultPort(accountingServer);
+  const subscriberPort = envPort(subscriberAccountingEnv);
+
+  assert.equal(envPort(accountingEnv), accountingPort);
+  assert.deepEqual([mfiPort, accountingPort, subscriberPort], [3300, 3301, 3302]);
+  assert.equal(new Set([mfiPort, accountingPort, subscriberPort]).size, 3);
+});
+
 test('production blocks legacy immediate lease activation unless explicitly enabled', () => {
   assert.equal(loadRuntimeConfig(safeProductionEnvironment).legacyImmediateLeasesEnabled, false);
   assert.equal(loadRuntimeConfig({

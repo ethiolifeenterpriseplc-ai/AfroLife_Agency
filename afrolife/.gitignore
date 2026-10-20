@@ -1,8 +1,10 @@
 node_modules/
 dist/
 .env
+.env.docker
 .env.production.windows
 data/
+.local-qa/
 coverage/
 npm-debug.log*
 android/.gradle/

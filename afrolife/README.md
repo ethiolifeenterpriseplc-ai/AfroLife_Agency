@@ -40,6 +40,31 @@ Same-origin TypeScript/Express API and installable web app for AfroLife agency o
 
 4. Run `npm run dev`, then open `http://localhost:3000`.
 
+`http://localhost:3000` is the local browser entry point for the PWA and API.
+The optional local Nginx preview on `http://localhost:8080` only proxies to
+that same app and is not needed for `npm run dev`. Users always open this
+single app URL (or the single public hostname in deployment); they do not open
+service-specific ports. Extracted backends remain private behind the central
+API gateway, which routes each feature internally.
+
+For a containerized local QA environment, start Docker Desktop and run
+`npm run qa:docker:up` from `afrolife/`. This builds the application, starts an
+isolated PostgreSQL database on loopback port 5433, applies migrations, grants
+the restricted runtime role, and serves the app at `http://localhost:3000`.
+Database and private uploads use Docker-managed named volumes; host `data/`
+and any prior local database are not deleted or mounted. Locally generated
+secrets are kept in the Git-ignored `.env.docker`. Run
+`npm run qa:docker:seed` to create synthetic role accounts; credentials are
+saved under the Git-ignored `.local-qa/` directory. Use
+`npm run qa:docker:status` and `npm run qa:docker:logs` for diagnostics.
+`npm run qa:docker:down` stops containers but intentionally preserves volumes
+and credentials. Do not use this QA environment for production data.
+This starts the core platform with its integrated Agency, MFI pilot, Insurance
+ledger, and synthetic brokerage sandbox paths. Separate Edir, Accounting,
+Global BI, and extracted domain-service deployments retain their own database,
+secrets, and cutover requirements; this local stack does not claim to deploy
+those independent service instances.
+
 For local workflow testing, run `npm run seed:local-test-users`. This creates
 synthetic active accounts for every AfroLife app role (including two Super
 Admins for four-eyes workflows). Random passwords are saved in
@@ -642,9 +667,10 @@ reconciliation, or production release gates.
 
 SACCO/MFI now has a separately runnable API process in `services/sacco-mfi/`.
 Build it with `npm run build:mfi` and start it with `npm run start:mfi`; it
-listens on private loopback port 3300. A standalone container definition is at
-`services/sacco-mfi/Dockerfile`. The shared API gateway forwards the
-existing `/api/v1/mfi` contract with signed identity when
+listens on private loopback port 3300. Accounting uses 3301 and the separate
+subscriber Accounting instance uses 3302 when co-located. A standalone
+container definition is at `services/sacco-mfi/Dockerfile`. The shared API
+gateway forwards the existing `/api/v1/mfi` contract with signed identity when
 `MFI_SERVICE_URL=http://127.0.0.1:3300` and the matching
 `MFI_GATEWAY_SECRET` are configured. The same Super App shell, sign-in,
 responsive navigation, localization, and API origin remain in use.

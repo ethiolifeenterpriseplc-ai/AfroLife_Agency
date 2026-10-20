@@ -3,6 +3,8 @@ WORKDIR /app/afrolife
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json ./tsconfig.json
+COPY migrations ./migrations
+COPY scripts/copy-migrations.mjs ./scripts/copy-migrations.mjs
 COPY src ./src
 COPY services/agency-domain/runtime.ts ./services/agency-domain/runtime.ts
 COPY services/workforce-management ./services/workforce-management

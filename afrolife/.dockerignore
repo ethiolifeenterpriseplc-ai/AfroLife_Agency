@@ -14,5 +14,6 @@ scripts
 !scripts/
 scripts/*
 !scripts/copy-accounting-assets.mjs
+!scripts/copy-migrations.mjs
 .env*
 npm-debug.log*
