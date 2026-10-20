@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -59,7 +60,12 @@ try{
   const territory=territories.find(item=>item.level==='sub_city');assert.ok(territory,'Synthetic territory seed is required');
   const suffix=Date.now().toString(36).toUpperCase();
   const property=await request('POST','/properties',propertyOwner,{address:`LOCAL QA property ${suffix}, Addis Ababa`,description:'Synthetic property-finance test only',ptype:'house',listing_mode:'rent',rent_period:'month',territory_id:territory.id,units:[{unit_no:'QA-1',ptype:'apartment',rent:10000}]},201);
-  const maintenance=await request('POST','/maintenance',propertyOwner,{property_id:property.id,description:'Synthetic vendor accounting workflow test',priority:'normal'},201);
+  const maintenancePayload={property_id:property.id,description:'Synthetic vendor accounting workflow test',priority:'normal',idempotency_key:randomUUID()};
+  const maintenance=await request('POST','/maintenance',propertyOwner,maintenancePayload,201);
+  const maintenanceRetry=await request('POST','/maintenance',propertyOwner,maintenancePayload,200);
+  assert.equal(maintenanceRetry.id,maintenance.id,'A retried maintenance request must return the original record');
+  assert.equal(maintenanceRetry.replayed,true,'A retried maintenance request must be marked as replayed');
+  await request('POST','/maintenance',propertyOwner,{...maintenancePayload,description:'Changed content under an existing retry key'},409);
   await request('POST',`/maintenance/${maintenance.id}/update`,admin,{status:'assigned',assigned_to:'LOCAL QA Maintenance Vendor'});
   await request('POST',`/maintenance/${maintenance.id}/update`,admin,{status:'in_progress',cost:1100});
   const vendor=await request('POST','/property-vendors',financeManager,{name:`LOCAL QA Vendor ${suffix}`,tax_id:`QA-${suffix}`,phone:'+12025550999',email:`vendor-${suffix.toLowerCase()}@example.test`},201);
@@ -81,6 +87,7 @@ try{
   assert.equal(outboxAfter-outboxBefore,2,'Approved invoice and reconciled settlement each publish one Accounting event');
   console.log(JSON.stringify({result:'PASS',environment:'local synthetic identities and local PostgreSQL',cases:[
     'Mock Finance Manager created vendor and maintenance invoice',
+    'Maintenance request retry returned the original record and changed-payload key reuse was rejected',
     'Invoice maker was denied approval; independent Super Admin approved Expense/Accounts Payable',
     'Vendor accounts-payable balance increased by the full invoice amount',
     'Payment maker was denied reconciliation; independent Super Admin posted Accounts Payable/Cash',

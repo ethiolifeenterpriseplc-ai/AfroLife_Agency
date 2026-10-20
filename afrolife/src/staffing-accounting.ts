@@ -74,7 +74,10 @@ staffingAccounting.post('/staffing-engagements/:id/work-periods',requireRole('ma
 }));
 
 staffingAccounting.get('/staffing-work-periods/pending',requireRole(...reviewers),h(async(req,res)=>{
-  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT p.*,e.source_agent_id,e.client_lead_id,e.worker_id FROM staffing_work_periods p JOIN staffing_engagements e ON e.id=p.engagement_id WHERE p.status='submitted' ORDER BY p.created_at LIMIT 200`)).rows));
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT p.*,e.source_agent_id,e.client_lead_id,e.worker_id,l.name AS client_name,w.name AS worker_name
+    FROM staffing_work_periods p JOIN staffing_engagements e ON e.id=p.engagement_id
+    JOIN leads l ON l.id=e.client_lead_id JOIN workers w ON w.id=e.worker_id
+    WHERE p.status='submitted' ORDER BY p.created_at LIMIT 200`)).rows));
 }));
 
 staffingAccounting.post('/staffing-work-periods/:id/decision',requireRole(...reviewers),h(async(req,res)=>{

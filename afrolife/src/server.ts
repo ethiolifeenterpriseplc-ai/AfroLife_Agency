@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { Phone } from './validators.js';
 import { pool, withUser, authenticate, requireRole, HttpError, JWT_SECRET, assertRuntimeDatabaseSafety } from './core.js';
 import { loadRuntimeConfig, workspaceModulesForServices } from './runtime-config.js';
-import { apiMetricsMiddleware, checkWorkspaceServices, getApiMetrics } from './workspace-status.js';
+import { apiMetricsMiddleware, createWorkspaceServiceStatusCache, flushApiMetrics, readPersistedApiMetrics, startApiMetricsPersistence } from './workspace-status.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
 import { audit, feeSnapshot, loadRules, post, transition } from './domain.js';
 import { supply } from './supply.js';
@@ -29,13 +29,14 @@ import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
 import { allowedMiniApps, hasMiniAppAccess, requireAnyMiniAppAccess, requireMiniAppAccess } from './mini-app-access.js';
-import { subscriptionRouter } from './subscriptions.js';
+import { getPublicSubscriptionCatalog, subscriptionRouter } from './subscriptions.js';
 import { createIndustryNewsProvider } from './industry-news.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
 if (JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be set (32+ chars)');
 const runtimeConfig = loadRuntimeConfig(process.env);
+const getWorkspaceServiceStatus = createWorkspaceServiceStatusCache();
 const corsOrigins = new Set((process.env.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
 // Behind a load balancer / reverse proxy every request looks like the same IP unless this is set, which makes the login rate limit hit everyone at once.
 // TRUST_PROXY=1 (number of proxy hops) or a subnet list; leave unset when the API is exposed directly.
@@ -82,7 +83,7 @@ app.get('/api/public/industry-news', h(async (_req, res) => {
 const STAFF = ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager'];
 const AGENT = ['master_agent', 'field_agent'];
 const api = express.Router();
-app.use('/api/v1', apiMetricsMiddleware);
+api.use(apiMetricsMiddleware);
 
 // ---- Auth (login with lockout and optional 2FA lives in admin.ts) ----
 api.post('/auth/login', createApiRateLimiter('login', Number(process.env.LOGIN_RATE_LIMIT ?? 20)));
@@ -110,6 +111,10 @@ api.post(
     })
     : (_req, res) => res.status(503).json({ error: 'AfroLife Edir service is not configured' }),
 );
+
+api.get('/subscriptions/catalog', (_req, res) => {
+  res.json(getPublicSubscriptionCatalog());
+});
 
 api.use(authenticate);
 api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
@@ -251,7 +256,7 @@ api.get('/features', h(async (req, res) => {
   });
 }));
 api.get('/system/status', h(async (_req, res) => {
-  const services = await checkWorkspaceServices([
+  res.json(await getWorkspaceServiceStatus([
     { id: 'core', name: 'AfroLife core', enabled: true, withoutUrl: 'integrated' },
     {
       id: 'workforce-management',
@@ -269,12 +274,12 @@ api.get('/system/status', h(async (_req, res) => {
     { id: 'global-bi', name: 'Global BI', enabled: Boolean(process.env.GLOBAL_BI_SERVICE_URL), url: process.env.GLOBAL_BI_SERVICE_URL, withoutUrl: 'disabled' },
     { id: 'insurance', name: 'Insurance ledger', enabled: Boolean(process.env.INSURANCE_SERVICE_URL), url: process.env.INSURANCE_SERVICE_URL, withoutUrl: 'integrated' },
     { id: 'mfi', name: 'SACCO / MFI', enabled: runtimeConfig.mfiPilotEnabled, url: process.env.MFI_SERVICE_URL, withoutUrl: 'disabled' },
-  ]);
-  res.json({ checked_at: new Date().toISOString(), services });
+  ]));
 }));
-api.get('/system/metrics', requireRole('global_admin'), (_req, res) => {
-  res.json(getApiMetrics());
-});
+api.get('/system/metrics', requireRole('global_admin'), h(async (req, res) => {
+  await flushApiMetrics().catch((error) => console.error('API metrics flush before read failed', error instanceof Error ? error.message : error));
+  res.json(await withUser(req.user!, readPersistedApiMetrics));
+}));
 api.use(adminRouter);
 api.use(privacy);
 api.use(ops);
@@ -697,8 +702,14 @@ if (runtimeConfig.isProduction) await assertRuntimeDatabaseSafety();
 const server = process.env.HOST
   ? app.listen(port, process.env.HOST, onListening)
   : app.listen(port, onListening);
+const apiMetricsTimer = startApiMetricsPersistence();
 
 // Let in-flight requests (and their transactions) finish when the platform restarts the container.
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
-  process.once(sig, () => server.close(() => pool.end().finally(() => process.exit(0))));
+  process.once(sig, () => {
+    clearInterval(apiMetricsTimer);
+    server.close(() => flushApiMetrics()
+      .catch((error) => console.error('Final API metrics flush failed', error instanceof Error ? error.message : error))
+      .finally(() => pool.end().finally(() => process.exit(0))));
+  });
 }

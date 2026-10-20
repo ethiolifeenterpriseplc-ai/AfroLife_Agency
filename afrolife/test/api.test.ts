@@ -174,6 +174,17 @@ test('Insurance Agent referrals require opt-in and remain within the assigned Ag
   ]);
 });
 
+test('persistent API metrics aggregate route traffic and remain Global Admin only', async () => {
+  assert.equal((await call(admin, 'GET', '/system/metrics')).status, 403);
+  const metrics = await call(globalAdmin, 'GET', '/system/metrics');
+  assert.equal(metrics.status, 200, JSON.stringify(metrics.body));
+  assert.ok(Array.isArray(metrics.body.routes));
+  const route = metrics.body.routes.find((metric: any) => metric.route === 'GET /api/v1/agent-referrals/me');
+  assert.ok(route, `Completed API traffic should have been flushed to persistent metrics before the read: ${JSON.stringify(metrics.body.routes)}`);
+  assert.ok(Number(route.requests) >= 1);
+  assert.ok(Number(route.average_duration_ms) >= 0);
+});
+
 test('Global System Admin controls shared platform configuration while Super Admin configures assigned modules only', async () => {
   assert.equal((await call(compliance, 'GET', '/platform/services')).status, 403);
   const services = await call(globalAdmin, 'GET', '/platform/services');

@@ -221,8 +221,8 @@ The local staging stack is installed under `/opt/afrolife/app`; PostgreSQL
 listens only on `127.0.0.1:5432`, the Node API only on `127.0.0.1:3000`, and
 the local Nginx proxy only on `127.0.0.1:8080`. The generated runtime secrets
 are stored in `/etc/afrolife/runtime.env`, readable only by root and the
-restricted `afrolife` service group. Eight schema migrations are applied to
-the separate `afrolife_linux` database.
+restricted `afrolife` service group. The `afrolife_linux` database is separate
+from the Windows development database.
 
 Linux deployment templates are in `deploy/linux/`:
 
@@ -235,14 +235,36 @@ current user's logon and keeps WSL alive so its enabled systemd services can
 run. The local staging URL is `http://localhost:8080`; it is not HTTPS and
 must not be used for public traffic or real identity documents.
 
-On 11 October 2026, the WSL services were active, the API health endpoint and
-local proxy each returned HTTP 200, and the separate Windows synthetic-data
-database accepted connections on `127.0.0.1:5433`. However, the page served
-from the WSL proxy still displayed the older AfroLife title rather than this
-checkout's EthioLife title. The WSL deployment is therefore healthy but not
-the current workspace release. No files or database migrations were changed
-in that running deployment; take and verify a backup, review the migrations,
-and schedule a controlled release before replacing it.
+On 20 October 2026, the WSL staging release was advanced to
+`/opt/afrolife/releases/release-20261020-maintenance-pagination` using an
+atomic `/opt/afrolife/app` symlink switch. The workspace UI bundle was
+checksum-verified against the deployed copy. The API and proxy returned HTTP
+200, all 90 workspace schema migrations were recorded in `afrolife_linux`,
+and `npm run check:local-deployment` passed with services and application
+ports bound to loopback. The previous releases remain available under
+`/opt/afrolife/releases/` for rollback.
+
+Later on 20 October 2026, the code-only release
+`/opt/afrolife/releases/release-20261020-maintenance-latest-update` replaced
+the per-row maintenance event-count lookup with a latest-event lookup and
+surfaced the update on Property queue cards. The actor name is included in
+history where row-level access allows it. No database migration was needed;
+the active release was switched atomically, the API reported a connected
+database, deployed UI hashes matched the workspace, and the local deployment
+checker passed again.
+
+The later code-only release
+`/opt/afrolife/releases/release-20261020-service-status-cache` added a
+15-second shared health snapshot and coalesced concurrent `/system/status`
+refreshes. Its compiled server and status module matched workspace SHA-256
+hashes; API/database health and `npm run check:local-deployment` passed. It
+made no schema change. Earlier releases remain available for atomic rollback.
+
+Before release, the current database, private uploads, and previous release
+were archived under the root-only directory
+`/var/backups/afrolife-staging-20261020/`; the database dump and both tar
+archives were validated. This is local staging evidence only. The local URL
+is not HTTPS and must not be used for public traffic or real identity documents.
 
 The Linux database has not been seeded with a Super Admin. When ready, open
 Ubuntu and run `sudo bash /opt/afrolife/app/deploy/linux/Seed-AfroLifeAdmin.sh`.

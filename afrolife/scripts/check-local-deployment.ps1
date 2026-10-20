@@ -35,7 +35,9 @@ $packageLock = Test-Path -LiteralPath (Join-Path $projectRoot 'package-lock.json
 Write-Check -Name 'Reproducible dependency lock' -Passed $packageLock -Details 'package-lock.json is present'
 
 $guestCommand = 'systemctl is-active afrolife nginx postgresql; ss -H -lnt'
-$guestResult = & wsl.exe --distribution $Distro --exec bash -lc $guestCommand 2>&1
+# The default WSL user session can be unavailable in a managed Windows shell.
+# This probe is read-only, so use root to query systemd and listener state.
+$guestResult = & wsl.exe --distribution $Distro --user root --exec bash -lc $guestCommand 2>&1
 $guestExitCode = $LASTEXITCODE
 $guestLines = @($guestResult | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
 $serviceStates = @($guestLines | Select-Object -First 3)

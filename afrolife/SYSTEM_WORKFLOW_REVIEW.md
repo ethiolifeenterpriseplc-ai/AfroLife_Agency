@@ -142,6 +142,65 @@ browser flows, and local test harness. This is a source and local-environment re
 it is not a legal, regulatory, penetration, accessibility, or production operations
 certification.
 
+## Cross-cutting review continuation — 20 October 2026
+
+### Scope and evidence
+
+This pass inspected the current Express startup and API middleware, auth-session
+and runtime-configuration code, private-file storage helper, service listener
+defaults and deployment templates, health/metrics routes, and the previously
+recorded role and domain workflow reviews. The current local WSL staging API
+reports a connected database and the local deployment checker passes. This
+pass did not run the automated test suite, exercise authenticated user journeys,
+or establish public production behavior. Browser automation did not start in
+the current workspace, so UI conclusions below rely on source and the prior
+browser evidence recorded elsewhere in this file.
+
+### Findings and changes
+
+| Priority | Finding | Disposition |
+| --- | --- | --- |
+| P2 reliability/performance | Every authenticated `/system/status` refresh started a new health request to every configured service, even when other operators had just requested the same snapshot. Each downstream probe can wait up to 2.5 seconds. | Implemented and deployed in `/opt/afrolife/releases/release-20261020-service-status-cache`: a 15-second in-process snapshot cache with in-flight request coalescing. Rapid refreshes and simultaneous viewers now share one probe pass; the response timestamp remains the probe time. Build, deployed-binary checksums, API health, and local WSL deployment checks passed. |
+| P1 release assurance | Local health and build success do not prove a recoverable production release. Public ingress/TLS, monitored restore rehearsal, and independent recovery evidence remain unverified. | Open. Keep public financial and identity workflows gated until the evidence in `PRODUCTION_HARDENING.md` and `QUALITY_ASSURANCE.md` is recorded for the actual target. |
+| P1 product workflow | Worker and tenant journeys still lack self-service for key lifecycle steps; Staffing placement outcome, dispute/appeal, and expiry handling remain incomplete. | Open product work. Define consent, ownership, and escalation rules before adding data collection or automated employment decisions. |
+| P1 privacy/operations | Document expiry/replacement, access review, retention, deletion, and incident handling are not one complete end-to-end operational process across all document classes. | Open policy and workflow work. Do not infer document validity from upload, OCR, or an isolated review state. |
+| P2 observability | API route metrics are process-local aggregates and reset on restart; service-health checks are point-in-time status, not alerting or an SLO. | Open. Add durable monitoring/alert ownership with retention and privacy limits before relying on uptime or trend claims. |
+| P2 field usability | Poor-network recovery, offline work capture, screen-reader/keyboard review, and physical-device behavior have not been established across the application. | Open validation work. Existing responsive CSS and targeted smoke checks are not accessibility or offline conformance evidence. |
+
+### Cross-cutting controls confirmed in source
+
+- Production configuration validates distinct non-placeholder JWT/MFA secrets,
+  HTTPS CORS origins, trusted proxy configuration, private absolute file
+  storage, remote database TLS, required staff MFA, and explicit service
+  cutover readiness.
+- Authenticated requests check active server-side sessions and current account
+  state. Runtime PostgreSQL startup rejects superuser, `BYPASSRLS`, and table
+  owner roles.
+- Private files use UUID-like storage keys, exclusive creation, restrictive
+  file permissions, and route-level metadata authorization in the reviewed
+  upload/download paths.
+- Service bind addresses intentionally differ by deployment: systemd templates
+  use loopback, while containerized services must listen on the container
+  interface. Do not standardize these defaults without matching proxy and
+  container networking changes.
+- The browser code scan found no direct `innerHTML`, `insertAdjacentHTML`, or
+  `eval` use in the reviewed public bundles. This limited scan is not a full
+  XSS or dependency security assessment.
+
+### Follow-up order
+
+1. Add a release-specific backup restore rehearsal and monitored recovery
+   ownership for the actual hosting environment.
+2. Complete role-owned worker and tenant journeys, including consent, status
+   changes, dispute/appeal, and escalation evidence.
+3. Approve jurisdiction-specific retention and implement deletion/legal-hold
+   and access-review operations across service boundaries. Expiry tracking and
+   verified replacement are now implemented in the workforce service.
+4. Connect persisted API metrics to external alerts, set thresholds and record
+   named alert owners. Metrics now persist across process restarts and instances.
+5. Run authenticated cross-role UI and API acceptance, keyboard/screen-reader
+   review, and poor-network/mobile-device checks against synthetic data.
+
 ## Highest-priority correction made
 
 SACCO journal reversals previously acquired the institution cash-account lock before
@@ -151,6 +210,81 @@ and surface as a generic server error. Reversal now locks the loan before cash a
 checks cash and savings minimum-balance constraints after obtaining the cash lock.
 The local SACCO journey now also reverses a partial loan repayment and checks that
 the principal balance returns to zero before completing repayment.
+
+## Detailed review continuation — 20 October 2026
+
+### Changes implemented in this continuation
+
+- API route metrics now flush in bounded batches to PostgreSQL every five seconds,
+  survive process restarts, aggregate across application instances, and flush on
+  graceful shutdown. The Global Admin endpoint reads the persisted aggregates;
+  route labels are parameterized Express patterns and the in-memory queue remains
+  capped at 500 routes. Migration `091_persistent_api_metrics.sql` adds the
+  protected metrics store. Metrics reads remain privileged to Global Admin.
+- Maintenance creation accepts a per-user idempotency key and payload digest.
+  A retry after a slow or interrupted network response returns the original
+  request instead of creating a duplicate; reusing a key with changed content is
+  rejected. The maintenance form preserves the retry key in the active form and
+  session storage. Migration `092_maintenance_replay_and_document_expiry_index.sql`
+  adds the key and expiry-query index.
+- Workforce staff with document-view permission now see expired and soon-to-expire
+  credentials in the next-30-days queue. When Compliance verifies a replacement,
+  older verified credentials of that type become `superseded` and the replacement
+  is audit-recorded. The old file is retained; this workflow does not infer a
+  legal deletion period.
+
+### Remaining work and decision gates
+
+- **Worker and tenant self-service:** account signup does not establish a verified
+  relationship to an existing worker or lease. Phone equality alone is not safe
+  proof of ownership. Before opening profile, lease, rent, maintenance, appeal or
+  dispute records to end users, implement an expiring single-use invitation or an
+  approved identity-verification flow, persist the verified account link, record
+  purpose-specific consent and consent version, and enforce the link in RLS as
+  well as route authorization. Then add worker status/availability, tenant
+  maintenance submission, dispute/appeal, and escalation journeys. No self-service
+  access was enabled by this review.
+- **Document retention and deletion:** expiry is surfaced and replacement is
+  tracked, but destruction is intentionally not automatic. Legal/privacy owners
+  must set retention periods by document type, jurisdiction, open-case hold,
+  appeal state, and contract. After approval, implement a reviewed retention job
+  that removes private file bytes and metadata consistently, logs the deletion,
+  and supports access review and legal hold.
+- **Recovery rehearsal and monitoring ownership:** code now persists API
+  aggregates, but external alert delivery, thresholds, production restore, and
+  measured RPO/RTO remain unverified. Before release, record named primary and
+  backup owners for incident command, database/private-file recovery, finance
+  reconciliation, and release approval in `V7_RELEASE_ACCEPTANCE_RECORD.md`;
+  run a release-specific restore rehearsal in the target hosting environment.
+- **UI validation:** maintenance submission now survives safe retries on
+  intermittent links and the workforce expiry queue is rendered in the UI.
+  Responsive and basic semantic-accessibility affordances already exist, but this
+  continuation did not complete screen-reader, keyboard-only, physical Android,
+  low-bandwidth device, or end-to-end identity-journey validation. Keep these as
+  release acceptance items and use synthetic accounts/data.
+
+### Deployment note
+
+Apply migrations `091`, `092`, and `093` through the migration role before deploying the
+new application code. Migration `093` corrects the Global Admin metrics policy
+for environments that already recorded migration `091`. Confirm the runtime role has no RLS bypass, then inspect
+the Global Admin metrics panel and submit one maintenance request with a deliberate
+retry in staging. Repository changes do not constitute a production backup,
+restore, alert-delivery, or accessibility certification.
+
+### Integration verification — 20 October 2026
+
+`npm run test:finance:e2e:local` passed against a uniquely named temporary
+loopback database with a restricted non-superuser runtime role. It applied all
+93 migrations, passed the Property Finance and Staffing Accounting end-to-end
+journeys, and passed all 57 core HTTP integration cases. Added assertions cover
+Global Admin-only persisted metrics, due-document queue visibility and
+replacement superseding, and idempotent maintenance retries including changed
+payload rejection. The runner removed the temporary database, roles, credentials,
+and private files. This does not apply migrations to the persistent local or
+production database, and the authenticated browser smoke was not run against the
+WSL service because that service still reports migration 090 and serves a
+different deployment target.
 
 ## Workflow and control review
 

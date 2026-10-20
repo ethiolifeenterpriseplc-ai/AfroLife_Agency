@@ -955,26 +955,61 @@ ops.get('/rent-transactions/pending', requireAnyActivity('rent.transactions.view
 
 // ================= Maintenance =================
 ops.post('/maintenance', requireActivity('property.maintenance.manage'), h(async (req, res) => {
-  const b = z.object({ property_id: z.string().uuid(), unit_id: z.string().uuid().optional(), description: z.string().trim().min(5).max(2000), category: z.enum(['general','plumbing','electrical','appliance','structural','cleaning','safety','other']).default('general'), priority: z.enum(['low', 'normal', 'urgent']).default('normal') }).parse(req.body);
-  const row = await withUser(req.user!, async (c) => {
+  const b = z.object({ property_id: z.string().uuid(), unit_id: z.string().uuid().optional(), description: z.string().trim().min(5).max(2000), category: z.enum(['general','plumbing','electrical','appliance','structural','cleaning','safety','other']).default('general'), priority: z.enum(['low', 'normal', 'urgent']).default('normal'), idempotency_key: z.string().uuid().optional() }).parse(req.body);
+  const payloadHash = b.idempotency_key ? createHash('sha256').update(JSON.stringify({
+    property_id: b.property_id, unit_id: b.unit_id ?? null, description: b.description, category: b.category, priority: b.priority,
+  })).digest('hex') : null;
+  const result = await withUser(req.user!, async (c) => {
+    if (b.idempotency_key) {
+      const existing = (await c.query(
+        'SELECT * FROM maintenance_requests WHERE idempotency_user_id=$1 AND idempotency_key=$2',
+        [req.user!.id, b.idempotency_key],
+      )).rows[0];
+      if (existing) {
+        if (existing.idempotency_payload_hash !== payloadHash) throw new HttpError(409, 'Idempotency-Key was already used for a different maintenance request');
+        return { row: existing, replayed: true };
+      }
+    }
     const p = (await c.query('SELECT source_agent_id FROM properties WHERE id = $1', [b.property_id])).rows[0];
     if (!p) throw new HttpError(404, 'Property not found');
     if (b.unit_id && !(await c.query('SELECT 1 FROM property_units WHERE id = $1 AND property_id = $2', [b.unit_id, b.property_id])).rowCount) throw new HttpError(422, 'That unit does not belong to this property');
-    const r = await c.query('INSERT INTO maintenance_requests (property_id, unit_id, description, category, priority, source_agent_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [b.property_id, b.unit_id ?? null, b.description, b.category, b.priority, p.source_agent_id]);
+    const r = await c.query(
+      `INSERT INTO maintenance_requests
+         (property_id,unit_id,description,category,priority,source_agent_id,idempotency_user_id,idempotency_key,idempotency_payload_hash)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (idempotency_user_id,idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+       RETURNING *`,
+      [b.property_id, b.unit_id ?? null, b.description, b.category, b.priority, p.source_agent_id,
+        b.idempotency_key ? req.user!.id : null, b.idempotency_key ?? null, payloadHash],
+    );
+    if (!r.rowCount && b.idempotency_key) {
+      const existing = (await c.query(
+        'SELECT * FROM maintenance_requests WHERE idempotency_user_id=$1 AND idempotency_key=$2',
+        [req.user!.id, b.idempotency_key],
+      )).rows[0];
+      if (!existing || existing.idempotency_payload_hash !== payloadHash) throw new HttpError(409, 'Maintenance request could not be replayed safely; retry with a new Idempotency-Key');
+      return { row: existing, replayed: true };
+    }
     await c.query("INSERT INTO maintenance_request_events (maintenance_request_id,actor_id,event_type,to_status,note) VALUES ($1,$2,'opened','open',$3)", [r.rows[0].id, req.user!.id, b.description]);
     await audit(c, req.user!.id, 'maintenance_opened', 'maintenance', r.rows[0].id, null, { priority: b.priority, category: b.category });
-    return r.rows[0];
+    return { row: r.rows[0], replayed: false };
   });
-  res.status(201).json(row);
+  res.status(result.replayed ? 200 : 201).json({ ...result.row, replayed: result.replayed });
 }));
 
 ops.get('/maintenance', requireActivity('property.maintenance.manage'), h(async (req, res) => {
+  const offset = z.coerce.number().int().min(0).max(100000).parse(req.query.offset ?? 0);
   res.json(await withUser(req.user!, async (c) => (await c.query(
     `SELECT m.*, p.address, u.unit_no,
        extract(epoch FROM (COALESCE(m.completed_at,now())-m.created_at))/3600 AS age_hours,
-       (SELECT count(*)::int FROM maintenance_request_events e WHERE e.maintenance_request_id=m.id) AS event_count
+       latest.event_type AS latest_event_type, latest.note AS latest_event_note,
+       latest.created_at AS latest_event_at
      FROM maintenance_requests m JOIN properties p ON p.id = m.property_id LEFT JOIN property_units u ON u.id=m.unit_id
-     ORDER BY (m.status IN ('done','cancelled')), m.priority = 'urgent' DESC, m.created_at DESC LIMIT 200`)).rows));
+     LEFT JOIN LATERAL (
+       SELECT e.event_type,e.note,e.created_at FROM maintenance_request_events e
+       WHERE e.maintenance_request_id=m.id ORDER BY e.created_at DESC,e.id DESC LIMIT 1
+     ) latest ON true
+     ORDER BY (m.status IN ('done','cancelled')), m.priority = 'urgent' DESC, m.created_at DESC, m.id DESC LIMIT 201 OFFSET $1`, [offset])).rows));
 }));
 
 ops.get('/maintenance/metrics', requireActivity('property.maintenance.manage'), h(async (req, res) => {
@@ -988,8 +1023,8 @@ ops.get('/maintenance/metrics', requireActivity('property.maintenance.manage'), 
 
 ops.get('/maintenance/:id/events', requireActivity('property.maintenance.manage'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
-    `SELECT e.id,e.event_type,e.from_status,e.to_status,e.note,e.created_at
-     FROM maintenance_request_events e
+    `SELECT e.id,e.event_type,e.from_status,e.to_status,e.note,e.created_at,u.legal_name AS actor_name
+     FROM maintenance_request_events e LEFT JOIN users u ON u.id=e.actor_id
      WHERE e.maintenance_request_id=$1 ORDER BY e.created_at,e.id`, [req.params.id])).rows));
 }));
 

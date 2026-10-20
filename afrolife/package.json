@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-migrations.mjs",
     "build:insurance": "tsc -p services/insurance-ledger/tsconfig.json",
     "build:accounting": "tsc -p services/accounting/tsconfig.json && node scripts/copy-accounting-assets.mjs",
     "build:global-bi": "tsc -p services/global-bi/tsconfig.json",

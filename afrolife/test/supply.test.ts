@@ -168,6 +168,30 @@ test('worker directory marks a verified profile as expired when required evidenc
   assert.equal(listedWorker.verification, 'expired');
 });
 
+test('document expiry queue surfaces due evidence and verified replacement supersedes the prior copy', async () => {
+  const created = await call(fa, 'POST', '/workers', workerBody(10, { phone: `+2519${run}0` }));
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const worker = created.body;
+  const expiresOn = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const current = await upload(fa, worker.id, 'national_id', { expires_on: expiresOn });
+  assert.equal(current.status, 201, JSON.stringify({ workerId: worker.id, expiresOn, upload: current.body }));
+  assert.equal((await call(compliance, 'POST', `/documents/${current.body.id}/review`, { decision: 'verified' })).status, 200);
+
+  const due = await call(fa, 'GET', '/documents/expiry?within_days=30');
+  assert.equal(due.status, 200);
+  assert.equal(due.body.find((entry: any) => entry.id === current.body.id)?.expiry_state, 'expiring');
+  assert.equal((await call(finance, 'GET', '/documents/expiry?within_days=30')).status, 403);
+
+  const replacement = await upload(fa, worker.id, 'national_id');
+  assert.equal(replacement.status, 201);
+  assert.equal((await call(compliance, 'POST', `/documents/${replacement.body.id}/review`, { decision: 'verified' })).status, 200);
+  const history = await call(fa, 'GET', `/workers/${worker.id}/documents`);
+  assert.equal(history.body.find((entry: any) => entry.id === current.body.id)?.status, 'superseded');
+  assert.equal(history.body.find((entry: any) => entry.id === replacement.body.id)?.status, 'verified');
+  const refreshedDue = await call(fa, 'GET', '/documents/expiry?within_days=30');
+  assert.equal(refreshedDue.body.some((entry: any) => entry.id === current.body.id), false);
+});
+
 test('matching: agents can manage candidates only within their own team scope', async () => {
   const lead = await call(fb, 'POST', '/leads', { lead_type: 'household', name: 'Employer ' + run, phone: `+2511${run}8` });
   assert.equal(lead.status, 201);

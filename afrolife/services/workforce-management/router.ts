@@ -55,6 +55,21 @@ router.get('/workers', requireActivity('workforce.workers.view'), h(async (req, 
 // ---- Documents: uploading is not verification ----
 const UploadQ = z.object({ doc_type: z.enum(['national_id', 'police_clearance', 'reference', 'certificate']), expires_on: z.string().date().optional() });
 
+router.get('/documents/expiry', requireActivity('workforce.documents.view'), h(async (req, res) => {
+  const withinDays = z.coerce.number().int().min(0).max(90).default(30).parse(req.query.within_days);
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT d.id,d.worker_id,w.name AS worker_name,d.doc_type,d.status,d.expires_on,
+       CASE WHEN d.expires_on < current_date THEN 'expired' ELSE 'expiring' END AS expiry_state
+     FROM documents d JOIN workers w ON w.id=d.worker_id
+     WHERE d.expires_on IS NOT NULL AND d.expires_on <= current_date + $1::integer
+       AND d.status IN ('verified','uploaded','under_review')
+     ORDER BY CASE WHEN d.expires_on < current_date THEN 0 ELSE 1 END,
+       CASE WHEN d.expires_on < current_date THEN d.expires_on END DESC,
+       d.expires_on,d.created_at LIMIT 300`,
+    [withinDays],
+  )).rows));
+}));
+
 /** Raw file body (PDF/JPEG/PNG, max 10 MB). The type is checked from the file's own bytes, not the client's claim. */
 router.post('/workers/:id/documents/upload', requireActivity('workforce.documents.upload'), express.raw({ type: () => true, limit: '10mb' }), h(async (req, res) => {
   const q = UploadQ.parse(req.query);
@@ -109,6 +124,19 @@ router.post('/documents/:id/review', requireActivity('workforce.documents.review
     if (document.uploaded_by === req.user!.id) throw new HttpError(403, 'A different compliance officer must review this document');
     if (!['uploaded', 'under_review'].includes(document.status)) throw new HttpError(409, 'Document has already been reviewed');
     const r = await c.query("UPDATE documents SET status = $2, reviewer_id = $3, reviewed_at = now(), review_note = $4 WHERE id = $1 RETURNING id, doc_type, status, review_note", [req.params.id, decision, req.user!.id, decision === 'rejected' ? note : null]);
+    if (decision === 'verified') {
+      const replaced = await c.query(
+        `UPDATE documents SET status='superseded'
+         WHERE worker_id=(SELECT worker_id FROM documents WHERE id=$1)
+           AND doc_type=$2 AND id<>$1 AND status='verified' RETURNING id`,
+        [req.params.id, document.doc_type],
+      );
+      if (replaced.rowCount) {
+        await audit(c, req.user!.id, 'documents_superseded', 'worker', (await c.query('SELECT worker_id FROM documents WHERE id=$1', [req.params.id])).rows[0].worker_id, null, {
+          replacement_document_id: req.params.id, superseded_document_ids: replaced.rows.map((row) => row.id), doc_type: document.doc_type,
+        });
+      }
+    }
     await audit(c, req.user!.id, 'document_' + decision, 'document', r.rows[0].id, { status: document.status }, { status: decision });
     return r.rows[0];
   }));

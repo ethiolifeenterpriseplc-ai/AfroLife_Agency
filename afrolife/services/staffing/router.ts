@@ -235,5 +235,8 @@ router.post('/matches/:id/release', requireActivity('staffing.requests.manage'),
 
 router.get('/requests/:id/matches', requireActivity('staffing.requests.manage'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
-    'SELECT m.id, m.worker_id, m.score, m.score_breakdown, m.status, w.name AS worker_name FROM matches m JOIN workers w ON w.id = m.worker_id WHERE m.request_id = $1 ORDER BY m.created_at', [req.params.id])).rows));
+    `SELECT m.id, m.worker_id, m.score, m.score_breakdown, m.status, w.name AS worker_name,
+       e.id AS engagement_id,e.status AS engagement_status,e.billing_unit,e.client_rate::text,e.worker_rate::text,e.starts_on,e.ends_on
+     FROM matches m JOIN workers w ON w.id = m.worker_id LEFT JOIN staffing_engagements e ON e.match_id=m.id
+     WHERE m.request_id = $1 ORDER BY m.created_at`, [req.params.id])).rows));
 }));

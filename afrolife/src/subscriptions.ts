@@ -14,6 +14,17 @@ const services = [
   { key: 'seller', name: 'Seller Services' },
 ] as const;
 
+export function getPublicSubscriptionCatalog() {
+  return {
+    services: services.map((service) => ({
+      ...service,
+      monthly_fee: 1000,
+      currency: 'ETB',
+      payment_method: 'manual',
+    })),
+  };
+}
+
 const serviceKeys = [
   'property_management', 'workforce_management', 'super_agent', 'edir',
   'insurance_brokerage', 'agent', 'landlord', 'seller',
@@ -63,14 +74,7 @@ function translateUniqueViolation(error: unknown): never {
 export const subscriptionRouter = express.Router();
 
 subscriptionRouter.get('/catalog', (_req, res) => {
-  res.json({
-    services: services.map((service) => ({
-      ...service,
-      monthly_fee: 1000,
-      currency: 'ETB',
-      payment_method: 'manual',
-    })),
-  });
+  res.json(getPublicSubscriptionCatalog());
 });
 
 subscriptionRouter.post('/requests', route(async (req, res) => {
