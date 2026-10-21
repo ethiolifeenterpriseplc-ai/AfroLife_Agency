@@ -4,22 +4,22 @@ export const INDUSTRY_NEWS_FEEDS = [
   {
     category: 'business',
     label: 'Business & finance',
-    url: 'https://news.google.com/rss/search?q=Ethiopia+business+finance+banking+when%3A30d&hl=en&gl=ET&ceid=ET%3Aen',
+    url: 'https://news.google.com/rss/search?q=Ethiopia+business+finance+banking+when%3A30d&hl=en-ET&gl=ET&ceid=ET%3Aen',
   },
   {
     category: 'property',
     label: 'Property & housing',
-    url: 'https://news.google.com/rss/search?q=Ethiopia+housing+real+estate+property+when%3A30d&hl=en&gl=ET&ceid=ET%3Aen',
+    url: 'https://news.google.com/rss/search?q=Ethiopia+housing+real+estate+property+when%3A30d&hl=en-ET&gl=ET&ceid=ET%3Aen',
   },
   {
     category: 'workforce',
     label: 'Workforce & employment',
-    url: 'https://news.google.com/rss/search?q=Ethiopia+jobs+employment+labour+workforce+when%3A30d&hl=en&gl=ET&ceid=ET%3Aen',
+    url: 'https://news.google.com/rss/search?q=Ethiopia+jobs+employment+labour+workforce+when%3A30d&hl=en-ET&gl=ET&ceid=ET%3Aen',
   },
   {
     category: 'technology',
     label: 'Technology & digital',
-    url: 'https://news.google.com/rss/search?q=Ethiopia+technology+digital+economy+telecom+when%3A30d&hl=en&gl=ET&ceid=ET%3Aen',
+    url: 'https://news.google.com/rss/search?q=Ethiopia+technology+digital+economy+telecom+when%3A30d&hl=en-ET&gl=ET&ceid=ET%3Aen',
   },
 ] as const;
 
@@ -47,6 +47,7 @@ const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_FUTURE_MS = 24 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 7000;
 const CACHE_TTL_MS = 12 * 60 * 1000;
+export const INDUSTRY_NEWS_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 const RSS_ACCEPT = 'application/rss+xml, application/xml, text/xml;q=0.9';
 
 function decodeXml(value: string): string {
@@ -222,27 +223,44 @@ export function createIndustryNewsProvider(options: {
     const completed = await Promise.all(INDUSTRY_NEWS_FEEDS.map(async (feed) => {
       try {
         return { category: feed.category, articles: await fetchFeed(feed) };
-      } catch {
+      } catch (error) {
+        const cause = error && typeof error === 'object' && 'cause' in error
+          ? error.cause
+          : null;
+        const code = cause && typeof cause === 'object' && 'code' in cause
+          && typeof cause.code === 'string'
+          ? cause.code
+          : undefined;
+        console.warn('AfroLife industry news feed request failed.', {
+          category: feed.category,
+          reason: error instanceof Error ? error.message : 'Unknown feed failure',
+          ...(code ? { code } : {}),
+        });
         return null;
       }
     }));
     const unavailableFeeds = completed.filter((result) => result === null).length;
     if (unavailableFeeds === INDUSTRY_NEWS_FEEDS.length) {
-      if (cache) {
-        return {
+      if (cache?.updatedAt) {
+        cache = {
           ...cache,
           stale: true,
           status: 'partial',
           unavailableFeeds,
         };
+        cacheExpiresAt = now().getTime() + cacheTtlMs;
+        return cache;
       }
-      return {
+      const unavailable: IndustryNewsResponse = {
         articles: [],
         updatedAt: null,
         stale: false,
         status: 'unavailable',
         unavailableFeeds,
       };
+      cache = unavailable;
+      cacheExpiresAt = now().getTime() + cacheTtlMs;
+      return unavailable;
     }
     for (const result of completed) {
       if (result) feedCache.set(result.category, result.articles);
@@ -260,12 +278,33 @@ export function createIndustryNewsProvider(options: {
   }
 
   return {
-    async getLatest(): Promise<IndustryNewsResponse> {
-      if (cache && now().getTime() < cacheExpiresAt) return cache;
+    async refreshNow(): Promise<IndustryNewsResponse> {
       if (!refreshInFlight) {
         refreshInFlight = refresh().finally(() => { refreshInFlight = null; });
       }
       return refreshInFlight;
     },
+    async getLatest(): Promise<IndustryNewsResponse> {
+      if (cache && now().getTime() < cacheExpiresAt) return cache;
+      return this.refreshNow();
+    },
   };
+}
+
+export function startIndustryNewsRefreshSchedule(
+  provider: Pick<ReturnType<typeof createIndustryNewsProvider>, 'refreshNow'>,
+  intervalMs = INDUSTRY_NEWS_REFRESH_INTERVAL_MS,
+): () => void {
+  let refreshing = false;
+  const refresh = () => {
+    if (refreshing) return;
+    refreshing = true;
+    void provider.refreshNow()
+      .catch((error) => console.error('AfroLife scheduled industry news refresh failed.', error))
+      .finally(() => { refreshing = false; });
+  };
+  refresh();
+  const timer = setInterval(refresh, intervalMs);
+  timer.unref();
+  return () => clearInterval(timer);
 }

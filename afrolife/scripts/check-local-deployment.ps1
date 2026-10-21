@@ -55,13 +55,18 @@ $guestDetails = "services=$($serviceStates -join ','); bindings=$($listenerLines
 Write-Check -Name "WSL $Distro services and bind addresses" -Passed $guestReady -Details $guestDetails
 
 $healthReady = $false
-$healthDetails = '127.0.0.1:3000/healthz must report ok=true and database=connected'
+$healthDetails = '127.0.0.1:3000/readyz must report the database, migrations, private storage, and configured services ready'
 try {
-  $healthResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/healthz' -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+  $healthResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/readyz' -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
   $health = $healthResponse.Content | ConvertFrom-Json -ErrorAction Stop
-  $healthReady = $health.ok -eq $true -and $health.database -eq 'connected'
+  $unavailableServices = @($health.checks.services | Where-Object { $_.status -eq 'unavailable' })
+  $healthReady = $health.ok -eq $true `
+    -and $health.checks.database -eq 'connected' `
+    -and $health.checks.migrations.current -eq $true `
+    -and $health.checks.private_storage -eq 'available' `
+    -and $unavailableServices.Count -eq 0
   if (-not $healthReady) {
-    $healthDetails += '; response did not report a healthy database'
+    $healthDetails += '; one or more readiness checks failed'
   }
 } catch {
   $healthDetails += "; probe error: $($_.Exception.Message)"

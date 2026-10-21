@@ -25,8 +25,13 @@ if (existsSync(credentialPath)) {
 }
 const localUrl = new URL(connectionString);
 const databaseName = decodeURIComponent(localUrl.pathname.replace(/^\/+/, ''));
+const connectionPort = Number(localUrl.port);
+const allowedConnectionPort = Number.isInteger(connectionPort)
+  && connectionPort >= 1
+  && connectionPort <= 65535
+  && (dockerQaMode || connectionPort === 5433);
 if (!['127.0.0.1', 'localhost', '::1'].includes(localUrl.hostname)
-  || localUrl.port !== '5433'
+  || !allowedConnectionPort
   || (dockerQaMode && disposableDatabaseUrl)
   || (disposableDatabaseUrl
     ? !/^afrolife_test_[a-z0-9_-]+$/i.test(databaseName)

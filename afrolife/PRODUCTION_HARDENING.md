@@ -213,9 +213,10 @@ service startup, backups, and trusted TLS.
 
 Run `npm run check:local-deployment` from the project directory before local
 staging checks. It verifies the Node.js version, active WSL services,
-loopback-only listeners, database-backed API health, and whether the local
-proxy serves the same app title as this checkout. A passing result is local
-evidence only, not a public production approval.
+loopback-only listeners, API readiness (database, current migrations, private
+storage, and configured services), and whether the local proxy serves the same
+app title as this checkout. A passing result is local evidence only, not a
+public production approval.
 
 The local staging stack is installed under `/opt/afrolife/app`; PostgreSQL
 listens only on `127.0.0.1:5432`, the Node API only on `127.0.0.1:3000`, and
@@ -276,6 +277,16 @@ configure Windows port proxies. Do not point the Linux app at the Windows
 development database. For public production, migrate this deployment to a
 supported VPS or cloud VM, configure DNS and firewall routing there, and test
 trusted TLS before accepting real user traffic.
+
+### Readiness probe implementation follow-up — 21 October 2026
+
+The workspace now exposes `/livez` for process liveness and `/readyz` for
+database connectivity, migration currency, writable private-file storage, and
+configured private-service health. `npm run check:local-deployment` checks
+`/readyz`. This code has not been deployed to the WSL release recorded above;
+run the checker again after a controlled local staging deployment. The route
+does not establish public TLS, external reachability, backups, monitoring, or
+production acceptance.
 
 ## Oracle Cloud Always Free ARM64 VM
 

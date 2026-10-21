@@ -62,3 +62,25 @@ For each provider, record `Disabled` until all fields are complete.
 - [ ] All Section 9.3 acceptance gates are passed.
 
 **Decision:** Not accepted. Local checks and synthetic evidence supplement the requirement crosswalk; they do not satisfy production acceptance or named-owner sign-off.
+
+## Engineering hardening follow-up — 21 October 2026
+
+The current workspace adds public `/livez` process liveness and `/readyz`
+dependency readiness. `/readyz` checks database connectivity, whether every
+SQL migration packaged with this source is applied with its expected checksum,
+writable private-file storage, and every configured private service. It returns
+only dependency identifiers and status, with HTTP 503 if a check fails. The local deployment
+checker and Docker QA health check now use readiness. An application TypeScript
+build and migration copy completed successfully in this workspace.
+
+Administrator password and MFA resets now revoke the target user's active
+sessions in the same database transaction. This is a code-level control; it
+does not implement end-user account recovery or verify a production identity
+provider.
+
+These changes have not been deployed to the local WSL staging stack or a
+production host and are not tied to a release commit in this record. They do
+not close the production decision above. Target-environment readiness, backup
+and restore acceptance, representative capacity, exhaustive authorization,
+manual accessibility, named owner approvals, provider/legal review, and
+business UAT remain open.

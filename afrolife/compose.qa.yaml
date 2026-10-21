@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${AFROLIFE_DB_ADMIN_PASSWORD:?Run npm run qa:docker:up to create .env.docker}
       AFROLIFE_APP_PASSWORD: ${AFROLIFE_DB_APP_PASSWORD:?Run npm run qa:docker:up to create .env.docker}
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:${AFROLIFE_DB_HTTP_PORT:-5433}:5432"
     volumes:
       - qa_database:/var/lib/postgresql
       - ./docker/qa-init.sql:/docker-entrypoint-initdb.d/10-afrolife-qa.sql:ro
@@ -69,6 +69,12 @@ services:
       - "127.0.0.1:${AFROLIFE_HTTP_PORT:-3000}:3000"
     volumes:
       - qa_private_files:/app/afrolife/data/private-files
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
       db:
         condition: service_healthy

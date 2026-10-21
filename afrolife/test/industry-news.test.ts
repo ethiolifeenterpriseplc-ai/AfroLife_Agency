@@ -85,7 +85,8 @@ test('news provider uses only fixed HTTPS RSS sources, normalizes results, and c
   assert.ok(requested.every(({ url, init }) => url.startsWith('https://')
     && init?.redirect === 'manual'
     && init?.signal instanceof AbortSignal
-    && new URL(url).hostname === 'news.google.com'));
+    && new URL(url).hostname === 'news.google.com'
+    && new URL(url).searchParams.get('hl') === 'en-ET'));
 
   now = new Date(NOW.getTime() + 60_000);
   assert.deepEqual(await provider.getLatest(), first);
@@ -118,15 +119,29 @@ test('feed failures return an honest unavailable state, then retain last-good da
   assert.equal(stale.updatedAt, initial.updatedAt);
   assert.deepEqual(stale.articles, initial.articles);
   assert.equal(requestCount, INDUSTRY_NEWS_FEEDS.length * 2);
+  assert.deepEqual(await provider.getLatest(), stale);
+  assert.equal(requestCount, INDUSTRY_NEWS_FEEDS.length * 2);
 
+  let unavailableFetchCount = 0;
+  let unavailableNow = new Date(NOW);
   const unavailableProvider = createIndustryNewsProvider({
-    fetcher: async () => response('upstream html', 200, 'text/html'),
+    now: () => unavailableNow,
+    cacheTtlMs: 1000,
+    fetcher: async () => {
+      unavailableFetchCount += 1;
+      return response('upstream html', 200, 'text/html');
+    },
   });
   const unavailable = await unavailableProvider.getLatest();
   assert.deepEqual(unavailable.articles, []);
   assert.equal(unavailable.updatedAt, null);
   assert.equal(unavailable.status, 'unavailable');
   assert.equal(unavailable.unavailableFeeds, INDUSTRY_NEWS_FEEDS.length);
+  assert.deepEqual(await unavailableProvider.getLatest(), unavailable);
+  assert.equal(unavailableFetchCount, INDUSTRY_NEWS_FEEDS.length);
+  unavailableNow = new Date(unavailableNow.getTime() + 2000);
+  assert.equal((await unavailableProvider.getLatest()).status, 'unavailable');
+  assert.equal(unavailableFetchCount, INDUSTRY_NEWS_FEEDS.length * 2);
 });
 
 test('partial feed failures retain successful prior coverage and disclose the incomplete refresh', async () => {
@@ -182,5 +197,9 @@ test('landing news section includes honest loading, filters, and safe Google New
   const fallback = html.slice(html.indexOf('id="industry-news-fallback"'), html.indexOf('</div>', html.indexOf('id="industry-news-fallback"')));
   assert.match(fallback, /google\.com\/search/);
   assert.match(fallback, /target="_blank" rel="noopener noreferrer"/);
+  assert.match(html, /class="news-publishers"[^>]*aria-label="Selected Ethiopian publisher websites"/);
+  assert.match(html, /https:\/\/www\.ena\.et\/web\/eng\//);
+  assert.match(html, /https:\/\/addisstandard\.com\//);
+  assert.match(html, /https:\/\/www\.thereporterethiopia\.com\//);
   assert.doesNotMatch(fallback, /<strong>/);
 });

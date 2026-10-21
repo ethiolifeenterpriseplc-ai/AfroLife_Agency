@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { assessMigrationReadiness, assertMigrationChecksum, migrationChecksum } from '../src/migration-checksums.js';
 
 const insuranceGrants = readFileSync(new URL('../migrations/039_insurance_ledger_runtime_grants.sql', import.meta.url), 'utf8');
 const authSessions = readFileSync(new URL('../migrations/040_auth_sessions.sql', import.meta.url), 'utf8');
@@ -31,6 +32,54 @@ const insuranceRequests = readFileSync(new URL('../src/insurance-requests.ts', i
 const insuranceBrokerageSandboxRouter = readFileSync(new URL('../src/insurance-brokerage-sandbox.ts', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
+const coreMigrator = readFileSync(new URL('../src/migrate.ts', import.meta.url), 'utf8');
+const accountingMigrator = readFileSync(new URL('../services/accounting/migrate.ts', import.meta.url), 'utf8');
+
+test('migration runners persist and enforce immutable SQL checksums', () => {
+  const checksum = migrationChecksum('SELECT 1;');
+  assert.match(checksum, /^[0-9a-f]{64}$/);
+  assert.doesNotThrow(() => assertMigrationChecksum('001_example.sql', checksum, checksum));
+  assert.doesNotThrow(() => assertMigrationChecksum('001_legacy.sql', null, checksum));
+  assert.throws(
+    () => assertMigrationChecksum('001_example.sql', checksum, migrationChecksum('SELECT 2;')),
+    /has changed since it was applied/,
+  );
+  const expected = [
+    { name: '001_first.sql', checksum: migrationChecksum('SELECT 1;') },
+    { name: '002_second.sql', checksum: migrationChecksum('SELECT 2;') },
+  ];
+  assert.deepEqual(assessMigrationReadiness(expected, expected), {
+    current: true,
+    applied: 2,
+    expected: 2,
+    checksumMismatches: 0,
+    checksumsUnverified: 0,
+    unexpectedMigrations: 0,
+  });
+  assert.deepEqual(
+    assessMigrationReadiness(expected, [
+      { name: '001_first.sql', checksum: migrationChecksum('SELECT 0;') },
+      { name: '002_second.sql', checksum: null },
+      { name: '003_unexpected.sql', checksum: migrationChecksum('SELECT 3;') },
+    ]),
+    {
+      current: false,
+      applied: 2,
+      expected: 2,
+      checksumMismatches: 1,
+      checksumsUnverified: 1,
+      unexpectedMigrations: 1,
+    },
+  );
+  assert.match(coreMigrator, /ADD COLUMN IF NOT EXISTS checksum text/);
+  assert.match(coreMigrator, /INSERT INTO schema_migrations \(name,checksum\)/);
+  assert.match(coreMigrator, /pg_advisory_lock\(71924211,1\)/);
+  assert.match(accountingMigrator, /ADD COLUMN IF NOT EXISTS checksum text/);
+  assert.match(accountingMigrator, /INSERT INTO accounting_service_migrations\(version,checksum\)/);
+  assert.match(accountingMigrator, /pg_advisory_lock\(71924211,2\)/);
+  assert.match(server, /SELECT name, checksum FROM schema_migrations/);
+  assert.match(server, /assessMigrationReadiness\(expectedMigrations, appliedRows\.rows\)/);
+});
 
 test('central Insurance ledger grants match service operations and identity sequences', () => {
   for (const revoke of [

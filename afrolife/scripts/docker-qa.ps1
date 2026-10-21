@@ -40,13 +40,15 @@ function New-LocalEnvironment {
   $appPassword = & $secret
   $jwtSecret = & $secret
   $mfaKey = & $secret
+  $databaseHttpPort = Get-DatabaseHttpPort
   $lines = @(
     'NODE_ENV=development',
     'AFROLIFE_HTTP_PORT=3000',
+    "AFROLIFE_DB_HTTP_PORT=$databaseHttpPort",
     "AFROLIFE_DB_ADMIN_PASSWORD=$adminPassword",
     "AFROLIFE_DB_APP_PASSWORD=$appPassword",
-    "DATABASE_URL=postgres://afrolife_app:$appPassword@127.0.0.1:5433/afrolife",
-    "MIGRATION_DATABASE_URL=postgres://postgres:$adminPassword@127.0.0.1:5433/afrolife",
+    "DATABASE_URL=postgres://afrolife_app:$appPassword@127.0.0.1:$databaseHttpPort/afrolife",
+    "MIGRATION_DATABASE_URL=postgres://postgres:$adminPassword@127.0.0.1:$databaseHttpPort/afrolife",
     "JWT_SECRET=$jwtSecret",
     "MFA_ENC_KEY=$mfaKey",
     'MFI_PILOT_ENABLED=1',
@@ -59,6 +61,66 @@ function New-LocalEnvironment {
   )
 }
 
+function Get-HttpPort {
+  $environmentPort = $env:AFROLIFE_HTTP_PORT
+  if (-not [string]::IsNullOrWhiteSpace($environmentPort)) {
+    if ($environmentPort -notmatch '^\d+$') {
+      throw 'AFROLIFE_HTTP_PORT must be an integer between 1 and 65535.'
+    }
+    $configuredPort = [int]$environmentPort
+    if ($configuredPort -lt 1 -or $configuredPort -gt 65535) {
+      throw 'AFROLIFE_HTTP_PORT must be between 1 and 65535.'
+    }
+    return $configuredPort
+  }
+
+  if (-not (Test-Path -LiteralPath $EnvironmentFile)) {
+    return 3000
+  }
+
+  foreach ($line in Get-Content -LiteralPath $EnvironmentFile) {
+    if ($line -match '^AFROLIFE_HTTP_PORT=(\d+)$') {
+      $configuredPort = [int]$Matches[1]
+      if ($configuredPort -lt 1 -or $configuredPort -gt 65535) {
+        throw 'AFROLIFE_HTTP_PORT must be between 1 and 65535.'
+      }
+      return $configuredPort
+    }
+  }
+
+  return 3000
+}
+
+function Get-DatabaseHttpPort {
+  $environmentPort = $env:AFROLIFE_DB_HTTP_PORT
+  if (-not [string]::IsNullOrWhiteSpace($environmentPort)) {
+    if ($environmentPort -notmatch '^\d+$') {
+      throw 'AFROLIFE_DB_HTTP_PORT must be an integer between 1 and 65535.'
+    }
+    $configuredPort = [int]$environmentPort
+    if ($configuredPort -lt 1 -or $configuredPort -gt 65535) {
+      throw 'AFROLIFE_DB_HTTP_PORT must be between 1 and 65535.'
+    }
+    return $configuredPort
+  }
+
+  if (-not (Test-Path -LiteralPath $EnvironmentFile)) {
+    return 5433
+  }
+
+  foreach ($line in Get-Content -LiteralPath $EnvironmentFile) {
+    if ($line -match '^AFROLIFE_DB_HTTP_PORT=(\d+)$') {
+      $configuredPort = [int]$Matches[1]
+      if ($configuredPort -lt 1 -or $configuredPort -gt 65535) {
+        throw 'AFROLIFE_DB_HTTP_PORT must be between 1 and 65535.'
+      }
+      return $configuredPort
+    }
+  }
+
+  return 5433
+}
+
 Push-Location $ProjectRoot
 try {
   if ($Action -eq 'Up') {
@@ -67,13 +129,15 @@ try {
       throw 'Docker Desktop is not running or this session cannot access its engine. Start Docker Desktop and retry.'
     }
     New-LocalEnvironment
+    $httpPort = Get-HttpPort
+    $databaseHttpPort = Get-DatabaseHttpPort
     Invoke-Compose -Arguments @('config', '--quiet')
     Invoke-Compose -Arguments @('up', '--build', '-d')
 
     $ready = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
       try {
-        $response = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/healthz' -TimeoutSec 3 -UseBasicParsing
+        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$httpPort/readyz" -TimeoutSec 5 -UseBasicParsing
         if ($response.StatusCode -eq 200 -and ($response.Content | ConvertFrom-Json).ok -eq $true) {
           $ready = $true
           break
@@ -84,10 +148,10 @@ try {
     }
     if (-not $ready) {
       Invoke-Compose -Arguments @('ps')
-      throw 'The app did not become healthy at http://127.0.0.1:3000/healthz. Review logs with npm run qa:docker:logs.'
+      throw "The app did not become ready at http://127.0.0.1:$httpPort/readyz. Review logs with npm run qa:docker:logs."
     }
-    Write-Output 'AfroLife QA app is ready at http://localhost:3000.'
-    Write-Output 'PostgreSQL is private to loopback port 5433; database and private uploads use Docker-managed named volumes.'
+    Write-Output "AfroLife QA app is ready at http://localhost:$httpPort."
+    Write-Output "PostgreSQL is private to loopback port $databaseHttpPort; database and private uploads use Docker-managed named volumes."
     Write-Output 'No existing project data or private-file directory was removed.'
   } elseif ($Action -eq 'Down') {
     if (-not (Test-Path -LiteralPath $EnvironmentFile)) {

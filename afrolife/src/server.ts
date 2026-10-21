@@ -1,14 +1,17 @@
 import './env.js';
 import express, { Request, Response, NextFunction, RequestHandler } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { access, stat } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import { z } from 'zod';
 import { Phone } from './validators.js';
 import { pool, withUser, authenticate, requireRole, HttpError, JWT_SECRET, assertRuntimeDatabaseSafety } from './core.js';
 import { loadRuntimeConfig, workspaceModulesForServices } from './runtime-config.js';
-import { apiMetricsMiddleware, createWorkspaceServiceStatusCache, flushApiMetrics, readPersistedApiMetrics, startApiMetricsPersistence } from './workspace-status.js';
+import { apiMetricsMiddleware, checkWorkspaceServices, createWorkspaceServiceStatusCache, flushApiMetrics, readPersistedApiMetrics, startApiMetricsPersistence, type ServiceProbe } from './workspace-status.js';
 import { createApiRateLimiter } from './rate-limit-store.js';
 import { audit, feeSnapshot, loadRules, post, transition } from './domain.js';
 import { supply } from './supply.js';
@@ -30,13 +33,41 @@ import { getFile, putFile } from './storage.js';
 import { correlationIdMiddleware, getCorrelationId } from './request-context.js';
 import { allowedMiniApps, hasMiniAppAccess, requireAnyMiniAppAccess, requireMiniAppAccess } from './mini-app-access.js';
 import { getPublicSubscriptionCatalog, subscriptionRouter } from './subscriptions.js';
-import { createIndustryNewsProvider } from './industry-news.js';
+import { createIndustryNewsProvider, INDUSTRY_NEWS_REFRESH_INTERVAL_MS, startIndustryNewsRefreshSchedule } from './industry-news.js';
+import { assessMigrationReadiness, migrationChecksum } from './migration-checksums.js';
 
 const app = express();
 app.use(correlationIdMiddleware);
 if (JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be set (32+ chars)');
 const runtimeConfig = loadRuntimeConfig(process.env);
 const getWorkspaceServiceStatus = createWorkspaceServiceStatusCache();
+const workspaceServiceProbes = (): ServiceProbe[] => [
+  { id: 'core', name: 'AfroLife core', enabled: true, withoutUrl: 'integrated' },
+  {
+    id: 'workforce-management',
+    name: 'Workforce Management',
+    enabled: true,
+    url: process.env.WORKFORCE_MANAGEMENT_SERVICE_URL ?? process.env.WORKER_MANAGEMENT_SERVICE_URL,
+    withoutUrl: 'integrated',
+  },
+  { id: 'staffing', name: 'Staffing', enabled: true, url: process.env.STAFFING_SERVICE_URL, withoutUrl: 'integrated' },
+  { id: 'property-management', name: 'Property Management', enabled: true, url: process.env.PROPERTY_MANAGEMENT_SERVICE_URL, withoutUrl: 'integrated' },
+  { id: 'marketplace', name: 'Marketplace', enabled: true, url: process.env.MARKETPLACE_SERVICE_URL, withoutUrl: 'integrated' },
+  { id: 'edir', name: 'AfroLife Edir', enabled: Boolean(process.env.EDIR_SERVICE_URL), url: process.env.EDIR_SERVICE_URL, withoutUrl: 'disabled' },
+  { id: 'accounting-internal', name: 'Internal Accounting & Finance', enabled: Boolean(process.env.ACCOUNTING_SERVICE_URL), url: process.env.ACCOUNTING_SERVICE_URL, withoutUrl: 'disabled' },
+  { id: 'accounting-subscriber', name: 'Subscriber Accounting & Finance', enabled: Boolean(process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL), url: process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL, withoutUrl: 'disabled' },
+  { id: 'global-bi', name: 'Global BI', enabled: Boolean(process.env.GLOBAL_BI_SERVICE_URL), url: process.env.GLOBAL_BI_SERVICE_URL, withoutUrl: 'disabled' },
+  { id: 'insurance', name: 'Insurance ledger', enabled: Boolean(process.env.INSURANCE_SERVICE_URL), url: process.env.INSURANCE_SERVICE_URL, withoutUrl: 'integrated' },
+  { id: 'mfi', name: 'SACCO / MFI', enabled: runtimeConfig.mfiPilotEnabled, url: process.env.MFI_SERVICE_URL, withoutUrl: 'disabled' },
+];
+const migrationDirectory = new URL('../migrations/', import.meta.url);
+const expectedMigrations = readdirSync(migrationDirectory)
+  .filter((name) => name.endsWith('.sql'))
+  .sort()
+  .map((name) => ({
+    name,
+    checksum: migrationChecksum(readFileSync(new URL(name, migrationDirectory), 'utf8')),
+  }));
 const corsOrigins = new Set((process.env.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
 // Behind a load balancer / reverse proxy every request looks like the same IP unless this is set, which makes the login rate limit hit everyone at once.
 // TRUST_PROXY=1 (number of proxy hops) or a subnet list; leave unset when the API is exposed directly.
@@ -66,7 +97,65 @@ app.get('/healthz', (_req, res, next) => {
     () => res.json({ ok: true, database: 'connected' }),
     next,
   );
-}); // used by uptime monitors to check API and database readiness
+}); // compatibility probe for database connectivity; use /readyz for full readiness
+app.get('/livez', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true });
+});
+app.get('/readyz', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const checks: Record<string, unknown> = {
+    database: 'unavailable',
+    migrations: {
+      current: false,
+      applied: 0,
+      expected: expectedMigrations.length,
+      checksumMismatches: 0,
+      checksumsUnverified: 0,
+      unexpectedMigrations: 0,
+    },
+    private_storage: 'unavailable',
+    services: [],
+  };
+  let ready = true;
+  try {
+    await pool.query('SELECT 1');
+    checks.database = 'connected';
+  } catch {
+    ready = false;
+  }
+  try {
+    const appliedRows = await pool.query<{ name: string; checksum: string | null }>(
+      'SELECT name, checksum FROM schema_migrations',
+    );
+    const migrationReadiness = assessMigrationReadiness(expectedMigrations, appliedRows.rows);
+    checks.migrations = migrationReadiness;
+    if (!migrationReadiness.current) ready = false;
+  } catch {
+    checks.migrations = {
+      current: false,
+      applied: 0,
+      expected: expectedMigrations.length,
+      checksumMismatches: 0,
+      checksumsUnverified: 0,
+      unexpectedMigrations: 0,
+    };
+    ready = false;
+  }
+  try {
+    const storagePath = resolve(process.env.FILE_STORAGE_DIR ?? './data/private-files');
+    const storageStats = await stat(storagePath);
+    if (!storageStats.isDirectory()) throw new Error('Private file storage path is not a directory');
+    await access(storagePath, fsConstants.W_OK);
+    checks.private_storage = 'available';
+  } catch {
+    ready = false;
+  }
+  const services = await checkWorkspaceServices(workspaceServiceProbes());
+  checks.services = services.map(({ id, status, latency_ms }) => ({ id, status, latency_ms }));
+  if (services.some((service) => service.status === 'unavailable')) ready = false;
+  res.status(ready ? 200 : 503).json({ ok: ready, checks });
+});
 // Resolve assets from source during development or from the project root after compilation.
 const staticDirs = ['../../public', '../public', '../../web']
   .map((dir) => fileURLToPath(new URL(dir, import.meta.url)))
@@ -76,6 +165,7 @@ for (const dir of staticDirs) app.use(express.static(dir));
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const industryNewsProvider = createIndustryNewsProvider();
+const stopIndustryNewsRefresh = startIndustryNewsRefreshSchedule(industryNewsProvider);
 app.get('/api/public/industry-news', h(async (_req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.json(await industryNewsProvider.getLatest());
@@ -256,25 +346,7 @@ api.get('/features', h(async (req, res) => {
   });
 }));
 api.get('/system/status', h(async (_req, res) => {
-  res.json(await getWorkspaceServiceStatus([
-    { id: 'core', name: 'AfroLife core', enabled: true, withoutUrl: 'integrated' },
-    {
-      id: 'workforce-management',
-      name: 'Workforce Management',
-      enabled: true,
-      url: process.env.WORKFORCE_MANAGEMENT_SERVICE_URL ?? process.env.WORKER_MANAGEMENT_SERVICE_URL,
-      withoutUrl: 'integrated',
-    },
-    { id: 'staffing', name: 'Staffing', enabled: true, url: process.env.STAFFING_SERVICE_URL, withoutUrl: 'integrated' },
-    { id: 'property-management', name: 'Property Management', enabled: true, url: process.env.PROPERTY_MANAGEMENT_SERVICE_URL, withoutUrl: 'integrated' },
-    { id: 'marketplace', name: 'Marketplace', enabled: true, url: process.env.MARKETPLACE_SERVICE_URL, withoutUrl: 'integrated' },
-    { id: 'edir', name: 'AfroLife Edir', enabled: Boolean(process.env.EDIR_SERVICE_URL), url: process.env.EDIR_SERVICE_URL, withoutUrl: 'disabled' },
-    { id: 'accounting-internal', name: 'Internal Accounting & Finance', enabled: Boolean(process.env.ACCOUNTING_SERVICE_URL), url: process.env.ACCOUNTING_SERVICE_URL, withoutUrl: 'disabled' },
-    { id: 'accounting-subscriber', name: 'Subscriber Accounting & Finance', enabled: Boolean(process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL), url: process.env.ACCOUNTING_SUBSCRIBER_SERVICE_URL, withoutUrl: 'disabled' },
-    { id: 'global-bi', name: 'Global BI', enabled: Boolean(process.env.GLOBAL_BI_SERVICE_URL), url: process.env.GLOBAL_BI_SERVICE_URL, withoutUrl: 'disabled' },
-    { id: 'insurance', name: 'Insurance ledger', enabled: Boolean(process.env.INSURANCE_SERVICE_URL), url: process.env.INSURANCE_SERVICE_URL, withoutUrl: 'integrated' },
-    { id: 'mfi', name: 'SACCO / MFI', enabled: runtimeConfig.mfiPilotEnabled, url: process.env.MFI_SERVICE_URL, withoutUrl: 'disabled' },
-  ]));
+  res.json(await getWorkspaceServiceStatus(workspaceServiceProbes()));
 }));
 api.get('/system/metrics', requireRole('global_admin'), h(async (req, res) => {
   await flushApiMetrics().catch((error) => console.error('API metrics flush before read failed', error instanceof Error ? error.message : error));
@@ -696,7 +768,7 @@ if (process.env.ACCOUNTING_SERVICE_URL && process.env.ACCOUNTING_INGEST_SECRET) 
   }, 5_000).unref();
 }
 
-const onListening = () => console.log('API listening');
+const onListening = () => console.log(`API listening; industry news refreshes every ${INDUSTRY_NEWS_REFRESH_INTERVAL_MS / 60_000} minutes`);
 const port = Number(process.env.PORT ?? 3000);
 if (runtimeConfig.isProduction) await assertRuntimeDatabaseSafety();
 const server = process.env.HOST
@@ -707,6 +779,7 @@ const apiMetricsTimer = startApiMetricsPersistence();
 // Let in-flight requests (and their transactions) finish when the platform restarts the container.
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.once(sig, () => {
+    stopIndustryNewsRefresh();
     clearInterval(apiMetricsTimer);
     server.close(() => flushApiMetrics()
       .catch((error) => console.error('Final API metrics flush failed', error instanceof Error ? error.message : error))

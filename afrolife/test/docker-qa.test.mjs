@@ -13,7 +13,14 @@ const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 
 test('Docker QA exposes one app port and keeps PostgreSQL on loopback', () => {
   assert.match(compose, /127\.0\.0\.1:\$\{AFROLIFE_HTTP_PORT:-3000\}:3000/);
-  assert.match(compose, /127\.0\.0\.1:5433:5432/);
+  assert.match(qaScript, /function Get-HttpPort/);
+  assert.match(qaScript, /\$environmentPort = \$env:AFROLIFE_HTTP_PORT/);
+  assert.match(qaScript, /AFROLIFE_HTTP_PORT=\(\\d\+\)/);
+  assert.match(qaScript, /127\.0\.0\.1:\$httpPort\/readyz/);
+  assert.match(qaScript, /localhost:\$httpPort/);
+  assert.match(compose, /127\.0\.0\.1:\$\{AFROLIFE_DB_HTTP_PORT:-5433\}:5432/);
+  assert.match(qaScript, /AFROLIFE_DB_HTTP_PORT=\$databaseHttpPort/);
+  assert.match(qaScript, /PostgreSQL is private to loopback port \$databaseHttpPort/);
   assert.match(compose, /qa_database:\/var\/lib\/postgresql/);
   assert.match(compose, /qa_private_files:\/app\/afrolife\/data\/private-files/);
   assert.doesNotMatch(compose, /(?:\.\/|\.\.\/)data(?:\/|:)/);
@@ -34,10 +41,17 @@ test('Docker image includes migration inputs and generated QA credentials stay u
   assert.match(gitIgnore, /^\.local-qa\/$/m);
 });
 
+test('Docker app health reflects full readiness, not only process/database liveness', () => {
+  assert.match(dockerfile, /\/readyz/);
+  assert.doesNotMatch(dockerfile, /HEALTHCHECK[\s\S]*?\/healthz/);
+  assert.match(compose, /\/readyz/);
+});
+
 test('Docker QA user seeding is explicit and verifies loopback host mapping and private container identity', () => {
   assert.match(qaScript, /\$env:AFROLIFE_DOCKER_QA = '1'/);
   assert.match(seedUsers, /process\.env\.AFROLIFE_DOCKER_QA === '1'/);
   assert.match(seedUsers, /dockerQaMode && disposableDatabaseUrl/);
+  assert.match(seedUsers, /dockerQaMode \|\| connectionPort === 5433/);
   assert.match(seedUsers, /dockerQaMode && dockerPrivateAddress && Number\(identity\.port\) === 5432/);
   assert.match(seedUsers, /localUrl\.hostname/);
   assert.match(seedUsers, /identity\.database_user === 'postgres' && identity\.is_superuser/);

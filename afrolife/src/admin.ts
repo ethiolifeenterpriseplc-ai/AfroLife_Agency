@@ -1779,9 +1779,11 @@ adminRouter.post('/users/:id/mfa/reset', requireRole('global_admin'), h(async (r
     }
     const r = await c.query('UPDATE users SET mfa_enabled = false, mfa_secret = NULL, mfa_last_step = -1 WHERE id = $1 RETURNING id, role', [req.params.id]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
+    await c.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [req.params.id]);
     await audit(c, req.user!.id, 'mfa_reset', 'user', String(req.params.id));
     return { ok: true };
   });
+  invalidateUser(String(req.params.id));
   res.json(out);
 }));
 
@@ -1796,8 +1798,10 @@ adminRouter.post('/users/:id/reset-password', requireRole('global_admin'), h(asy
     }
     const r = await c.query('UPDATE users SET password_hash = $2, must_change_password = true, failed_logins = 0, locked_until = NULL WHERE id = $1', [req.params.id, await bcrypt.hash(temp, 12)]);
     if (!r.rowCount) throw new HttpError(404, 'User not found');
+    await c.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [req.params.id]);
     await audit(c, req.user!.id, 'password_reset', 'user', String(req.params.id));
   });
+  invalidateUser(String(req.params.id));
   res.json({ temp_password: temp });
 }));
 

@@ -239,6 +239,8 @@ async function loadPublicIndustryNews() {
   }
 }
 loadPublicIndustryNews.articles = null;
+loadPublicIndustryNews();
+setInterval(loadPublicIndustryNews, 15 * 60 * 1000);
 
 async function api(path, options = {}) {
   const headers = new Headers(options.headers ?? {});

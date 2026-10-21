@@ -312,7 +312,19 @@ try {
     assert.equal(await evaluate("document.querySelector('#mfi-tab')?.hidden"), true, 'Disabled SACCO pilot should remain hidden');
   }
   await evaluate("document.querySelector('#agents-tab').click()");
-  await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"commissions\"]')", 'agent mini-app shortcuts');
+  await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Agent management'", 'Agent management workspace');
+  const superAdminAgentApps = await evaluate(`({
+    available: [...document.querySelectorAll('.tab[data-panel]:not([hidden])')]
+      .map((tab) => tab.dataset.panel)
+      .filter((panel) => ['leads', 'workers', 'requests', 'properties', 'marketplace', 'contracts', 'commissions', 'rent', 'agents'].includes(panel)),
+    cards: document.querySelectorAll('#workspace .service-launcher-card').length,
+  })`);
+  if (superAdminAgentApps.available.length) {
+    await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"commissions\"]')", 'Super Admin mini-app shortcuts for the selected tenant');
+  } else {
+    assert.equal(superAdminAgentApps.cards, 0,
+      'An unscoped Super Admin should not see service shortcuts before selecting an enabled tenant');
+  }
   if (mfiEnabled && mfiInstitutionAvailable) {
     await evaluate("document.querySelector('#mfi-tab').click()");
     await waitFor("!!document.querySelector('#workspace .mfi-workspace')", 'SACCO workspace return');
@@ -426,11 +438,20 @@ try {
     const roleCheck = await evaluate(`({role:${JSON.stringify(role)},title:document.querySelector('#page-title')?.textContent?.trim() || '',adminVisible:document.querySelector('#admin-tab')?.hidden === false})`);
     assert.equal(roleCheck.title, 'Your workspace', `${role} should start in its own overview after another account signs out`);
     assert.equal(roleCheck.adminVisible, ['corporate_business_manager', 'compliance'].includes(role), `${role} admin navigation should follow its assigned role`);
+    if (role === 'master_agent') {
+      await evaluate("document.querySelector('#agents-tab').click()");
+      await waitFor("!!document.querySelector('#workspace .service-launcher-card [data-action=\"open-panel\"][data-panel=\"commissions\"]')",
+        'Master Agent mini-app shortcuts for assigned services');
+      await evaluate("document.querySelector('.tab[data-panel=\"overview\"]').click()");
+      await waitFor("document.querySelector('#page-title')?.textContent?.trim() === 'Your workspace'",
+        'Master Agent return to the overview');
+    }
     roleChecks.push(roleCheck);
   }
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join('; ')}`);
   const checks = [
-    'Super Admin login', 'agent mini-app shortcuts', 'mobile bottom navigation visibility and touch target sizing',
+    'Super Admin login and tenant-scoped Agent management shortcuts',
+    'Master Agent mini-app shortcuts for assigned services', 'mobile bottom navigation visibility and touch target sizing',
     'More sections sheet navigation', '320px/mobile/tablet/desktop horizontal overflow',
     `${roleChecks.length} additional role sign-ins`, 'accessible names, image alternatives, document language and main heading smoke',
     'browser exceptions and unexpected console errors',

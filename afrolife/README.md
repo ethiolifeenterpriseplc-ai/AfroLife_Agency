@@ -88,7 +88,9 @@ Before a shared or production launch, provision at least two Super Admin account
 Global Admin is the Global System Admin role and is the only role for platform-wide configuration: tenant onboarding, service and package definitions, platform module availability, Super Admin onboarding and assignment, global identity, role templates, and operations controls. A Super Admin can administer only assigned business entities, choose a subset of the modules and services approved for each active entity, register its deployment reference, and onboard Master Agents or Field Agents they created. A Super Admin cannot create tenants, change shared service packages, alter global role templates, assign other Super Admins, or administer another tenant. Without an assigned active entity context, a Super Admin receives no business modules. Business Admin (`corporate_business_manager`) is limited to business-entity operations and agent onboarding; system configuration remains unavailable. Super Admin and Business Admin user lists are limited to accounts they created. An active, MFA-enabled Super Admin can nominate another active, MFA-enabled Super Admin; a second, different eligible Super Admin must approve the request with a reason. Request and decision events are recorded in the audit log. No role bypasses financial maker-checker approvals.
 
 The initial database migration creates a starter Ethiopia → Addis Ababa → Bole territory path and default pricing/matching rules. Additional territories are managed through the API by a Super Admin.
-The `/healthz` endpoint checks PostgreSQL connectivity and returns HTTP 500 if the database is unavailable.
+`/livez` confirms that the API process is running. `/healthz` checks PostgreSQL connectivity. `/readyz` is the deployment readiness probe: it checks the database, every workspace migration packaged with this release and its stored checksum, writable private-file storage, and all configured private services. It returns HTTP 503 if any required check fails and does not expose connection strings or exception details.
+The Docker image health check uses `/readyz`; a container can therefore remain live while being marked unhealthy when its schema, storage, or configured services are not ready.
+Core and standalone Accounting migration runners serialize migration execution with PostgreSQL advisory locks, record SHA-256 checksums, and stop if an already-checksummed migration file changes. Existing migration histories without checksums are baselined to the migration contents present at the first checksum-aware run; this cannot identify edits made before that baseline. Never edit an applied migration—add a new migration instead.
 
 ## Workspace navigation, search, and service status
 
@@ -140,10 +142,10 @@ An `integrated` service uses the central API process; `disabled` means it is not
 configured or enabled; `available` and `unavailable` report the latest health
 probe only. A healthy probe is not evidence of production, accounting, or
 financial readiness. Global and Super Admins can also view bounded aggregate
-API request/failure counts and response timings. Metrics are in-memory per
-process, reset on restart, and group route templates without query strings or
-record IDs; they are operational indicators, not durable monitoring or audit
-evidence.
+API request/failure counts and response timings. Route-template aggregates
+flush to PostgreSQL and survive process restarts; they do not include query
+strings or record IDs. They are operational indicators, not external alerting,
+an audit trail, or a substitute for durable infrastructure monitoring.
 
 ## Languages and public registration
 
@@ -521,7 +523,7 @@ scenarios, launch evidence, and pilot operations.
 - `npm run test:mfi:e2e:local` — exercise the SACCO/MFI API journey against the running local app and isolated QA database
 - `npm run test:ui:e2e:local` — headless Chrome smoke check for Super Admin login, SACCO forms, responsive layouts, and browser errors; requires local QA accounts and Chrome
 - `npm run test:integration` — run API/database tests against a running local instance
-- `npm run check:local-deployment` — check local WSL service health, loopback-only listeners, and whether the proxy serves the current checkout
+- `npm run check:local-deployment` — check local WSL service state, loopback-only listeners, full `/readyz` status (database, migrations, storage, configured services), and whether the proxy serves the current checkout
 - GitHub Actions runs browser syntax/config checks, service builds, and unit tests on relevant pushes and pull requests. A macOS runner also syncs and builds the iOS app for the simulator without signing; device signing and App Store distribution still require Apple signing credentials and release review.
 - `npm run android:add` — generate the Capacitor Android project
 - `npm run android:sync` — copy the web app into Android and sync native plugins
