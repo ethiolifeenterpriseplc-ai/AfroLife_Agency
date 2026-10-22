@@ -37,10 +37,10 @@ export async function assertReadOnlyDatabaseSafety(): Promise<void> {
   try {
     const role = (await client.query(
       `SELECT r.rolsuper, r.rolbypassrls,
-              has_table_privilege(current_user,'public.global_bi_aggregates','SELECT') AS can_read,
-              has_table_privilege(current_user,'public.global_bi_aggregates','INSERT') AS can_insert,
-              has_table_privilege(current_user,'public.global_bi_aggregates','UPDATE') AS can_update,
-              has_table_privilege(current_user,'public.global_bi_aggregates','DELETE') AS can_delete,
+              has_table_privilege(current_user,'public.global_bi_30m_aggregates','SELECT') AS can_read,
+              has_table_privilege(current_user,'public.global_bi_30m_aggregates','INSERT') AS can_insert,
+              has_table_privilege(current_user,'public.global_bi_30m_aggregates','UPDATE') AS can_update,
+              has_table_privilege(current_user,'public.global_bi_30m_aggregates','DELETE') AS can_delete,
               has_table_privilege(current_user,'public.global_bi_metric_catalog','INSERT') AS catalog_can_insert,
               has_table_privilege(current_user,'public.global_bi_metric_catalog','UPDATE') AS catalog_can_update,
               has_table_privilege(current_user,'public.global_bi_metric_catalog','DELETE') AS catalog_can_delete,

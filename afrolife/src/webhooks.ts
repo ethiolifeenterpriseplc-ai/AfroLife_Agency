@@ -3,6 +3,17 @@ import type { RequestHandler } from 'express';
 import { z } from 'zod';
 import { withService } from './core.js';
 
+type PaymentEvent = { event_id: string; invoice_id: string; amount: number; reference: string };
+type ExistingPaymentEvent = { invoice_id: string; amount: string | number; reference: string };
+
+export function isSamePaymentEvent(existing: ExistingPaymentEvent, event: PaymentEvent): boolean {
+  const existingAmount = Number(existing.amount);
+  return existing.invoice_id.toLowerCase() === event.invoice_id.toLowerCase()
+    && Number.isFinite(existingAmount)
+    && Math.round(existingAmount * 100) === Math.round(event.amount * 100)
+    && existing.reference === event.reference;
+}
+
 export function paymentWebhook(secret: string): RequestHandler {
   return (req, res, next) => {
     void (async () => {
@@ -18,7 +29,7 @@ export function paymentWebhook(secret: string): RequestHandler {
         res.status(401).json({ error: 'Invalid signature' });
         return;
       }
-      let event: { event_id: string; invoice_id: string; amount: number; reference: string };
+      let event: PaymentEvent;
       try {
         event = z.object({
           event_id: z.string().trim().min(1).max(160),
@@ -33,8 +44,16 @@ export function paymentWebhook(secret: string): RequestHandler {
 
       const result = await withService('payment_webhook', async (c) => {
         await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`payment-provider-event:${event.event_id}`]);
-        const existing = await c.query('SELECT id FROM payments WHERE provider_event_id = $1', [event.event_id]);
-        if (existing.rowCount) return { status: 200, body: { ok: true, duplicate: true } };
+        const existing = await c.query<ExistingPaymentEvent>(
+          'SELECT invoice_id, amount, reference FROM payments WHERE provider_event_id = $1',
+          [event.event_id],
+        );
+        if (existing.rowCount) {
+          if (!isSamePaymentEvent(existing.rows[0], event)) {
+            return { status: 409, body: { error: 'Payment event identifier was already used for a different payment' } };
+          }
+          return { status: 200, body: { ok: true, duplicate: true } };
+        }
         const inv = (await c.query('SELECT * FROM invoices WHERE id = $1 FOR UPDATE', [event.invoice_id])).rows[0];
         if (!inv) return { status: 404, body: { error: 'Invoice not found' } };
         if (inv.status !== 'pending' || Math.round(Number(inv.amount) * 100) !== Math.round(event.amount * 100)) {

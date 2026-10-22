@@ -7,22 +7,32 @@ import pg from 'pg';
 
 const credentialsFile = process.env.MFI_E2E_USERS_FILE
   ?? join(process.env.LOCALAPPDATA ?? '', 'AfroLife', 'local-test-users.txt');
+const apiBase = new URL(process.env.API_URL ?? 'http://127.0.0.1:3000');
+assert.ok(
+  apiBase.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(apiBase.hostname),
+  'Local SACCO E2E refuses non-local API hosts',
+);
+const fixtureConnectionString = process.env.MFI_E2E_DATABASE_URL;
+const migrationConnectionString = process.env.MIGRATION_DATABASE_URL;
+assert.ok(fixtureConnectionString, 'MFI_E2E_DATABASE_URL must explicitly target a disposable test database');
+assert.ok(migrationConnectionString, 'MIGRATION_DATABASE_URL must explicitly target the MFI E2E database');
+const fixtureDbUrl = new URL(fixtureConnectionString);
+const migrationDbUrl = new URL(migrationConnectionString);
+const fixtureDatabase = decodeURIComponent(fixtureDbUrl.pathname.replace(/^\/+/, ''));
+const migrationDatabase = decodeURIComponent(migrationDbUrl.pathname.replace(/^\/+/, ''));
+assert.ok(['127.0.0.1','localhost','::1'].includes(fixtureDbUrl.hostname)
+  && ['127.0.0.1','localhost','::1'].includes(migrationDbUrl.hostname)
+  && fixtureDbUrl.port === '5433' && migrationDbUrl.port === '5433'
+  && /^afrolife_test_[a-z0-9_-]+$/i.test(fixtureDatabase)
+  && migrationDatabase === fixtureDatabase
+  && decodeURIComponent(migrationDbUrl.username) === 'postgres',
+  'Local SACCO E2E requires matching fixture and migration URLs for a loopback afrolife_test_* database');
 const lines = readFileSync(credentialsFile, 'utf8').split(/\r?\n/);
 const credentials = new Map<string, { phone: string; password: string }>();
 for (const line of lines) {
   const match = line.match(/^([^|]+?)\s*\|\s*(\+\d+)\s*\|\s*(.+)$/);
   if (match) credentials.set(match[1].trim(), { phone: match[2], password: match[3] });
 }
-const apiBase = new URL(process.env.API_URL ?? 'http://127.0.0.1:3000');
-assert.ok(
-  apiBase.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(apiBase.hostname),
-  'Local SACCO E2E refuses non-local API hosts',
-);
-const fixtureDbUrl = new URL(process.env.MFI_E2E_DATABASE_URL ?? process.env.MIGRATION_DATABASE_URL ?? '');
-const fixtureDatabase = decodeURIComponent(fixtureDbUrl.pathname.replace(/^\/+/, ''));
-assert.ok(['127.0.0.1','localhost','::1'].includes(fixtureDbUrl.hostname) && fixtureDbUrl.port === '5433'
-  && (fixtureDatabase === 'afrolife' || /^afrolife_test_[a-z0-9_-]+$/i.test(fixtureDatabase)),
-  'Local SACCO E2E requires the local AfroLife database or an explicitly named disposable afrolife_test_* database');
 const api = `${apiBase.origin}/api/v1`;
 async function login(role: string) {
   const account = credentials.get(role);

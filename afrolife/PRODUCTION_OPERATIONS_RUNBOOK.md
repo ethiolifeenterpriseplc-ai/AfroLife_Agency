@@ -190,6 +190,10 @@ maintenance window, enabled feature/provider flags, health/monitoring links,
 backup reference, rollback owner and go/no-go approvers in
 [V7_RELEASE_ACCEPTANCE_RECORD.md](V7_RELEASE_ACCEPTANCE_RECORD.md).
 
+- For any persistent database, use the approval and execution gates in
+  [Live database migration approval and execution](#live-database-migration-approval-and-execution)
+  before starting a migration job. A successful local or disposable-database
+  rehearsal is not authorization to change a persistent environment.
 - Do not enable real screening, e-invoicing, payments, signature effect,
   external data transfer or regulated-finance behavior solely because code or
   a sandbox test exists. Require the applicable signed approval and provider
@@ -204,6 +208,83 @@ backup reference, rollback owner and go/no-go approvers in
   approved SLO breach persists, or the responsible domain owner withdraws
   approval. The IC manages incident containment; only the Release Owner
   authorizes resumption.
+
+## Live database migration approval and execution
+
+This procedure governs schema and data migrations against any persistent
+production or production-like database. It is a gated operator workflow, not
+permission to connect to or modify a live database. Do not infer authorization
+from a code change, a successful test, a readiness result, or a verbal request
+to prepare this path.
+
+### Approval package — complete before scheduling
+
+1. Identify the exact environment, database, owning service, hosting region,
+   current application release, database migration history, and accountable
+   database/domain owners. Record environment identifiers, not connection
+   strings or credentials, in the release record.
+2. Pin the candidate source commit and produce the ordered migration list and
+   expected checksums from that exact build. Compare it with the target's
+   migration records. Resolve missing, unexpected, null-checksum, or
+   checksum-drift findings through a reviewed recovery decision; never edit
+   migration history or replace an applied migration to make a check pass.
+3. Review every migration for data loss, table locks, runtime grants, RLS
+   effects, backfill duration, compatibility with the currently deployed
+   application, and impact on all services sharing the database. Document
+   expected duration, resource impact, write-freeze needs, validation queries,
+   and the exact stop conditions.
+4. Rehearse the exact candidate migration sequence against a freshly restored,
+   access-controlled disposable copy representative of the target. Verify
+   restore integrity first; capture duration, logs, migration records,
+   checksums, readiness, runtime-role ACL behavior, and domain control totals.
+   Exercise the proposed application rollback or roll-forward procedure on
+   that copy. A dry run that does not execute the SQL is not a substitute for
+   this rehearsal.
+5. Attach a verified pre-change backup/PITR reference and restore evidence,
+   a recovery point, a tested recovery owner, a written application/database
+   compatibility plan, and a reconciliation plan for any writes made during
+   the window. Do not claim rollback is available unless the exact recovery
+   path was tested.
+6. Obtain recorded approval from the database/platform owner, the affected
+   Finance/Domain Controller, Security/Operations, and the Release Owner.
+   Require Legal/Compliance or provider owners when the change affects their
+   controls. Each approval must identify the exact commit, environment,
+   migration range/checksum, window, recovery plan, and any accepted risk.
+   Record names and timestamps in the controlled release record.
+
+If any evidence or required approval is absent, stop at **Not approved**.
+Do not connect a migration client to the persistent database.
+
+### Execution window — only after approval
+
+1. Reconfirm the release record matches the approved commit, target, migration
+   range/checksums, backup reference, approvers, and maintenance window. Any
+   difference voids the approval until reviewed again.
+2. Notify affected operators and users through the approved channel. Pause
+   writes or enter the approved maintenance mode if the rehearsal requires it;
+   verify the write freeze before continuing.
+3. Run only the repository's reviewed migration entry point using the
+   migration-only identity. Keep the application on its restricted runtime
+   identity. Do not use ad hoc SQL, a superuser application connection, or
+   credentials copied into shell history or the release record.
+4. Preserve the command output and timestamps in the controlled evidence
+   store. Stop on any error, unexpected migration, checksum mismatch,
+   prolonged lock, or unexpected data/permission change. Do not rerun blindly,
+   delete migration records, or make manual schema edits to clear the failure.
+5. Verify migration parity and checksums, application `/readyz`, runtime-role
+   permissions and RLS behavior, service health, representative read/write
+   journeys, backups, and domain-specific control totals. Finance must verify
+   journals, subledgers, settlement/replay state, and reconciliation before
+   financial writes resume.
+6. The Release Owner and affected domain owners record the go/no-go decision.
+   Resume traffic only after all checks pass and the evidence is attached.
+   Otherwise keep the affected writes paused and invoke the rehearsed
+   recovery/roll-forward plan under incident command.
+
+The core migrator applies each new migration in its own transaction; the
+Accounting service migrator applies its migration set in a transaction. These
+transaction boundaries do not make a multi-service release atomic and do not
+replace the backup, rehearsal, compatibility review, or recovery approval.
 
 ## Post-incident review and exercises
 

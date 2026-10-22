@@ -2,6 +2,11 @@
 
 This is a working release record. Blank fields are not accepted evidence. Do not mark release accepted until the evidence belongs to the exact release candidate and an accountable person has signed it.
 
+The current candidate-specific sign-off worksheet and evidence/action registers
+are in
+[PRODUCTION_SIGN_OFF_PACKAGE_2026-10-22.md](PRODUCTION_SIGN_OFF_PACKAGE_2026-10-22.md).
+The current disposition remains **NO-GO**.
+
 ## Release candidate
 
 | Field | Value |
@@ -20,6 +25,8 @@ Supplemental synthetic-only results from 14 October 2026 are recorded in [V7_MOC
 | Gate | Evidence to attach or link | Owner | State |
 |---|---|---|---|
 | Build, unit, API and regression checks | Local main/domain builds, 178 unit tests, production dependency audit, and 49/49 API/supply integrations passed; API/supply evidence used source commit `037f84d`, while the current working tree also passes builds and unit tests. CI run tied to exact release commit and full run evidence still required. See restricted-runtime acceptance report. | Engineering | Local checks passed; release gate open |
+| Focused finance/BI/governance regression | On 22 October 2026, 27 focused tests passed across accounting controls, agency accounting, database readiness, Global BI, tenant data admin, and webhooks. Command and scope are recorded in `PRODUCTION_SIGN_OFF_PACKAGE_2026-10-22.md`. | Engineering | Focused working-tree tests passed; not a full suite, integration run, or release-candidate CI |
+| Persistent database migration approval | Exact target identity and current schema inventory; candidate migration names/checksums; reviewed lock/data/compatibility impact; verified pre-change backup and restore; production-like rehearsal; recovery and reconciliation plan; named database, Finance/Domain, Security/Operations, and Release Owner approvals. Follow the migration approval and execution procedure in `PRODUCTION_OPERATIONS_RUNBOOK.md`. | Database/Platform Owner + Finance/Domain Controller + Security/Operations + Release Owner | Not approved — no persistent database change authorized |
 | Full-surface tenant/party isolation | Restricted-runtime ACL checker passed for Insurance ledger and auth-session privileges; API/supply suite passed 49/49. This supersedes the earlier local Insurance `UPDATE` observation, which was caused by grant setup order. Full route/resource inventory and production-equivalent negative evidence remain required. See both mock and restricted-runtime evidence reports. | Security/Engineering | Partial — production gate open |
 | Performance/capacity | 50,000 synthetic leads were seeded; authenticated lead-list load attempt produced no usable report. Prior health-only smoke: 500 requests, concurrency 25, p95 105.3 ms/p99 172.3 ms. See mock evidence report. | Product/IT | Partial — production gate open |
 | Recovery and rollback | Synthetic database plus file restore passed with matching control totals/hash in 18.2 seconds. Proposed RPO/RTO, PITR, target infrastructure, backup protection and rollback remain unverified. See mock evidence report. | IT/Operations | Partial — production gate open |
@@ -62,6 +69,20 @@ For each provider, record `Disabled` until all fields are complete.
 - [ ] All Section 9.3 acceptance gates are passed.
 
 **Decision:** Not accepted. Local checks and synthetic evidence supplement the requirement crosswalk; they do not satisfy production acceptance or named-owner sign-off.
+
+## Persistent database change decision
+
+**Decision:** Deferred / not authorized.
+
+No live or production-like persistent database migration is approved by this
+record. Do not treat local test results, prior migration-gap observations, a
+green `/readyz`, or this repository change as authorization. Complete the
+target-specific inventory, checksum comparison, representative restore and
+migration rehearsal, recovery/reconciliation plan, and named approvals in the
+operations runbook before scheduling any persistent database change. Update
+this record with the exact environment, release commit, migration range and
+checksums, approval names/timestamps, backup evidence, execution result, and
+post-change reconciliation before changing this decision.
 
 ## Engineering hardening follow-up — 21 October 2026
 

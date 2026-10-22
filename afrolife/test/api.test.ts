@@ -965,6 +965,7 @@ test('opt-in lease lifecycle requires independent approval, signature evidence, 
 
   const handover = { reason, handover_date: '2031-01-01', move_in_inspection_completed: true };
   assert.equal((await call(learningManager, 'POST', `/leases/${lease.body.id}/execute`, handover)).status, 409);
+  let signatureDocumentId: string | undefined;
   for (const party of ['tenant', 'owner']) {
     const uploaded = await callFile(
       fa,
@@ -973,7 +974,22 @@ test('opt-in lease lifecycle requires independent approval, signature evidence, 
     );
     assert.equal(uploaded.status, 201, JSON.stringify(uploaded.body));
     assert.equal(uploaded.body.signature_evidence_only, true);
+    signatureDocumentId ??= uploaded.body.id;
   }
+  assert.ok(signatureDocumentId);
+  const signatureDownload = await fetch(`${API}/lease-signature-documents/${signatureDocumentId}/file`, {
+    headers: { authorization: `Bearer ${fa.token}` },
+  });
+  assert.equal(signatureDownload.status, 200);
+  assert.deepEqual(Buffer.from(await signatureDownload.arrayBuffer()), PNG);
+  const downloadAudit = await db.query(
+    `SELECT id FROM audit_logs
+     WHERE actor_id=$1 AND action='lease_signature_evidence_downloaded'
+       AND entity='lease' AND entity_id=$2
+       AND new_value->>'document_id'=$3`,
+    [fa.id, lease.body.id, signatureDocumentId],
+  );
+  assert.equal(downloadAudit.rowCount, 1, 'Lease signature evidence download must be auditable');
   assert.equal((await call(compliance, 'POST', `/leases/${lease.body.id}/execute`, handover)).status, 403);
   const executed = await call(learningManager, 'POST', `/leases/${lease.body.id}/execute`, handover);
   assert.equal(executed.status, 200, JSON.stringify(executed.body));

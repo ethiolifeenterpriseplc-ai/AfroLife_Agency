@@ -15,6 +15,12 @@ do not establish production infrastructure readiness, legal or regulatory
 approval, provider authorization, business acceptance, or permission to
 change a persistent database.
 
+The detailed full-platform engineering review and session validation are
+recorded in
+[PLATFORM_READINESS_REVIEW_2026-10-22.md](PLATFORM_READINESS_REVIEW_2026-10-22.md).
+That review includes the current QA ACL finding/correction, test results,
+capacity limits, browser-smoke failure, and open owner decisions.
+
 ## Candidate and scope record
 
 Complete this section before requesting approvals. Blank values mean that the
@@ -53,6 +59,7 @@ approval or a claim that its open limitations have been resolved.
 | E-04 | Engineering hardening follow-up, dated 21 October 2026: `/livez` and `/readyz` readiness behavior and the application build are documented. | Not deployed to a target staging or production host; see [V7_RELEASE_ACCEPTANCE_RECORD.md](V7_RELEASE_ACCEPTANCE_RECORD.md). |
 | E-05 | Operational procedures and gated persistent-database workflow are documented in [PRODUCTION_OPERATIONS_RUNBOOK.md](PRODUCTION_OPERATIONS_RUNBOOK.md). | Procedures are not proof of a witnessed drill, staffed on-call, target alerting, or migration authorization. |
 | E-06 | Role/module readiness, deployment gates, and approval boundaries are described in [PRODUCTION_ACCEPTANCE_PACK.md](PRODUCTION_ACCEPTANCE_PACK.md) and [V7_RELEASE_ACCEPTANCE_RECORD.md](V7_RELEASE_ACCEPTANCE_RECORD.md). | This package does not supersede those records; update the release record only when evidence is attached to the exact candidate. |
+| E-07 | Session engineering review, dated 22 October 2026, recorded in [PLATFORM_READINESS_REVIEW_2026-10-22.md](PLATFORM_READINESS_REVIEW_2026-10-22.md). | Updated working-tree unit/build/API-supply results and isolated QA ACL correction are documented. Capacity is health-only, browser role sweep failed, and production recovery, external approvals, and business UAT remain open. |
 
 ## Release-blocking checklist
 
@@ -158,4 +165,3 @@ record immutable references in the approval rows above:
 - accessibility/localization and candidate-specific business UAT results
 - incident/recovery drill, named on-call/support coverage, rollout and rollback records
 - final signed go/no-go decision and post-deployment verification record
-

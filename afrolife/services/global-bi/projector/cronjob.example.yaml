@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tenant-global-bi-projector
+  labels:
+    app.kubernetes.io/name: tenant-global-bi-projector
+    app.kubernetes.io/managed-by: tenant-operator
+spec:
+  schedule: "*/30 * * * *"
+  timeZone: Etc/UTC
+  suspend: true
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 180
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: tenant-global-bi-projector
+        spec:
+          restartPolicy: Never
+          serviceAccountName: tenant-local-global-bi-projector
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: projector
+              image: replace-with-tenant-approved-image
+              imagePullPolicy: IfNotPresent
+              command:
+                - /app/tenant-approved-global-bi-projector
+              args:
+                - --bucket-time-zone=UTC
+                - --bucket-minutes=30
+                - --output=/run/projector-output
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              volumeMounts:
+                - name: output
+                  mountPath: /run/projector-output
+          volumes:
+            - name: output
+              emptyDir:
+                sizeLimit: 16Mi

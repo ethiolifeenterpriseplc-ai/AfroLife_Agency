@@ -43,6 +43,11 @@ const credentialsPath = join(
   'AfroLife',
   `finance-e2e-users-${suffix}.txt`,
 );
+const mfiCredentialsPath = join(
+  process.env.LOCALAPPDATA ?? tmpdir(),
+  'AfroLife',
+  `mfi-e2e-users-${suffix}.txt`,
+);
 const storagePath = join(tmpdir(), `afrolife-finance-e2e-storage-${suffix}`);
 const adminClient = new pg.Client({ connectionString: adminConnectionString, connectionTimeoutMillis: 5000 });
 let createdRoles = [];
@@ -155,6 +160,10 @@ try {
     MARKETPLACE_PAYMENT_MODE: 'mock',
     JWT_SECRET: process.env.JWT_SECRET ?? randomBytes(48).toString('base64url'),
     MFA_ENC_KEY: process.env.MFA_ENC_KEY ?? randomBytes(48).toString('base64url'),
+    MFI_PILOT_ENABLED: '1',
+    MFI_SERVICE_URL: '',
+    MFI_E2E_DATABASE_URL: migrationUrl.toString(),
+    MFI_E2E_USERS_FILE: mfiCredentialsPath,
     ACCOUNTING_SERVICE_URL: 'http://127.0.0.1:1',
     ACCOUNTING_INGEST_SECRET: randomBytes(48).toString('hex'),
     ACCOUNTING_GATEWAY_SECRET: randomBytes(48).toString('hex'),
@@ -183,6 +192,11 @@ try {
     await fixtureGrants.end();
   }
 
+  runNode(
+    ['--require', './.codex-osinfo-fallback.cjs', '--import', 'tsx', 'scripts/seed-local-mfi-e2e-users.ts'],
+    testEnv,
+    'Synthetic MFI-user seeding',
+  );
   runNode(['--import', 'tsx', 'scripts/seed-local-test-users.ts'], testEnv, 'Synthetic finance-user seeding');
   const userData = readFileSync(credentialsPath, 'utf8');
   const suiteEnv = { ...testEnv, PROPERTY_E2E_USERS_DATA: userData };
@@ -233,6 +247,11 @@ try {
 
   const port = await findPort();
   await startApi(port, suiteEnv);
+  runNode(
+    ['--require', './.codex-osinfo-fallback.cjs', '--import', 'tsx', 'scripts/local-mfi-e2e.ts'],
+    { ...suiteEnv, API_URL: `http://127.0.0.1:${port}` },
+    'SACCO/MFI role journey E2E',
+  );
   suiteExitCode = spawnSync(
     process.execPath,
     ['--import', 'tsx', '--test', 'test/api.test.ts', 'test/supply.test.ts'],
@@ -273,7 +292,7 @@ try {
       try { await cleanup.end(); } catch {}
     }
   }
-  for (const file of [credentialsPath]) {
+  for (const file of [credentialsPath, mfiCredentialsPath]) {
     try { rmSync(file, { force: true }); } catch (error) {
       console.error(`Could not remove test credential file: ${error instanceof Error ? error.message : error}`);
       suiteExitCode = 1;

@@ -33,6 +33,30 @@ test('Docker QA migrations run as database owner and the app uses a restricted r
   assert.match(compose, /condition: service_completed_successfully/);
 });
 
+test('Docker QA reapplies restricted Insurance ledger ACLs after broad runtime grants', () => {
+  const grantRuntime = compose.split('  grant-runtime:')[1]?.split('  app:')[0] ?? '';
+  const broadGrant = grantRuntime.indexOf('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES');
+  const accountRestriction = grantRuntime.indexOf('REVOKE ALL ON TABLE insurance_ledger_accounts');
+  assert.ok(broadGrant >= 0 && accountRestriction > broadGrant,
+    'Insurance ledger restrictions must be reapplied after the general runtime grants');
+  for (const statement of [
+    'REVOKE ALL ON TABLE insurance_ledger_accounts FROM afrolife_app',
+    'REVOKE ALL ON TABLE insurance_ledger_journals FROM afrolife_app',
+    'REVOKE ALL ON TABLE insurance_ledger_lines FROM afrolife_app',
+    'REVOKE ALL ON TABLE insurance_ledger_audit FROM afrolife_app',
+    'GRANT SELECT, INSERT ON TABLE insurance_ledger_accounts TO afrolife_app',
+    'GRANT SELECT, INSERT, UPDATE ON TABLE insurance_ledger_journals TO afrolife_app',
+    'GRANT SELECT, INSERT ON TABLE insurance_ledger_lines TO afrolife_app',
+    'GRANT SELECT, INSERT ON TABLE insurance_ledger_audit TO afrolife_app',
+    'REVOKE ALL ON SEQUENCE insurance_ledger_lines_id_seq FROM afrolife_app',
+    'REVOKE ALL ON SEQUENCE insurance_ledger_audit_id_seq FROM afrolife_app',
+    'GRANT USAGE, SELECT ON SEQUENCE insurance_ledger_lines_id_seq TO afrolife_app',
+    'GRANT USAGE, SELECT ON SEQUENCE insurance_ledger_audit_id_seq TO afrolife_app',
+  ]) {
+    assert.ok(grantRuntime.includes(statement), `Docker QA grant-runtime must include: ${statement}`);
+  }
+});
+
 test('Docker image includes migration inputs and generated QA credentials stay untracked', () => {
   assert.match(dockerfile, /COPY migrations \.\/migrations/);
   assert.match(dockerfile, /COPY scripts\/copy-migrations\.mjs \.\/scripts\/copy-migrations\.mjs/);

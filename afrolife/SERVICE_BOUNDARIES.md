@@ -20,21 +20,30 @@ or infrastructure secrets. A tenant may only be marked active after its
 deployment is verified; the current registry and verification field do not
 provision or independently attest to an actual deployment.
 
-Global BI is a separate read-only analytics database and is the only intended
-cross-tenant data exception. The platform now defines a minimized monthly
-aggregate catalog, a read-only dashboard API, and a strict projection importer.
-Only Global Admin, Super Admin, Finance, and Finance Manager can query the
-cross-tenant totals; the UI does not expose tenant-level rows or identifiers.
-Projection records contain only tenant IDs, approved metric keys, monthly
-aggregate values, units, and projection timestamps. The query role is
-read-only; the separately provisioned projector role can write only to the
-aggregate store. A 13-month window is enforced by the API and importer.
+Global BI is a separate read-only analytics database and the only intended
+cross-tenant data exception. The current catalog and dashboard use strict
+30-minute UTC aggregate buckets, with 13 months of projection retention and
+bounded 31-day query windows. Only Global Admin can query the cross-tenant
+totals; the API returns no tenant identifiers, names, or operational records.
+The query role is read-only. The separately provisioned projector role can
+write only to the approved aggregate store. Migration 002 adds the new grain
+without editing the immutable monthly migration; the old monthly projections
+are no longer used by the dashboard.
 
-Tenant-side aggregate extraction, signed/verified tenant enrollment, the
-hourly scheduler, replay monitoring, and production source reconciliation are
-not implemented or verified yet. Until those controls are deployed, the
-dashboard must remain disabled or show no data; never substitute direct
-cross-tenant operational queries or the shared-database mirror.
+No tenant-local source extractor, trusted remote ingestion endpoint, verified
+tenant projector, 30-minute scheduler, replay monitoring, or production source
+reconciliation is implemented or verified yet. Global BI status reports the
+projector and scheduler as not configured and health as unconfirmed. A recent
+aggregate import is evidence of received data only, not proof of a healthy
+schedule or complete tenant coverage. Never substitute direct cross-tenant
+operational queries or the shared-database mirror.
+
+Global Admin can assign tenant-scoped Database Admin and Analytics Admin
+capability metadata to active eligible accounts. These grants do not create
+database credentials, tenant database access, SQL execution, or Global BI
+access for tenant operators. Migration and backup/restore review requests are
+immutable evidence records only; no database change or restore is executed by
+the control plane.
 
 Existing shared-database and legacy-schema access remain transitional until
 tenant-by-tenant migration, reconciliation, role grants, rollback, and

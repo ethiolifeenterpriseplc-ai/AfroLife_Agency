@@ -25,10 +25,10 @@ const client = await pool.connect();
 try {
   const role = (await client.query(
     `SELECT r.rolsuper,r.rolbypassrls,
-            has_table_privilege(current_user,'public.global_bi_aggregates','SELECT') AS can_read,
-            has_table_privilege(current_user,'public.global_bi_aggregates','INSERT') AS can_insert,
-            has_table_privilege(current_user,'public.global_bi_aggregates','UPDATE') AS can_update,
-            has_table_privilege(current_user,'public.global_bi_aggregates','DELETE') AS can_delete,
+            has_table_privilege(current_user,'public.global_bi_30m_aggregates','SELECT') AS can_read,
+            has_table_privilege(current_user,'public.global_bi_30m_aggregates','INSERT') AS can_insert,
+            has_table_privilege(current_user,'public.global_bi_30m_aggregates','UPDATE') AS can_update,
+            has_table_privilege(current_user,'public.global_bi_30m_aggregates','DELETE') AS can_delete,
             has_table_privilege(current_user,'public.global_bi_metric_catalog','SELECT') AS catalog_can_read,
             has_table_privilege(current_user,'public.global_bi_metric_catalog','INSERT') AS catalog_can_insert,
             has_schema_privilege(current_user,'public','CREATE') AS can_create_in_public
@@ -52,31 +52,31 @@ try {
   let ignoredStale = 0;
   for (const row of parsed.projections) {
     const result = await client.query(
-      `INSERT INTO global_bi_aggregates
-         (tenant_id,metric_key,source_service,period_start,period_end,metric_value,unit,currency,projected_at)
-       SELECT $1,c.metric_key,c.source_service,$3::date,$4::date,$5::numeric,c.unit,$6,$7::timestamptz
+      `INSERT INTO global_bi_30m_aggregates
+           (tenant_id,metric_key,source_service,bucket_start,metric_value,unit,currency,projected_at)
+         SELECT $1,c.metric_key,c.source_service,$3::timestamptz,$4::numeric,c.unit,$5,$6::timestamptz
        FROM global_bi_metric_catalog c WHERE c.metric_key=$2
-       ON CONFLICT (tenant_id,metric_key,period_start,currency)
-       DO UPDATE SET period_end=EXCLUDED.period_end,metric_value=EXCLUDED.metric_value,
+         ON CONFLICT (tenant_id,metric_key,bucket_start,currency)
+         DO UPDATE SET metric_value=EXCLUDED.metric_value,
                      projected_at=EXCLUDED.projected_at
-       WHERE EXCLUDED.projected_at > global_bi_aggregates.projected_at`,
-      [parsed.tenantId, row.metricKey, row.periodStart, row.periodEnd, row.value, row.currency ?? '', generatedAt],
+         WHERE EXCLUDED.projected_at > global_bi_30m_aggregates.projected_at`,
+        [parsed.tenantId, row.metricKey, row.bucketStart, row.value, row.currency ?? '', generatedAt],
     );
     if (result.rowCount) {
       imported += result.rowCount;
     } else {
       const existing = await client.query(
-        `SELECT projected_at FROM global_bi_aggregates
-         WHERE tenant_id=$1 AND metric_key=$2 AND period_start=$3::date AND currency=$4`,
-        [parsed.tenantId, row.metricKey, row.periodStart, row.currency ?? ''],
+        `SELECT projected_at FROM global_bi_30m_aggregates
+         WHERE tenant_id=$1 AND metric_key=$2 AND bucket_start=$3::timestamptz AND currency=$4`,
+        [parsed.tenantId, row.metricKey, row.bucketStart, row.currency ?? ''],
       );
       if (!existing.rowCount) throw new Error(`Projection metric ${row.metricKey} is missing from the Global BI catalog`);
       ignoredStale += 1;
     }
   }
   await client.query(
-    `DELETE FROM global_bi_aggregates
-     WHERE period_start < date_trunc('month',current_date - interval '12 months')::date`,
+    `DELETE FROM global_bi_30m_aggregates
+     WHERE bucket_start < date_trunc('month',now() - interval '12 months')`,
   );
   await client.query('COMMIT');
   console.log(`Imported ${imported} aggregate projection(s); ignored ${ignoredStale} unchanged or stale replay(s)`);

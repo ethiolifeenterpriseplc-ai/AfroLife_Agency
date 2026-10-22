@@ -5,6 +5,7 @@ import { createAccountingWorkspace } from './accounting.js';
 import { createEdirWorkspace } from './edir.js';
 import { createPrivacyWorkspace } from './privacy.js';
 import { createGlobalBiWorkspace } from './global-bi.js';
+import { createTenantDataAdminWorkspace } from './tenant-data-admin.js';
 import { createMiniAppAccessEditor } from './mini-app-access.js';
 import { miniAppByPanel } from './mini-apps/registry.js';
 import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from './workspace-navigation.js';
@@ -28,7 +29,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const KNOWN_PANELS = new Set([
-  'overview', 'subscriptions', 'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace',
+  'overview', 'subscriptions', 'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace', 'tenant-data-admin',
   'contracts', 'commissions', 'agents', 'rent', 'mfi', 'accounting', 'edir',
   'insurance', 'privacy', 'global-bi', 'security', 'admin', 'status', 'password',
 ]);
@@ -38,7 +39,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], workerDocumentExpiry: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], workerDocumentExpiry: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
@@ -976,7 +977,7 @@ function signOut({ revoke = true, message = '' } = {}) {
     leads: [], workers: [], workerDocumentExpiry: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [],
     commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
     roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
-    platformServices: [], platformServicePackages: [], platformTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], businessTenants: [],
+    platformServices: [], platformServicePackages: [], platformTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [],
     marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
     insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [],
     edirMe: null, mfaSetup: null,
@@ -1011,6 +1012,12 @@ function signOut({ revoke = true, message = '' } = {}) {
 async function loadWorkspace() {
   state.user = await api('/auth/me');
   startSessionActivity(state.user.session_idle_timeout_minutes ?? 30);
+  const selfCapabilities = await getOptional('/platform/my-data-capabilities', []);
+  state.myDataCapabilities = Array.isArray(selfCapabilities) ? selfCapabilities : [];
+  const assignedDataTenantIds = state.myDataCapabilities.map((entry) => entry.tenant_id);
+  if (!assignedDataTenantIds.includes(state.dataAdminTenantId)) {
+    state.dataAdminTenantId = assignedDataTenantIds.length === 1 ? assignedDataTenantIds[0] : null;
+  }
   const featureFallback = { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] };
   if (state.user.role === 'super_admin') {
     state.tenantAdminTenants = await api('/platform/my-tenants');
@@ -1073,6 +1080,7 @@ async function loadWorkspace() {
     && (!Array.isArray(state.features.allowedModules) || state.features.allowedModules.includes('accounting'));
   $('#accounting-tab').hidden = !accountingAllowed;
   $('#global-bi-tab').hidden = state.features.globalBiEnabled !== true;
+  $('#tenant-data-admin-tab').hidden = state.myDataCapabilities.length === 0;
   $('#edir-tab').hidden = !state.features.edirEnabled;
   if ($('#mfi-tab').hidden && state.panel === 'mfi') state.panel = 'overview';
   if ($('#accounting-tab').hidden && state.panel === 'accounting') state.panel = 'overview';
@@ -1102,6 +1110,7 @@ async function loadWorkspace() {
       tab.hidden = !allowed.has(tab.dataset.panel);
     }
   });
+  $('#tenant-data-admin-tab').hidden = state.myDataCapabilities.length === 0;
   for (const [panel, enabled] of [
     ['workers', hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')],
     ['requests', hasActivity('staffing.requests.manage')],
@@ -1273,6 +1282,16 @@ async function loadPanelData(panel) {
       state.edirMe = state.features.edirEnabled && state.user.kyc_status === 'verified'
         ? await safeGet('/edir/me', null) : null;
       break;
+    case 'tenant-data-admin': {
+      const assigned = state.myDataCapabilities.find((entry) => entry.tenant_id === state.dataAdminTenantId);
+      state.tenantDataWorkspace = assigned
+        ? await safeGet(`/platform/my-data/${encodeURIComponent(assigned.tenant_id)}/workspace`, null)
+        : null;
+      state.tenantAnalyticsStatus = assigned?.capabilities?.includes('analytics_admin')
+        ? await safeGet(`/platform/my-data/${encodeURIComponent(assigned.tenant_id)}/analytics`, null)
+        : null;
+      break;
+    }
     case 'admin':
       state.users = ['global_admin', 'compliance','corporate_business_manager','super_admin'].includes(state.user.role)
         ? await safeGet('/users', []) : [];
@@ -1295,6 +1314,7 @@ async function loadPanelData(panel) {
           safeGet('/platform/tenants', []), safeGet('/platform/super-admins', []),
           safeGet('/platform/catalog-products', []),
         ]);
+        state.platformDataAdmin = await safeGet('/platform/tenant-capabilities', null);
         state.businessTenants = await safeGet('/platform/business-tenants', []);
       }
       break;
@@ -3747,6 +3767,156 @@ function renderTenantAdminWorkspace() {
   return section;
 }
 
+function renderTenantDataGovernance() {
+  const section = node('section', undefined, 'panel form-card tenant-data-governance');
+  section.append(
+    node('p', 'GLOBAL CONTROL PLANE', 'eyebrow'),
+    node('h3', 'Tenant data administration'),
+    node('p', 'Global Admin assigns tenant-scoped Database Admin and Analytics Admin capability records to active eligible accounts. These assignments grant no platform database connection, SQL console, tenant database access, credential access, or change execution. Tenant operators remain responsible for their own data plane.'),
+  );
+  const snapshot = state.platformDataAdmin;
+  if (!snapshot) {
+    section.append(node('p', 'Tenant control-plane metadata is unavailable. Retry the workspace connection; no status is inferred.', 'admin-data-empty'));
+    return section;
+  }
+  const tenantSelect = field('Tenant scope', 'tenant_id', 'select');
+  tenantSelect.input.dataset.capabilityTenant = 'true';
+  const selectTenant = node('option', 'Select an active tenant'); selectTenant.value = '';
+  tenantSelect.input.append(selectTenant);
+  const activeTenants = (snapshot.tenants ?? []).filter((tenant) => tenant.status === 'active');
+  for (const tenant of activeTenants) {
+    const option = node('option', `${tenant.display_name} · ${tenant.tenant_key}`);
+    option.value = tenant.id;
+    tenantSelect.input.append(option);
+  }
+  const assignment = node('form', undefined, 'inline-form admin-data-assignment');
+  assignment.dataset.form = 'platform-tenant-capabilities';
+  assignment.append(tenantSelect.label);
+  const account = field('Eligible active account', 'user_id', 'select');
+  account.input.dataset.capabilityUser = 'true';
+  const accountPrompt = node('option', 'Select an active tenant first'); accountPrompt.value = '';
+  account.input.append(accountPrompt);
+  assignment.append(account.label);
+  const capabilities = node('fieldset', undefined, 'admin-capability-options');
+  capabilities.append(node('legend', 'Tenant-scoped capability'));
+  const capabilityInputs = [];
+  for (const [value, label, detail] of [
+    ['database_admin', 'Database Admin', 'Metadata, readiness evidence, and operator-request tracking only'],
+    ['analytics_admin', 'Analytics Admin', 'No Global BI access is included; this service currently has no tenant-filtered query endpoint'],
+  ]) {
+    const labelNode = node('label');
+    const input = node('input');
+    input.type = 'checkbox';
+    input.name = 'capabilities';
+    input.value = value;
+    labelNode.append(input, node('strong', label), node('small', detail));
+    capabilities.append(labelNode);
+    capabilityInputs.push(input);
+  }
+  assignment.append(capabilities, button('Save tenant capabilities', 'submit', 'button button-primary span-2'));
+  section.append(assignment);
+  tenantSelect.input.addEventListener('change', async () => {
+    account.input.replaceChildren();
+    const placeholder = node('option', 'Loading eligible accounts…'); placeholder.value = '';
+    account.input.append(placeholder);
+    account.input.disabled = true;
+    if (!tenantSelect.input.value) {
+      placeholder.textContent = 'Select an active tenant first';
+      return;
+    }
+    try {
+      const users = await api(`/platform/tenant-capabilities/${encodeURIComponent(tenantSelect.input.value)}/eligible-users`);
+      account.input.replaceChildren();
+      const first = node('option', 'Choose an active eligible account'); first.value = '';
+      account.input.append(first);
+      for (const user of users) {
+        const option = node('option', `${user.legal_name} · ${roleLabel(user.role)}`);
+        option.value = user.id;
+        account.input.append(option);
+      }
+      if (!users.length) {
+        first.textContent = 'No eligible active accounts are available';
+      }
+      account.input.disabled = false;
+      capabilityInputs.forEach((input) => { input.checked = false; });
+    } catch (error) {
+      account.input.replaceChildren();
+      const failed = node('option', 'Could not load eligible accounts'); failed.value = '';
+      account.input.append(failed);
+      showAlert(error.message, true);
+    }
+  });
+  account.input.addEventListener('change', () => {
+    const assigned = new Set((snapshot.grants ?? [])
+      .filter((grant) => grant.tenant_id === tenantSelect.input.value && grant.user_id === account.input.value)
+      .map((grant) => grant.capability));
+    capabilityInputs.forEach((input) => { input.checked = assigned.has(input.value); });
+  });
+  const grantsByTenant = new Map();
+  for (const grant of snapshot.grants ?? []) {
+    if (!grantsByTenant.has(grant.tenant_id)) grantsByTenant.set(grant.tenant_id, new Map());
+    const users = grantsByTenant.get(grant.tenant_id);
+    if (!users.has(grant.user_id)) users.set(grant.user_id, { name: grant.legal_name, role: grant.role, capabilities: [] });
+    users.get(grant.user_id).capabilities.push(grant.capability);
+  }
+  const assignments = node('section', undefined, 'admin-data-assignments');
+  assignments.append(node('h4', 'Current assignments'));
+  if (!activeTenants.length) assignments.append(empty('No active registered tenants are available for tenant-scoped capability assignment.'));
+  for (const tenant of activeTenants) {
+    const tenantSection = node('section', undefined, 'admin-data-tenant');
+    tenantSection.append(node('h5', `${tenant.display_name} · ${tenant.tenant_key}`));
+    const users = grantsByTenant.get(tenant.id);
+    if (!users?.size) tenantSection.append(node('p', 'No Database Admin or Analytics Admin capability is assigned.'));
+    for (const [userId, grant] of users ?? []) {
+      tenantSection.append(node('p', `${grant.name} · ${roleLabel(grant.role)} · ${[...new Set(grant.capabilities)].map((capability) => capability === 'database_admin' ? 'Database Admin' : 'Analytics Admin').join(' + ')} · ${userId}`));
+    }
+    assignments.append(tenantSection);
+  }
+  section.append(assignments);
+
+  const checklist = node('details', undefined, 'admin-data-checklist');
+  checklist.append(node('summary', 'Operator readiness checklists (manual evidence only)'));
+  const migrationChecklist = node('section');
+  migrationChecklist.append(node('h4', 'Migration review'));
+  migrationChecklist.append(node('p', 'Confirm tenant-local maintenance window and approved release; compare migration manifest and checksums; verify a tenant-local backup and restore-tested recovery point; run migrations only with that tenant’s approved operator process; capture before/after schema and readiness evidence; record rollback outcome. This panel does not run or validate those steps.'));
+  const backupChecklist = node('section');
+  backupChecklist.append(node('h4', 'Backup / restore review'));
+  backupChecklist.append(node('p', 'Confirm tenant-local backup policy, encryption and retention; record last successful backup timestamp and immutable evidence reference; verify restore into an isolated tenant-controlled environment; perform integrity and application checks; document recovery objectives and operator sign-off. No backup, restore, or database change is triggered here.'));
+  checklist.append(migrationChecklist, backupChecklist);
+  section.append(checklist);
+
+  const requestForm = node('form', undefined, 'inline-form admin-data-request');
+  requestForm.dataset.form = 'platform-operator-request';
+  requestForm.append(node('h4', 'Create an audited operator request (no execution)'));
+  const requestTenant = field('Active tenant', 'tenant_id', 'select');
+  const requestTenantPrompt = node('option', 'Select an active tenant'); requestTenantPrompt.value = '';
+  requestTenant.input.append(requestTenantPrompt);
+  for (const tenant of activeTenants) {
+    const option = node('option', `${tenant.display_name} · ${tenant.tenant_key}`); option.value = tenant.id;
+    requestTenant.input.append(option);
+  }
+  requestForm.append(requestTenant.label);
+  const requestType = field('Review type', 'request_type', 'select');
+  for (const [value, label] of [
+    ['migration_review', 'Migration review'],
+    ['backup_restore_review', 'Backup / restore review'],
+    ['database_change_review', 'Database change review'],
+  ]) { const option = node('option', label); option.value = value; requestType.input.append(option); }
+  requestForm.append(requestType.label);
+  requestForm.append(field('Request summary (no SQL, credentials, or connection details)', 'summary', 'textarea', true, { minlength: '10', maxlength: '1000' }).label);
+  requestForm.append(field('Non-secret evidence reference (optional; not a URL)', 'evidence_reference', 'text', false, { maxlength: '200' }).label);
+  requestForm.append(button('Record request only', 'submit', 'button button-outline span-2'));
+  section.append(requestForm);
+  const requests = node('section', undefined, 'admin-data-requests');
+  requests.append(node('h4', 'Recent operator requests'));
+  if (!(snapshot.operatorRequests ?? []).length) requests.append(node('p', 'No operational requests are recorded. Creating a request never executes a database change.', 'admin-data-empty'));
+  for (const request of (snapshot.operatorRequests ?? []).slice(0, 12)) {
+    requests.append(node('p', `${request.tenant_name} · ${request.request_type.replaceAll('_', ' ')} · requested ${new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(request.created_at))} · ${request.summary} · execution not performed`));
+  }
+  section.append(requests);
+  return section;
+}
+
 function renderAdmin() {
   const wrap = node('div');
   const isAdmin = isPlatformAdmin();
@@ -3776,6 +3946,7 @@ function renderAdmin() {
   const columns = node('div', undefined, 'columns');
   if (isGlobalAdmin) wrap.append(renderBusinessRules());
   if (isGlobalAdmin) wrap.append(renderPlatformControlPlane());
+  if (isGlobalAdmin) wrap.append(renderTenantDataGovernance());
   if (isGlobalAdmin) wrap.append(renderGlobalAdminPromotions());
   if (isGlobalAdmin) wrap.append(renderReadinessEvidence());
   if (isGlobalAdmin) {
@@ -4033,6 +4204,7 @@ function renderPanel() {
     mfi: 'SACCO / MFI workspace',
     accounting: 'Accounting & Finance',
     'global-bi': 'Global BI',
+    'tenant-data-admin': 'Tenant data administration',
     edir: 'AfroLife Edir workspace',
     insurance: 'Insurance information',
     marketplace: 'Marketplace',
@@ -4070,6 +4242,24 @@ function renderPanel() {
   }
   if (state.panel === 'global-bi') {
     $('#workspace').replaceChildren(createGlobalBiWorkspace(api));
+    finishWorkspaceRender();
+    return;
+  }
+  if (state.panel === 'tenant-data-admin') {
+    $('#workspace').replaceChildren(createTenantDataAdminWorkspace(
+      api,
+      state.myDataCapabilities,
+      state.dataAdminTenantId,
+      state.tenantDataWorkspace,
+      state.tenantAnalyticsStatus,
+      async (tenantId) => {
+        state.dataAdminTenantId = tenantId;
+        state.tenantDataWorkspace = null;
+        state.tenantAnalyticsStatus = null;
+        loadedPanels.delete('tenant-data-admin');
+        await refresh();
+      },
+    ));
     finishWorkspaceRender();
     return;
   }
@@ -4257,6 +4447,32 @@ async function submitForm(form) {
     });
     await refresh();
     showAlert('Super Admin assigned to this tenant.');
+    return;
+  }
+  if (form.dataset.form === 'platform-tenant-capabilities') {
+    const tenantId = values.tenant_id;
+    const userId = values.user_id;
+    if (!tenantId || !userId) throw new Error('Choose an active tenant and eligible account.');
+    const capabilities = [...form.querySelectorAll('input[name="capabilities"]:checked')]
+      .map((input) => input.value);
+    await api(`/platform/tenant-capabilities/${encodeURIComponent(tenantId)}/${encodeURIComponent(userId)}`, {
+      method: 'PUT', body: JSON.stringify({ capabilities }),
+    });
+    await refresh();
+    showAlert('Tenant capability assignment recorded. No database connection or data-plane action was performed.');
+    return;
+  }
+  if (form.dataset.form === 'platform-operator-request') {
+    if (!values.tenant_id) throw new Error('Choose an active tenant.');
+    const body = {
+      tenant_id: values.tenant_id,
+      request_type: values.request_type,
+      summary: values.summary,
+      ...(values.evidence_reference ? { evidence_reference: values.evidence_reference } : {}),
+    };
+    const result = await api('/platform/operator-requests', { method: 'POST', body: JSON.stringify(body) });
+    await refresh();
+    showAlert(`Operator request ${result.id} recorded. Execution was not performed.`);
     return;
   }
   if (form.dataset.form === 'tenant-deployment-registration') {

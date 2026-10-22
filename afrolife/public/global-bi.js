@@ -5,11 +5,21 @@ const el = (tag, text, className) => {
   return item;
 };
 
-const dateValue = (date) => [
-  date.getFullYear(),
-  String(date.getMonth() + 1).padStart(2, '0'),
-  String(date.getDate()).padStart(2, '0'),
-].join('-');
+const localDateTimeValue = (date) => {
+  const local = new Date(date);
+  return [
+    local.getFullYear(),
+    String(local.getMonth() + 1).padStart(2, '0'),
+    String(local.getDate()).padStart(2, '0'),
+  ].join('-') + `T${String(local.getHours()).padStart(2, '0')}:${String(local.getMinutes()).padStart(2, '0')}`;
+};
+
+export function isGlobalBiUtcBucketBoundary(date) {
+  return date instanceof Date && Number.isFinite(date.valueOf())
+    && date.getUTCMinutes() % 30 === 0
+    && date.getUTCSeconds() === 0
+    && date.getUTCMilliseconds() === 0;
+}
 
 export function normalizeGlobalBiDashboard(payload) {
   if (!payload || typeof payload !== 'object'
@@ -25,8 +35,21 @@ export function normalizeGlobalBiDashboard(payload) {
     point && typeof point.period === 'string' && typeof point.metric === 'string'
       && (typeof point.value === 'number' || typeof point.value === 'string'));
 
+  const targetIntervalMinutes = Number.isFinite(Number(payload.targetIntervalMinutes))
+    ? Number(payload.targetIntervalMinutes) : null;
+  const projectionStates = new Set([
+    'not_configured', 'recent_projection_observed', 'stale', 'invalid_timestamp',
+  ]);
+
   return {
+    grain: payload.grain === '30_minutes' && targetIntervalMinutes === 30 ? '30_minutes' : null,
+    targetIntervalMinutes,
     asOf: typeof payload.asOf === 'string' ? payload.asOf : null,
+    oldestProjectionAt: typeof payload.oldestProjectionAt === 'string' ? payload.oldestProjectionAt : null,
+    projectionState: projectionStates.has(payload.projectionState) ? payload.projectionState : 'unknown',
+    projectorConfiguration: typeof payload.projectorConfiguration === 'string' ? payload.projectorConfiguration : 'unconfirmed',
+    schedulerConfiguration: typeof payload.schedulerConfiguration === 'string' ? payload.schedulerConfiguration : 'unconfirmed',
+    tenantProjectorHealth: 'unconfirmed',
     reportingTenants: (typeof payload.reportingTenants === 'number' || typeof payload.reportingTenants === 'string')
       && String(payload.reportingTenants).trim() !== ''
       && Number.isFinite(Number(payload.reportingTenants))
@@ -37,11 +60,11 @@ export function normalizeGlobalBiDashboard(payload) {
 }
 
 function formatPeriod(period) {
-  const source = /^\d{4}-\d{2}$/.test(period) ? `${period}-01` : period;
-  const date = new Date(`${source.slice(0, 10)}T12:00:00`);
+  const source = /^\d{4}-\d{2}$/.test(period) ? `${period}-01T12:00:00Z` : period;
+  const date = new Date(source);
   return Number.isNaN(date.getTime())
     ? period
-    : new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(date);
+    : new Intl.DateTimeFormat('en', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' }).format(date);
 }
 
 function metricLabel(metric) {
@@ -107,27 +130,29 @@ function renderSeries(series, container) {
 export function createGlobalBiWorkspace(api) {
   const root = el('div', undefined, 'global-bi-workspace');
   root.append(
-    el('p', 'A read-only, aggregate-only view across reporting tenants. No customer, member, transaction-row, or credential details are displayed.', 'bi-intro'),
+    el('p', 'GLOBAL · Read-only, aggregate-only analytics. Tenant data remains in separate authoritative data planes; this workspace has no direct tenant database access.', 'bi-intro bi-scope-banner'),
+    el('p', 'Requested update cadence: every 30 minutes, using UTC-aligned buckets. The tenant-local projector and scheduler are not centrally configured or verified. A recent import is evidence of received data only, not proof of projector health or full tenant coverage.', 'bi-cadence-notice'),
   );
 
   const filterForm = el('form', undefined, 'bi-filter-form');
   const today = new Date();
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const fromLabel = el('label', 'From date');
+  const toDefault = new Date(Math.floor(today.valueOf() / 1_800_000) * 1_800_000);
+  const fromDefault = new Date(toDefault.valueOf() - 24 * 60 * 60_000);
+  const fromLabel = el('label', 'From (local input; UTC buckets)');
   const fromInput = el('input');
-  fromInput.type = 'date';
+  fromInput.type = 'datetime-local';
   fromInput.name = 'from';
   fromInput.required = true;
-  fromInput.value = dateValue(monthStart);
+  fromInput.value = localDateTimeValue(fromDefault);
   fromLabel.append(fromInput);
-  const toLabel = el('label', 'To date');
+  const toLabel = el('label', 'To (local input; UTC buckets)');
   const toInput = el('input');
-  toInput.type = 'date';
+  toInput.type = 'datetime-local';
   toInput.name = 'to';
   toInput.required = true;
-  toInput.value = dateValue(today);
+  toInput.value = localDateTimeValue(toDefault);
   toLabel.append(toInput);
-  const submit = el('button', 'Apply period', 'button button-primary');
+  const submit = el('button', 'Apply window', 'button button-primary');
   submit.type = 'submit';
   filterForm.append(fromLabel, toLabel, submit);
   root.append(filterForm);
@@ -147,13 +172,21 @@ export function createGlobalBiWorkspace(api) {
   let sequence = 0;
   async function loadDashboard() {
     const requestNumber = ++sequence;
-    const from = fromInput.value;
-    const to = toInput.value;
-    if (!from || !to || from > to) {
+    const from = fromInput.value ? new Date(fromInput.value) : null;
+    const to = toInput.value ? new Date(toInput.value) : null;
+    if (!from || !to || !Number.isFinite(from.valueOf()) || !Number.isFinite(to.valueOf()) || from > to) {
       summary.replaceChildren();
       metrics.replaceChildren();
       trends.replaceChildren();
-      status.textContent = 'Choose a valid reporting period. The start date must be on or before the end date.';
+      status.textContent = 'Choose a valid reporting window. The start must be before the end.';
+      status.classList.add('is-error');
+      return;
+    }
+    if (!isGlobalBiUtcBucketBoundary(from) || !isGlobalBiUtcBucketBoundary(to)) {
+      summary.replaceChildren();
+      metrics.replaceChildren();
+      trends.replaceChildren();
+      status.textContent = 'Choose start and end times that align exactly to 30-minute UTC bucket boundaries.';
       status.classList.add('is-error');
       return;
     }
@@ -165,11 +198,11 @@ export function createGlobalBiWorkspace(api) {
     trends.replaceChildren();
 
     try {
-      const query = new URLSearchParams({ from, to });
+      const query = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
       const payload = normalizeGlobalBiDashboard(await api(`/global-bi/dashboard?${query}`));
       if (requestNumber !== sequence) return;
 
-      status.textContent = `Reporting period ${from} to ${to}. Figures are limited to approved aggregate projections.`;
+      status.textContent = `${payload.grain === '30_minutes' ? 'Confirmed 30-minute UTC buckets' : 'Bucket grain not reported'} from ${from.toISOString()} to ${to.toISOString()}. Figures are approved aggregates only.`;
       const summaryTitle = el('h2', 'Reporting coverage');
       const coverage = el('article', undefined, 'bi-coverage');
       coverage.append(
@@ -177,16 +210,33 @@ export function createGlobalBiWorkspace(api) {
         el('strong', payload.reportingTenants === null ? 'Not reported' : String(payload.reportingTenants)),
       );
       const freshness = el('article', undefined, 'bi-freshness');
-      freshness.append(el('span', 'Latest projection'));
+      freshness.append(el('span', 'Latest received projection'));
       const asOfDate = payload.asOf ? new Date(payload.asOf) : null;
       freshness.append(el('strong', asOfDate && !Number.isNaN(asOfDate.getTime())
-        ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(asOfDate)
+        ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC', timeZoneName: 'short' }).format(asOfDate)
         : 'Not yet reported'));
-      summary.append(summaryTitle, coverage, freshness);
+      const cadence = el('article', undefined, `bi-freshness bi-projection-state is-${payload.projectionState.replaceAll('_', '-')}`);
+      cadence.append(el('span', 'Projection status'));
+      cadence.append(el('strong', payload.projectionState === 'recent_projection_observed'
+        ? 'Recent data observed · health unconfirmed'
+        : payload.projectionState === 'stale' ? 'No recent projection observed'
+          : payload.projectionState === 'not_configured' ? 'No projection received'
+            : payload.projectionState === 'invalid_timestamp' ? 'Invalid projection timestamp'
+              : 'Not reported'));
+      const projector = el('article', undefined, 'bi-freshness bi-scheduler-state');
+      projector.append(el('span', 'Tenant projector configuration'), el('strong',
+        payload.projectorConfiguration.replaceAll('_', ' ')));
+      const scheduler = el('article', undefined, 'bi-freshness bi-scheduler-state');
+      scheduler.append(el('span', 'Tenant scheduler configuration'), el('strong',
+        payload.schedulerConfiguration.replaceAll('_', ' ')));
+      const projectorHealth = el('article', undefined, 'bi-freshness bi-scheduler-state');
+      projectorHealth.append(el('span', 'Tenant projector health'), el('strong',
+        payload.tenantProjectorHealth.replaceAll('_', ' ')));
+      summary.append(summaryTitle, coverage, freshness, cadence, projector, scheduler, projectorHealth);
 
       metrics.append(el('h2', 'Aggregate indicators'));
       if (!payload.metrics.length) {
-        metrics.append(el('p', 'No aggregate indicators are available for this period yet. The projection store may be empty or awaiting approved reporting data.', 'bi-empty'));
+        metrics.append(el('p', 'No aggregate indicators are available for this window. The tenant-local projector and 30-minute scheduler have not been confirmed. No sample or operational transaction data is shown.', 'bi-empty'));
       } else {
         const list = el('dl', undefined, 'bi-metric-list');
         for (const metric of payload.metrics) {
@@ -204,7 +254,7 @@ export function createGlobalBiWorkspace(api) {
       trends.append(el('h2', 'Reporting trends'));
       renderSeries(payload.series, trends);
       if (!payload.metrics.length && !payload.series.length) {
-        status.textContent = 'No aggregate projection data is available for this period. No sample or operational transaction data is shown.';
+        status.textContent = 'No aggregate projection data is available for this window. No sample or operational transaction data is shown.';
       }
     } catch (error) {
       if (requestNumber !== sequence) return;

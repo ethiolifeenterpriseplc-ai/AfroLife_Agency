@@ -27,7 +27,8 @@ test('custom mini-app grants narrow but never elevate role access', () => {
   assert.equal(hasMiniAppAccess(user('customer', 'custom', ['accounting']), 'accounting'), true);
   assert.equal(hasMiniAppAccess(user('customer', 'custom', []), 'accounting'), false);
   assert.equal(hasMiniAppAccess(user('finance', 'custom', []), 'accounting'), false);
-  assert.equal(hasMiniAppAccess(user('finance', 'custom', ['global-bi']), 'global-bi'), true);
+  assert.equal(hasMiniAppAccess(user('finance', 'custom', ['global-bi']), 'global-bi'), false);
+  assert.equal(hasMiniAppAccess(user('global_admin'), 'global-bi'), true);
   assert.equal(hasMiniAppAccess(user('worker', 'custom', ['global-bi']), 'global-bi'), false);
   assert.equal(hasMiniAppAccess(user('super_admin'), 'global-bi'), false);
 });

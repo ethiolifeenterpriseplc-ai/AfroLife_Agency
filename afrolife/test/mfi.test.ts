@@ -7,6 +7,7 @@ import { MFI_SANDBOX_SIMULATIONS, runMfiSandboxSimulation } from '../src/mfi-san
 const sharedPortals = readFileSync(new URL('../migrations/050_shared_mini_app_portals.sql', import.meta.url), 'utf8');
 const mfiRouter = readFileSync(new URL('../src/mfi.ts', import.meta.url), 'utf8');
 const mfiUi = readFileSync(new URL('../public/mfi.js', import.meta.url), 'utf8');
+const mfiE2e = readFileSync(new URL('../scripts/local-mfi-e2e.ts', import.meta.url), 'utf8');
 const mfiApprovalMigration = readFileSync(new URL('../migrations/073_mfi_journal_maker_checker.sql', import.meta.url), 'utf8');
 const accountingMock = JSON.parse(readFileSync(new URL('./fixtures/accounting-source-events.json', import.meta.url), 'utf8')) as {
   events:Array<{source_reference:string;lines:Array<{debit:string;credit:string}>}>;
@@ -25,6 +26,13 @@ test('MFI amounts reject zero, excess precision, negatives and exponent notation
     assert.throws(() => parseMfiAmount(value));
   }
   assert.throws(() => decimalToCents('1.001'), TypeError);
+});
+
+test('MFI E2E requires matching disposable fixture and migration database URLs', () => {
+  assert.match(mfiE2e, /MFI_E2E_DATABASE_URL must explicitly target a disposable test database/);
+  assert.match(mfiE2e, /MIGRATION_DATABASE_URL must explicitly target the MFI E2E database/);
+  assert.match(mfiE2e, /migrationDatabase === fixtureDatabase/);
+  assert.match(mfiE2e, /afrolife_test_\[a-z0-9_-\]/);
 });
 
 test('synthetic MFI financial events balance and MFI savings/repayments require an independent checker', () => {

@@ -2,6 +2,12 @@
 
 This pack consolidates the operational readiness, incident response, and approval evidence needed before a production release decision for the existing AfroLife Agency and property platform. It is intentionally conservative: local engineering evidence supports the implementation, but it does not establish legal, provider, finance, or regulated product approval.
 
+The candidate-specific checklist, evidence register, action register, and
+approval/signature forms are maintained in
+[PRODUCTION_SIGN_OFF_PACKAGE_2026-10-22.md](PRODUCTION_SIGN_OFF_PACKAGE_2026-10-22.md).
+Its current disposition is **NO-GO**: no immutable release candidate or
+candidate-specific named approvals have been recorded.
+
 ## 1. Executive decision
 
 The current platform remains in a guarded production-readiness state rather than a full production-authorized state. The implementation is hardened for the existing platform, its legacy flow remains protected, and regulated or legal-effect features stay disabled until named owners sign off on the applied policy and evidence.
@@ -36,6 +42,7 @@ The approval gate includes these areas:
 | Finance/accounting policy | Finance Controller | Tax counsel / CFO | chart of accounts, close checklist, reconciliation evidence | Pending named sign-off |
 | Service identities | Security Lead | Platform Ops | inventory, rotation, expiry, revocation record | Pending named sign-off |
 | Disaster recovery and backups | IT / Operations | Security + Finance | restore rehearsal, target RPO/RTO, evidence record | Pending named sign-off |
+| Persistent database migration | Database/Platform Owner | Finance/Domain Controller + Security/Operations + Release Owner | exact target and commit, migration/checksum inventory, production-like restore rehearsal, compatibility/recovery plan, signed window approval and post-migration reconciliation | Not approved; no persistent DB change authorized |
 | Release ownership | Business/Product Release Owner | Technical Release Owner | go/no-go record, open-risk list, rollback plan | Pending named sign-off |
 | Incident management | Incident Commander | Security/Privacy | severity matrix, contact tree, drill record | Pending named sign-off |
 
@@ -60,6 +67,7 @@ The actual approver names must be recorded in the running release package; the r
 - [ ] Restore rehearsal has been performed on a dedicated disposable target and compared to control totals.
 - [ ] Monitoring and alerting cover core service degradation, failed backup, and ledger anomalies.
 - [ ] RTO / RPO objectives are document-controlled and approved by the accountable owner.
+- [ ] The persistent database migration package is approved and rehearsed using the gated procedure in [PRODUCTION_OPERATIONS_RUNBOOK.md](PRODUCTION_OPERATIONS_RUNBOOK.md#live-database-migration-approval-and-execution), or the database change is explicitly deferred.
 
 ### Privacy, legal, and provider controls
 - [ ] All external provider integrations remain disabled unless a lawful basis and approval record exist.
@@ -86,12 +94,44 @@ Severity guidance:
 
 This evidence should be retained in the release package or controlled evidence store:
 - final build and migration evidence
+- exact target migration inventory and checksums, pre-change backup/PITR reference,
+  production-like restore/rehearsal results, compatibility and recovery plan,
+  named approvals, execution log, and post-migration reconciliation; if
+  deferred, retain the explicit no-change decision
 - restore rehearsal output with control totals and checksum / hash references
 - finance period-close sign-off and owner statement reconciliation evidence
 - service-identity inventory and rotation records
 - legal/provider approval references or explicit waiver / deferred decision memo
 - incident playbook and release-owner approval route
 - open-risk register and ownership list
+
+## 5.1 Controlled rollout sequence
+
+Use the following order for a production candidate. A later stage does not
+inherit approval from an earlier stage.
+
+1. **Prepare:** pin the release commit, scope the enabled features, name owners,
+   close code and dependency gates, and record unresolved risks.
+2. **Rehearse:** restore a representative database and private files to an
+   isolated target; apply the exact migrations and release; test recovery,
+   authorization, readiness, workflows, capacity, and financial control totals.
+3. **Approve:** obtain the required legal, provider, finance, security,
+   operations, business UAT, database, and release-owner decisions for the
+   actual candidate and environment. Keep unapproved integrations disabled.
+4. **Deploy:** use the recorded maintenance window, migration-only identity,
+   restricted runtime identity, verified backup, and runbook procedure.
+   Capture evidence and stop at any unexpected result.
+5. **Verify and decide:** validate service readiness and critical journeys,
+   reconcile financial records, confirm monitoring and support coverage, and
+   obtain a named go/no-go decision before resuming traffic.
+6. **Observe:** monitor the agreed release window and record incidents,
+   operational metrics, reconciliation results, and follow-up owners. Close
+   acceptance only when evidence belongs to the exact deployed commit.
+
+The current workspace's local and disposable-environment results are not
+production migration approval, production deployment evidence, or business
+acceptance. The live database must remain unchanged until the migration gate
+has complete evidence and explicit named approvals.
 
 ## 6. Hardening status by service area
 

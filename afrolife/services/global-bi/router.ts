@@ -1,101 +1,78 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
-import { z } from 'zod';
-import { HttpError } from '../../src/http-error.js';
 import type { AuthUser } from '../../src/auth-types.js';
+import { GLOBAL_BI_BUCKET_MINUTES } from './projection-contract.js';
+import { assertGlobalBiAccess } from './access-control.js';
+import { parseGlobalBiRange } from './query-range.js';
+import { summarizeProjectionStatus } from './projection-status.js';
 import { withUser } from './db.js';
-
-const GLOBAL_BI_ROLES = ['global_admin', 'super_admin', 'finance', 'finance_manager'];
-const dateRange = z.object({
-  from: z.string().date().optional(),
-  to: z.string().date().optional(),
-}).strict();
-
-function defaultDateRange(now = new Date()) {
-  const end = now.toISOString().slice(0, 10);
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1))
-    .toISOString().slice(0, 10);
-  return { from: start, to: end };
-}
-
-function thirteenMonthsAgo(now = new Date()): string {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1))
-    .toISOString().slice(0, 10);
-}
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
 
 export function createGlobalBiRouter() {
   const router = express.Router();
+  router.get('/status', h(async (req, res) => {
+    assertGlobalBiAccess(req.user!.role);
+    const freshness = await withUser(req.user! as AuthUser, async (client) => (await client.query(
+      `SELECT count(DISTINCT tenant_id)::int AS observed_tenants,
+              max(projected_at) AS latest_projection
+       FROM global_bi_30m_aggregates`,
+    )).rows[0]);
+    res.json(summarizeProjectionStatus(
+      freshness.latest_projection,
+      Number(freshness.observed_tenants),
+    ));
+  }));
   router.get('/dashboard', h(async (req, res) => {
-    if (!GLOBAL_BI_ROLES.includes(req.user!.role)) {
-      throw new HttpError(403, 'Your role cannot view Global BI');
-    }
-    const input = dateRange.parse(req.query);
-    const defaults = defaultDateRange();
-    const from = input.from ?? defaults.from;
-    const to = input.to ?? defaults.to;
-    if (from > to) throw new HttpError(400, 'Report start date must be on or before its end date');
-    if (!from.endsWith('-01')) {
-      throw new HttpError(400, 'Global BI reports use full calendar-month start dates');
-    }
-    if (from < thirteenMonthsAgo()) throw new HttpError(400, 'Global BI reports are limited to the 13-month retention window');
-
+    assertGlobalBiAccess(req.user!.role);
+    const { from, to } = parseGlobalBiRange(req.query);
     const result = await withUser(req.user! as AuthUser, async (client) => {
       const metrics = (await client.query(
         `WITH selected AS (
-           SELECT a.tenant_id, a.metric_key, a.period_start, a.metric_value, a.unit,
-                  a.currency, a.projected_at, c.temporal_aggregation
-           FROM global_bi_aggregates a
+           SELECT a.tenant_id,a.metric_key,a.bucket_start,a.metric_value,a.unit,a.currency,
+                  c.temporal_aggregation
+           FROM global_bi_30m_aggregates a
            JOIN global_bi_metric_catalog c ON c.metric_key=a.metric_key
-           WHERE a.period_start >= $1::date
-             AND a.period_start <= date_trunc('month',$2::date)::date
-             AND (
-               c.temporal_aggregation='flow'
-               OR a.period_start=(
-                 SELECT max(latest.period_start)
-                 FROM global_bi_aggregates latest
-                 WHERE latest.tenant_id=a.tenant_id
-                   AND latest.metric_key=a.metric_key
-                   AND coalesce(latest.currency,'')=coalesce(a.currency,'')
-                   AND latest.period_start >= $1::date
-                   AND latest.period_start <= date_trunc('month',$2::date)::date
-               )
-             )
+           WHERE a.bucket_start >= $1::timestamptz AND a.bucket_start <= $2::timestamptz
+             AND (c.temporal_aggregation='flow' OR a.bucket_start=(
+               SELECT max(latest.bucket_start) FROM global_bi_30m_aggregates latest
+               WHERE latest.tenant_id=a.tenant_id AND latest.metric_key=a.metric_key
+                 AND coalesce(latest.currency,'')=coalesce(a.currency,'')
+                 AND latest.bucket_start >= $1::timestamptz AND latest.bucket_start <= $2::timestamptz
+             ))
          )
-         SELECT metric_key AS key, sum(metric_value)::text AS value, unit, currency
-         FROM selected
-         GROUP BY metric_key, unit, currency
-         ORDER BY metric_key, currency`,
+         SELECT metric_key AS key,sum(metric_value)::text AS value,unit,currency
+         FROM selected GROUP BY metric_key,unit,currency ORDER BY metric_key,currency`,
         [from, to],
       )).rows;
       const series = (await client.query(
-        `SELECT a.period_start::text AS period, a.metric_key AS metric,
-                sum(a.metric_value)::text AS value, a.unit, a.currency
-         FROM global_bi_aggregates a
-         WHERE a.period_start >= $1::date
-           AND a.period_start <= date_trunc('month',$2::date)::date
-         GROUP BY a.period_start, a.metric_key, a.unit, a.currency
-         ORDER BY a.period_start, a.metric_key, a.currency`,
+        `SELECT a.bucket_start AS period,a.metric_key AS metric,
+                sum(a.metric_value)::text AS value,a.unit,a.currency
+         FROM global_bi_30m_aggregates a
+         WHERE a.bucket_start >= $1::timestamptz AND a.bucket_start <= $2::timestamptz
+         GROUP BY a.bucket_start,a.metric_key,a.unit,a.currency
+         ORDER BY a.bucket_start,a.metric_key,a.currency`,
         [from, to],
       )).rows;
       const freshness = (await client.query(
-        `WITH tenant_freshness AS (
-           SELECT tenant_id,max(projected_at) AS projected_at
-           FROM global_bi_aggregates
-           WHERE period_start >= $1::date
-             AND period_start <= date_trunc('month',$2::date)::date
-           GROUP BY tenant_id
-         )
-         SELECT count(*)::int AS reporting_tenants,min(projected_at) AS as_of
-         FROM tenant_freshness`,
+        `SELECT count(DISTINCT tenant_id)::int AS observed_tenants,
+                max(projected_at) AS latest_projection,
+                min(projected_at) AS oldest_projection
+         FROM global_bi_30m_aggregates
+         WHERE bucket_start >= $1::timestamptz AND bucket_start <= $2::timestamptz`,
         [from, to],
       )).rows[0];
+      const projectionStatus = summarizeProjectionStatus(
+        freshness.latest_projection,
+        Number(freshness.observed_tenants),
+      );
       return {
         from,
         to,
-        asOf: freshness.as_of?.toISOString?.() ?? null,
-        reportingTenants: freshness.reporting_tenants,
+        ...projectionStatus,
+        reportingTenants: projectionStatus.observedTenants,
+        asOf: projectionStatus.latestProjectionAt,
+        oldestProjectionAt: freshness.oldest_projection?.toISOString?.() ?? null,
         metrics,
         series,
       };

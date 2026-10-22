@@ -46,6 +46,18 @@ services:
         GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO afrolife_app;
         GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO afrolife_app;
         GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO afrolife_app;
+        REVOKE ALL ON TABLE insurance_ledger_accounts FROM afrolife_app;
+        REVOKE ALL ON TABLE insurance_ledger_journals FROM afrolife_app;
+        REVOKE ALL ON TABLE insurance_ledger_lines FROM afrolife_app;
+        REVOKE ALL ON TABLE insurance_ledger_audit FROM afrolife_app;
+        REVOKE ALL ON SEQUENCE insurance_ledger_lines_id_seq FROM afrolife_app;
+        REVOKE ALL ON SEQUENCE insurance_ledger_audit_id_seq FROM afrolife_app;
+        GRANT SELECT, INSERT ON TABLE insurance_ledger_accounts TO afrolife_app;
+        GRANT SELECT, INSERT, UPDATE ON TABLE insurance_ledger_journals TO afrolife_app;
+        GRANT SELECT, INSERT ON TABLE insurance_ledger_lines TO afrolife_app;
+        GRANT SELECT, INSERT ON TABLE insurance_ledger_audit TO afrolife_app;
+        GRANT USAGE, SELECT ON SEQUENCE insurance_ledger_lines_id_seq TO afrolife_app;
+        GRANT USAGE, SELECT ON SEQUENCE insurance_ledger_audit_id_seq TO afrolife_app;
         SQL
     depends_on:
       migrate:

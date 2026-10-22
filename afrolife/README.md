@@ -127,14 +127,22 @@ or bypasses service, entity-membership, ownership, or territory checks.
 Assignments are enforced on both shell visibility and matching API route
 families, and every change is retained in an append-only access audit.
 
-Global BI is a separate service and read-only analytics database. It exposes
-aggregate monthly performance totals to Global Admin, Super Admin, Finance, and
-Finance Manager; it does not expose tenant-level rows, identities, or
-transaction details. Its schema/import contract limits retention to 13 months.
-The gateway remains disabled until the separate database and verified source
-projectors are configured. Tenant-side aggregate extraction, hourly scheduling,
-and source reconciliation are not yet deployed, so no real global totals are
-available until that projection pipeline is completed.
+Global BI is a separate service and read-only analytics database. Its current
+contract uses allowlisted aggregate metrics in 30-minute UTC buckets, retains
+13 months of projections, and limits each query to a 31-day window. Only Global
+Admin may query cross-tenant totals; no tenant identifiers, operational rows,
+or credentials are returned. A Global Admin can assign tenant-scoped Database
+Admin and Analytics Admin capability metadata to active eligible accounts;
+these grants do not provide database connectivity, SQL execution, or Global BI
+access. Migration, backup/restore, and database-change requests are audited
+records only and never execute operations.
+
+Each tenant operator owns any eventual local projector and scheduler. There is
+currently no tenant source extractor, trusted remote ingestion endpoint, or
+verified 30-minute schedule. Global BI reports projector/scheduler as not
+configured and health as unconfirmed until trustworthy local evidence is
+available; a recent import alone is not a health check. No sample values are
+shown, and the central platform does not connect to tenant databases.
 
 The authenticated Service status panel checks the core database-backed API and
 configured service health endpoints. The Overview flags unavailable services.
@@ -541,7 +549,7 @@ To generate local signing/encryption secrets in PowerShell:
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Integration tests need a disposable database named `test_*` or `afrolife_test*`; never point them at production or ordinary development data. Run `npm run test:finance:e2e:local` to create a uniquely named temporary database on the isolated loopback PostgreSQL instance, apply migrations, create synthetic identities, and run the property-finance, staffing-accounting, and core HTTP integration suites. The runner uses the configured local migration administrator only to provision and migrate the disposable database, a non-superuser fixture role used only for test setup, and separate restricted application runtime roles for the core API and Staffing service. Both services use the same disposable database so test-created domain records are visible across the integration boundary, while role grants continue to enforce service-level access. The runner drops the database, roles, test credentials, and temporary file storage when finished. The local database setup intentionally does not set integration-test URLs because its `afrolife` database is persistent. Runtime commands load `%LOCALAPPDATA%\AfroLife\afrolife.env` when present, otherwise the project `.env`.
+Integration tests need a disposable database named `test_*` or `afrolife_test*`; never point them at production or ordinary development data. Run `npm run test:finance:e2e:local` to create a uniquely named temporary database on the isolated loopback PostgreSQL instance, apply migrations, create synthetic identities, and run the MFI/SACCO role journey, property-finance, staffing-accounting, and core HTTP integration suites. The runner uses the configured local migration administrator only to provision and migrate the disposable database, a non-superuser fixture role used only for test setup, and separate restricted application runtime roles for the core API and Staffing service. Both services use the same disposable database so test-created domain records are visible across the integration boundary, while role grants continue to enforce service-level access. The MFI E2E additionally requires its fixture and migration URLs to identify the same loopback `afrolife_test_*` database. The runner drops the database, roles, test credentials, and temporary file storage when finished. The local database setup intentionally does not set integration-test URLs because its `afrolife` database is persistent. Runtime commands load `%LOCALAPPDATA%\AfroLife\afrolife.env` when present, otherwise the project `.env`.
 
 For manual integration runs, start the API with the restricted `DATABASE_URL` role and set `TEST_DATABASE_URL` to a disposable local database used only for fixtures. The test-only role may need bypass-RLS permissions to create synthetic fixtures, but it must not be a PostgreSQL superuser; API requests must always run through the restricted runtime role so the suite exercises row-level security.
 

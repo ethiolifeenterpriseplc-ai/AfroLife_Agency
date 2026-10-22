@@ -17,6 +17,8 @@ import { createApiRateLimiter } from './rate-limit-store.js';
 import { sessionIdleTimeoutMinutes, WORKSPACE_MODULES } from './runtime-config.js';
 import { ROLE_ACTIVITIES, ROLE_NAMES, getRoleActivity, hasRoleActivityAccess, type RoleName } from './role-activities.js';
 import { MINI_APP_LABELS } from './mini-app-access.js';
+import { EXCLUDED_TENANT_CAPABILITY_ROLES, tenantCapabilitiesSchema, tenantOperatorRequestSchema } from './platform-data-admin.js';
+import { getMyTenantDataScopes, getTenantDataScope, requireTenantDataCapability } from './tenant-data-access.js';
 import { getKycRequirements, requiredKycDocuments, ConfigScope, validateMarketplaceConfig, loadMarketplaceConfig } from './marketplace-config.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
@@ -785,6 +787,198 @@ adminRouter.delete('/platform/tenants/:tenantId/admins/:userId', requirePlatform
     await audit(client, req.user!.id, 'platform_tenant_admin_unassigned', 'platform_tenant', tenantId, { user_id: userId }, null);
   });
   res.sendStatus(204);
+}));
+
+adminRouter.get('/platform/my-data-capabilities', h(async (req, res) => {
+  const scopes = await withUser(req.user!, (client) => getMyTenantDataScopes(client, req.user!.id));
+  res.json(scopes);
+}));
+
+adminRouter.get('/platform/my-data/:tenantId/workspace', h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const scope = await withUser(req.user!, async (client) => {
+    const result = await getTenantDataScope(client, req.user!.id, tenantId);
+    if (!result) throw new HttpError(404, 'No active data-administrator assignment exists for this tenant.');
+    return result;
+  });
+  res.json({
+    scope: 'tenant',
+    tenant: {
+      id: scope.tenant_id,
+      key: scope.tenant_key,
+      name: scope.display_name,
+      hosting_mode: scope.hosting_mode,
+      region: scope.region,
+      deployment_status: scope.deployment_status,
+      config_version: scope.config_version,
+      updated_at: scope.tenant_updated_at,
+    },
+    capabilities: scope.capabilities,
+    database_access: 'metadata_only',
+    database_endpoint: null,
+    secrets: null,
+    raw_records: null,
+    execution: 'not_performed',
+  });
+}));
+
+adminRouter.get('/platform/my-data/:tenantId/analytics', h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const result = await withUser(req.user!, async (client) => {
+    const scope = await getTenantDataScope(client, req.user!.id, tenantId);
+    if (!scope) throw new HttpError(404, 'No active data-administrator assignment exists for this tenant.');
+    requireTenantDataCapability(scope, 'analytics_admin');
+    return scope;
+  });
+  res.json({
+    scope: 'tenant',
+    tenant: { id: result.tenant_id, key: result.tenant_key, name: result.display_name },
+    grain: '30_minutes',
+    bucket_time_zone: 'UTC',
+    projector_status: 'not_connected',
+    scheduler_status: 'not_configured',
+    health: 'unconfirmed',
+    message: 'Tenant-local analytics projector is not connected. No tenant analytics are available from the central platform.',
+    metrics: [],
+    series: [],
+  });
+}));
+
+adminRouter.post('/platform/my-data/:tenantId/operator-requests', h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const body = tenantOperatorRequestSchema.omit({ tenant_id: true }).strict().parse(req.body);
+  const created = await withUser(req.user!, async (client) => {
+    const scope = await getTenantDataScope(client, req.user!.id, tenantId);
+    if (!scope) throw new HttpError(404, 'No active data-administrator assignment exists for this tenant.');
+    requireTenantDataCapability(scope, 'database_admin');
+    const row = (await client.query(
+      `INSERT INTO platform_tenant_operator_requests
+         (tenant_id,actor_id,request_type,summary,evidence_reference)
+       VALUES($1,$2,$3,$4,$5)
+       RETURNING id,tenant_id,request_type,summary,evidence_reference,created_at`,
+      [tenantId, req.user!.id, body.request_type, body.summary, body.evidence_reference ?? null],
+    )).rows[0];
+    await audit(client, req.user!.id, 'platform_tenant_operator_request_created',
+      'platform_tenant_operator_request', row.id, null, {
+        tenant_id: row.tenant_id,
+        request_type: row.request_type,
+        evidence_reference: row.evidence_reference,
+      });
+    return row;
+  });
+  res.status(201).json({ ...created, status: 'requested', execution: 'not_performed' });
+}));
+
+adminRouter.get('/platform/tenant-capabilities', requirePlatformControlPlaneAdmin, h(async (req, res) => {
+  const result = await withUser(req.user!, async (client) => {
+    const [tenants, grants, requests] = await Promise.all([
+      client.query(
+        `SELECT id,tenant_key,display_name,status,hosting_mode,region
+         FROM platform_tenants ORDER BY display_name`,
+      ),
+      client.query(
+        `SELECT g.tenant_id,g.user_id,u.legal_name,u.role,g.capability,g.assigned_at
+         FROM platform_tenant_capability_grants g JOIN users u ON u.id=g.user_id
+         ORDER BY g.tenant_id,u.legal_name,g.capability`,
+      ),
+      client.query(
+        `SELECT r.id,r.tenant_id,t.display_name AS tenant_name,r.request_type,r.summary,
+                r.evidence_reference,r.created_at,r.actor_id
+         FROM platform_tenant_operator_requests r
+         JOIN platform_tenants t ON t.id=r.tenant_id
+         ORDER BY r.created_at DESC LIMIT 100`,
+      ),
+    ]);
+    return {
+      tenants: tenants.rows,
+      grants: grants.rows,
+      operatorRequests: requests.rows.map((row) => ({ ...row, status: 'requested', execution: 'not_performed' })),
+    };
+  });
+  res.json(result);
+}));
+
+adminRouter.get('/platform/tenant-capabilities/:tenantId/eligible-users', requirePlatformControlPlaneAdmin, h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const users = await withUser(req.user!, async (client) => {
+    const tenant = (await client.query(
+      `SELECT status FROM platform_tenants WHERE id=$1`, [tenantId],
+    )).rows[0];
+    if (!tenant) throw new HttpError(404, 'Tenant not found.');
+    if (tenant.status !== 'active') throw new HttpError(409, 'Only active tenants can receive data-administrator assignments.');
+    return (await client.query(
+      `SELECT id,legal_name,role FROM users
+       WHERE active AND role <> ALL($1::text[])
+       ORDER BY legal_name,id LIMIT 500`,
+      [EXCLUDED_TENANT_CAPABILITY_ROLES],
+    )).rows;
+  });
+  res.json(users);
+}));
+
+adminRouter.put('/platform/tenant-capabilities/:tenantId/:userId', requirePlatformControlPlaneAdmin, h(async (req, res) => {
+  const tenantId = z.string().uuid().parse(req.params.tenantId);
+  const userId = z.string().uuid().parse(req.params.userId);
+  const body = z.object({ capabilities: tenantCapabilitiesSchema }).strict().parse(req.body);
+  const updated = await withUser(req.user!, async (client) => {
+    const target = (await client.query(
+      `SELECT u.id,u.role,u.active,t.status AS tenant_status
+       FROM users u CROSS JOIN platform_tenants t
+       WHERE u.id=$1 AND t.id=$2 FOR UPDATE OF u,t`,
+      [userId, tenantId],
+    )).rows[0];
+    if (!target) throw new HttpError(404, 'Tenant or account not found.');
+    if (target.tenant_status !== 'active') throw new HttpError(409, 'Only active tenants can receive data-administrator assignments.');
+    if (!target.active || EXCLUDED_TENANT_CAPABILITY_ROLES.includes(target.role)) {
+      throw new HttpError(422, 'Choose an active eligible account. Super Admin, Master Agent, and Global Admin accounts are excluded.');
+    }
+    await client.query(
+      'DELETE FROM platform_tenant_capability_grants WHERE tenant_id=$1 AND user_id=$2',
+      [tenantId, userId],
+    );
+    for (const capability of body.capabilities) {
+      await client.query(
+        `INSERT INTO platform_tenant_capability_grants(tenant_id,user_id,capability,assigned_by)
+         VALUES($1,$2,$3,$4)`,
+        [tenantId, userId, capability, req.user!.id],
+      );
+    }
+    await client.query(
+      `INSERT INTO platform_tenant_capability_events(tenant_id,subject_user_id,actor_id,event_type,capabilities)
+       VALUES($1,$2,$3,'capabilities_replaced',$4::text[])`,
+      [tenantId, userId, req.user!.id, body.capabilities],
+    );
+    await audit(client, req.user!.id, 'platform_tenant_capabilities_replaced',
+      'platform_tenant', tenantId, null, { user_id: userId, capabilities: body.capabilities });
+    return { tenant_id: tenantId, user_id: userId, capabilities: body.capabilities };
+  });
+  res.json(updated);
+}));
+
+adminRouter.post('/platform/operator-requests', requirePlatformControlPlaneAdmin, h(async (req, res) => {
+  const body = tenantOperatorRequestSchema.parse(req.body);
+  const created = await withUser(req.user!, async (client) => {
+    const tenant = (await client.query(
+      'SELECT id,status FROM platform_tenants WHERE id=$1', [body.tenant_id],
+    )).rows[0];
+    if (!tenant) throw new HttpError(404, 'Tenant not found.');
+    if (tenant.status !== 'active') throw new HttpError(409, 'Operational review requests require an active tenant.');
+    const row = (await client.query(
+      `INSERT INTO platform_tenant_operator_requests
+         (tenant_id,actor_id,request_type,summary,evidence_reference)
+       VALUES($1,$2,$3,$4,$5)
+       RETURNING id,tenant_id,request_type,summary,evidence_reference,created_at`,
+      [body.tenant_id, req.user!.id, body.request_type, body.summary, body.evidence_reference ?? null],
+    )).rows[0];
+    await audit(client, req.user!.id, 'platform_tenant_operator_request_created',
+      'platform_tenant_operator_request', row.id, null, {
+        tenant_id: row.tenant_id,
+        request_type: row.request_type,
+        evidence_reference: row.evidence_reference,
+      });
+    return row;
+  });
+  res.status(201).json({ ...created, status: 'requested', execution: 'not_performed' });
 }));
 
 adminRouter.post('/platform/tenants', requirePlatformControlPlaneAdmin, h(async (req, res) => {

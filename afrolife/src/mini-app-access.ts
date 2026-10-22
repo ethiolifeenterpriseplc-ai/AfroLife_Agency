@@ -82,9 +82,7 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
     case 'contracts':
       return !['customer', 'worker', 'property_owner'].includes(user.role);
     case 'global-bi':
-      return [
-        'global_admin', 'finance', 'finance_manager',
-      ].includes(user.role);
+      return user.role === 'global_admin';
     default:
       return true;
   }

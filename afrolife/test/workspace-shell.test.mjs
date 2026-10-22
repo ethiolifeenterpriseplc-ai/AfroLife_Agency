@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { checkWorkspaceServices, createApiMetrics } from '../src/workspace-status.ts';
 import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from '../public/workspace-navigation.js';
 import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from '../public/workspace-search.js';
-import { normalizeGlobalBiDashboard } from '../public/global-bi.js';
+import { isGlobalBiUtcBucketBoundary, normalizeGlobalBiDashboard } from '../public/global-bi.js';
 import { buildMiniAppAccessPayload } from '../public/mini-app-access.js';
 import { normalizeAccountingTrendRows } from '../public/accounting-dashboard.js';
 import { paginateRows } from '../public/row-pagination.js';
@@ -27,18 +27,71 @@ test('Global BI normalization preserves real empty-state values without filling 
     reportingTenants: 0,
     metrics: [],
     series: [],
-  }), { asOf: null, reportingTenants: 0, metrics: [], series: [] });
+  }), {
+    grain: null,
+    targetIntervalMinutes: null,
+    asOf: null,
+    oldestProjectionAt: null,
+    projectionState: 'unknown',
+    projectorConfiguration: 'unconfirmed',
+    schedulerConfiguration: 'unconfirmed',
+    tenantProjectorHealth: 'unconfirmed',
+    reportingTenants: 0,
+    metrics: [],
+    series: [],
+  });
   assert.deepEqual(normalizeGlobalBiDashboard({
     asOf: '2026-10-18T10:00:00Z',
     reportingTenants: null,
+    grain: '30_minutes',
+    targetIntervalMinutes: 30,
+    projectionState: 'recent_projection_observed',
+    projectorConfiguration: 'configured',
+    schedulerConfiguration: 'configured',
+    tenantProjectorHealth: 'unconfirmed',
     metrics: [{ key: 'posted_volume', value: '12.50', unit: 'ETB' }, { key: 5, value: 1, unit: 'count' }],
     series: [{ period: '2026-10', metric: 'posted_volume', value: '12.50' }, { period: 1, metric: 'ignored', value: 3 }],
   }), {
+    grain: '30_minutes',
+    targetIntervalMinutes: 30,
     asOf: '2026-10-18T10:00:00Z',
+    oldestProjectionAt: null,
+    projectionState: 'recent_projection_observed',
+    projectorConfiguration: 'configured',
+    schedulerConfiguration: 'configured',
+    tenantProjectorHealth: 'unconfirmed',
     reportingTenants: null,
     metrics: [{ key: 'posted_volume', value: '12.50', unit: 'ETB' }],
     series: [{ period: '2026-10', metric: 'posted_volume', value: '12.50' }],
   });
+  assert.equal(normalizeGlobalBiDashboard({
+    grain: '30_minutes',
+    targetIntervalMinutes: 60,
+    metrics: [],
+    series: [],
+  }).grain, null);
+  assert.equal(normalizeGlobalBiDashboard({
+    grain: '30_minutes',
+    targetIntervalMinutes: 30,
+    projectionState: 'unrecognized',
+    tenantProjectorHealth: 'healthy',
+    metrics: [],
+    series: [],
+  }).projectionState, 'unknown');
+  assert.equal(normalizeGlobalBiDashboard({
+    grain: '30_minutes',
+    targetIntervalMinutes: 30,
+    tenantProjectorHealth: 'healthy',
+    metrics: [],
+    series: [],
+  }).tenantProjectorHealth, 'unconfirmed');
+});
+
+test('Global BI range boundaries are validated after local-to-UTC conversion', () => {
+  assert.equal(isGlobalBiUtcBucketBoundary(new Date('2026-10-21T09:30:00+03:00')), true);
+  assert.equal(isGlobalBiUtcBucketBoundary(new Date('2026-10-21T09:45:00+03:00')), false);
+  assert.equal(isGlobalBiUtcBucketBoundary(new Date('2026-10-21T09:30:01Z')), false);
+  assert.equal(isGlobalBiUtcBucketBoundary(new Date('invalid')), false);
 });
 
 test('mini-app access payload reset clears custom modules and custom grants are deduplicated', () => {

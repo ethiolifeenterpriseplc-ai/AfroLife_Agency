@@ -275,6 +275,11 @@ test('lease lifecycle evidence is scoped and append-only while the legacy lease 
   assert.match(operations, /ops\.post\('\/leases\/:id\/execute', requireActivity\('property\.tenancy\.execute'\)/);
   assert.match(operations, /ops\.post\('\/leases', requireActivity\('property\.tenancy\.manage'\)/);
   assert.match(operations, /signature_evidence_only: true/);
+  const signatureDownloadRoute = operations.split("ops.get('/lease-signature-documents/:id/file'")[1]
+    ?.split("ops.post('/leases/:id/execute'")[0] ?? '';
+  assert.match(signatureDownloadRoute, /SELECT id,lease_id,storage_key,mime FROM lease_documents/);
+  assert.match(signatureDownloadRoute, /lease_signature_evidence_downloaded/);
+  assert.match(signatureDownloadRoute, /document_id: row\.id/);
 });
 
 test('lease notice records are scoped, append-only, idempotent, and non-terminating', () => {

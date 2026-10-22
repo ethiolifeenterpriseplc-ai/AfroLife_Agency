@@ -24,11 +24,8 @@ export function getGlobalBiMetric(key: GlobalBiMetricKey) {
   return GLOBAL_BI_METRICS.find((metric) => metric.key === key)!;
 }
 
-export function isMonthlyWindow(periodStart: string, periodEnd: string): boolean {
-  if (!/^\d{4}-\d{2}-01$/.test(periodStart)) return false;
-  const start = new Date(`${periodStart}T00:00:00.000Z`);
-  if (Number.isNaN(start.valueOf()) || start.toISOString().slice(0, 10) !== periodStart) return false;
-  start.setUTCMonth(start.getUTCMonth() + 1);
-  start.setUTCDate(0);
-  return start.toISOString().slice(0, 10) === periodEnd;
+export function isThirtyMinuteBucket(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:(00|30):00(?:\.000)?Z$/.test(value)) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.valueOf()) && date.toISOString().replace('.000Z', 'Z') === value.replace('.000Z', 'Z');
 }

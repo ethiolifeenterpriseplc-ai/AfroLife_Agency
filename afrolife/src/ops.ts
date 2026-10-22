@@ -381,10 +381,17 @@ ops.post('/leases/:id/signature-documents', requireActivity('property.tenancy.ma
   }));
 
 ops.get('/lease-signature-documents/:id/file', h(async (req, res) => {
-  const document = await withUser(req.user!, async (c) => (await c.query(
-    'SELECT id,storage_key,mime FROM lease_documents WHERE id=$1',
-    [req.params.id],
-  )).rows[0]);
+  const document = await withUser(req.user!, async (c) => {
+    const row = (await c.query(
+      'SELECT id,lease_id,storage_key,mime FROM lease_documents WHERE id=$1',
+      [req.params.id],
+    )).rows[0];
+    if (!row) throw new HttpError(404, 'Lease signature evidence not found');
+    await audit(c, req.user!.id, 'lease_signature_evidence_downloaded', 'lease', row.lease_id, null, {
+      document_id: row.id,
+    });
+    return row;
+  });
   if (!document) throw new HttpError(404, 'Lease signature evidence not found');
   const file = await getFile(document.storage_key);
   res.set({
