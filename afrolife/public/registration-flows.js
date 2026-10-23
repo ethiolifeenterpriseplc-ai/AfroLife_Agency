@@ -3,10 +3,12 @@ export const EDIR_APPLICATION_DOCUMENTS = Object.freeze([
   Object.freeze({ type: 'governance_charter', label: 'Governance or bylaws document' }),
 ]);
 
-export const DEFAULT_NATIVE_API_ORIGIN = 'https://integrating-devices-executive-springs.trycloudflare.com';
+const RETIRED_NATIVE_API_ORIGIN = 'https://integrating-devices-executive-springs.trycloudflare.com';
+export const DEFAULT_NATIVE_API_ORIGIN = '';
 
 export function nativeApiOrigin(savedOrigin) {
-  return savedOrigin?.trim() || DEFAULT_NATIVE_API_ORIGIN;
+  const origin = savedOrigin?.trim() ?? DEFAULT_NATIVE_API_ORIGIN;
+  return origin === RETIRED_NATIVE_API_ORIGIN ? DEFAULT_NATIVE_API_ORIGIN : origin;
 }
 
 export function signupRequiredDocuments(signupOptions, accountType) {

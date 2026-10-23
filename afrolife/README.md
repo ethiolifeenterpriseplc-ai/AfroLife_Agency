@@ -452,7 +452,7 @@ builds trust system certificates only. Stop the preview and remove its
 firewall rule with `scripts/stop-local-android-lan.ps1` when testing ends.
 This LAN preview is for synthetic data and internal testing only.
 
-The native app is preconfigured to use `https://integrating-devices-executive-springs.trycloudflare.com` as its API origin and stores that origin on-device. This is a Cloudflare quick-tunnel address for the current deployment, not a durable production hostname; replace the bundled default and rebuild before production if the tunnel changes. A Super Admin can change the server from the app after signing in. The API must allow the exact native WebView origin `https://localhost` in `CORS_ORIGINS`. Keep the Android app and API on HTTPS.
+The native app prompts for the API server address on first launch; it does not bundle a temporary or potentially stale server URL. On a test device, enter the HTTPS address printed by the LAN preview setup above. The address is stored on-device, and a Super Admin can change it from the app after signing in. The API must allow the exact native WebView origin `https://localhost` in `CORS_ORIGINS`. Keep the Android app and API on HTTPS.
 
 For a signed release APK, configure `AFROLIFE_RELEASE_STORE_FILE`,
 `AFROLIFE_RELEASE_STORE_PASSWORD`, `AFROLIFE_RELEASE_KEY_ALIAS`, and

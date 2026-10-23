@@ -107,6 +107,85 @@ main { width: min(1180px, calc(100% - 40px)); min-height: calc(100vh - 134px); m
   box-shadow: 0 20px 52px rgba(4, 25, 20, .28);
 }
 .hub-campaign img { display: block; width: 100%; height: auto; aspect-ratio: 488 / 232; border-radius: 13px; object-fit: cover; }
+.hub-service-network {
+  position: relative;
+  display: grid;
+  min-height: 232px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 50% 50%, #fffdf6 0 22%, transparent 22.5%),
+    linear-gradient(135deg, #f6f2df 0%, #e8f2e8 52%, #eaf1f8 100%);
+  color: #174b3d;
+}
+.hub-service-network::before,
+.hub-service-network::after {
+  position: absolute;
+  width: 176px;
+  aspect-ratio: 1;
+  border: 1px dashed rgba(23, 75, 61, .24);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+.hub-service-network::after {
+  width: 218px;
+  border-color: rgba(215, 173, 89, .34);
+}
+.hub-network-orbit {
+  position: absolute;
+  width: 260px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(23, 75, 61, .22), transparent);
+  transform: rotate(-32deg);
+}
+.hub-network-node {
+  position: absolute;
+  z-index: 1;
+  padding: 7px 12px;
+  border: 1px solid #c8d9c9;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 5px 14px rgba(23, 61, 50, .1);
+  color: #174b3d;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .01em;
+}
+.hub-network-node--work { top: 14px; left: 12%; }
+.hub-network-node--homes { top: 14px; right: 12%; }
+.hub-network-node--business { bottom: 14px; left: 12%; }
+.hub-network-node--community { right: 12%; bottom: 14px; }
+.hub-network-center {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 112px;
+  height: 112px;
+  align-content: center;
+  justify-items: center;
+  border: 1px solid rgba(23, 75, 61, .16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 12px 28px rgba(23, 61, 50, .14);
+  text-align: center;
+}
+.hub-network-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 50%;
+  background: #174b3d;
+  color: #f0c772;
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1;
+}
+.hub-network-center strong { color: #174b3d; font-size: 15px; letter-spacing: -.3px; }
+.hub-network-center small { margin-top: 2px; color: #65766d; font-size: 7px; font-weight: 800; letter-spacing: .13em; }
 .hub-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 23px; }
 .hub-actions a { text-decoration: none; }
 .hub-actions .button { min-height: 46px; }
@@ -1534,6 +1613,7 @@ body {
   .hub-heading { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: clamp(22px, 6vw, 36px); border-radius: 22px; }
   .hub-heading h2 { font-size: clamp(29px, 8vw, 40px); }
   .hub-campaign { width: 100%; max-width: 600px; }
+  .hub-service-network { min-height: 220px; }
   .hub-actions > .button { flex: 1 1 145px; }
 }
 

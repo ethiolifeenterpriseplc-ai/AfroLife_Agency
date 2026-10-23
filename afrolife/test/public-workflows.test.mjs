@@ -31,10 +31,11 @@ test('signup uploads enforce configured KYC documents and limit server changes t
     kind === 'national_id' ? { name: 'id.png' } : null), ['police_clearance']);
   assert.equal(canChangeServer('super_admin'), true);
   assert.equal(canChangeServer('finance'), false);
-  assert.equal(DEFAULT_NATIVE_API_ORIGIN, 'https://integrating-devices-executive-springs.trycloudflare.com');
-  assert.equal(nativeApiOrigin(null), DEFAULT_NATIVE_API_ORIGIN);
+  assert.equal(DEFAULT_NATIVE_API_ORIGIN, '');
+  assert.equal(nativeApiOrigin(null), '');
+  assert.equal(nativeApiOrigin('https://integrating-devices-executive-springs.trycloudflare.com'), '');
   assert.equal(nativeApiOrigin(' https://api.example.com '), 'https://api.example.com');
-  assert.equal(nativeApiOrigin(' '), DEFAULT_NATIVE_API_ORIGIN);
+  assert.equal(nativeApiOrigin(' '), '');
   assert.equal(edirApplicationDocumentPath('application/1', 'legal_registration'),
     '/edir/public/registration-applications/application%2F1/documents/legal_registration');
 });
@@ -294,15 +295,20 @@ test('public hub integrates the campaign artwork with the existing public action
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
   const serviceWorker = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
-  assert.match(html, /<section id="public-hub"[\s\S]*?<div class="hub-heading">[\s\S]*?<p class="eyebrow">PEOPLE · SERVICES · OPPORTUNITY<\/p>[\s\S]*?<h2>Services for work, homes, business, and community\.<\/h2>[\s\S]*?<figure class="hub-campaign">[\s\S]*?<img src="\/brand\/afrolife-campaign-hero\.png"[^>]*>/);
+  assert.match(html, /<section id="public-hub"[\s\S]*?<div class="hub-heading">[\s\S]*?<p class="eyebrow">PEOPLE · SERVICES · OPPORTUNITY<\/p>[\s\S]*?<h2>Services for work, homes, business, and community\.<\/h2>[\s\S]*?<figure class="hub-campaign">[\s\S]*?<div class="hub-service-network" role="img" aria-label="Work, homes, business, and community services connected through AfroLife">/);
   assert.match(html, /<a class="button button-primary" href="#login-form">Sign in<\/a>/);
   assert.match(html, /<button id="public-create-account" class="button button-outline" type="button">Create account<\/button>/);
   assert.match(html, /<button class="button button-outline" type="button" data-install-pwa>Install AfroLife<\/button>/);
+  assert.match(html, /class="hub-network-node hub-network-node--work"[^>]*>Work<\/span>/);
+  assert.match(html, /class="hub-network-node hub-network-node--homes"[^>]*>Homes<\/span>/);
+  assert.match(html, /class="hub-network-node hub-network-node--business"[^>]*>Business<\/span>/);
+  assert.match(html, /class="hub-network-node hub-network-node--community"[^>]*>Community<\/span>/);
   for (const panel of ['properties', 'marketplace', 'workers', 'edir', 'mfi', 'agents']) {
     assert.match(html, new RegExp(`<a class="service-card" data-panel="${panel}" href="#login-form">`));
   }
   assert.match(styles, /\.hub-heading\s*\{[^}]*linear-gradient\(125deg,\s*var\(--brand-green\)/s);
-  assert.match(styles, /\.hub-campaign img\s*\{[^}]*aspect-ratio:\s*488 \/ 232/s);
+  assert.match(styles, /\.hub-service-network\s*\{[^}]*min-height:\s*232px;[^}]*border-radius:\s*13px;[^}]*background:/s);
+  assert.match(styles, /@media \(max-width: 700px\) \{[\s\S]*?\.hub-service-network \{ min-height: 220px; \}/);
   assert.match(styles, /\.hub-heading \{ grid-template-columns: minmax\(0, 1fr\); gap:/);
   assert.match(styles, /#public-hub \.service-card\[data-panel\] \.service-icon\s*\{[^}]*background:\s*var\(--mini-app-tint\);[^}]*color:\s*var\(--mini-app-ink/s);
   assert.match(serviceWorker, /const CACHE = 'afrolife-shell-v34'/);
@@ -311,6 +317,23 @@ test('public hub integrates the campaign artwork with the existing public action
     '/icons/afrolife-icon-192.png', '/icons/afrolife-icon-256.png', '/icons/afrolife-icon-512.png',
     '/brand/afrolife-brand-lockup.svg', '/brand/afrolife-campaign-hero.png',
   ]) assert.ok(serviceWorker.includes(`'${asset}'`), `service worker should cache ${asset}`);
+});
+
+test('public landing page does not repeat raster artwork across visible image elements', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const styles = [
+    readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8'),
+    readFileSync(new URL('../public/financial-workspaces.css', import.meta.url), 'utf8'),
+  ].join('\n');
+  const imageSources = [
+    ...[...html.matchAll(/<img\b[^>]*\bsrc=(["'])(.*?)\1[^>]*>/gi)].map(([, , source]) => source),
+    ...[...styles.matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi)].map(([, , source]) => source),
+  ].filter((source) => /\.(?:png|jpe?g|webp|avif|gif)(?:[?#]|$)/i.test(source))
+    .map((source) => source.split(/[?#]/, 1)[0].toLowerCase());
+  const repeatedSources = [...new Set(imageSources.filter((source, index) => imageSources.indexOf(source) !== index))];
+
+  assert.deepEqual(repeatedSources, []);
+  assert.equal(imageSources.filter((source) => source === '/brand/afrolife-campaign-hero.png').length, 1);
 });
 
 test('public subscription catalog has only the eight approved ETB 1,000 services', () => {
