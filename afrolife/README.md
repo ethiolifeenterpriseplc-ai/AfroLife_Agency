@@ -429,7 +429,13 @@ In Android Studio, build or run the `android` project on a device/emulator. To b
 npm run android:build
 ```
 
-The debug APK is written to `%LOCALAPPDATA%\AfroLife\android-build\_app\outputs\apk\debug\app-debug.apk`.
+After a successful build, the APK is published to
+`artifacts/AfroLife-Agency-<versionName>-debug.apk`, and
+`artifacts/AfroLife-Agency-debug-latest.apk` is refreshed as the convenience
+download. The former `AfroLife-Agency-1.0-debug-latest.apk` path is also
+refreshed for compatibility. The Android `versionCode` and `versionName` are tracked in
+`android/app/version.properties`; increment `versionCode` for each distributable
+APK so Android recognizes it as an update.
 
 For an Android device on the same Wi-Fi as the development PC, start the local
 API, then run this command from an elevated PowerShell:

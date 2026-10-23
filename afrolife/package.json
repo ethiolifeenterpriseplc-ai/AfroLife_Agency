@@ -53,7 +53,7 @@
     "android:branding": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-android-brand-assets.ps1",
     "android:sync": "npm run android:branding && cap sync android",
     "android:open": "cap open android",
-    "android:build": "npm run android:branding && cap sync android && cd android && .\\gradlew.bat --project-cache-dir \"%LOCALAPPDATA%\\AfroLife\\gradle-project-cache\" --init-script gradle\\build-output.init.gradle assembleDebug",
+    "android:build": "npm run android:branding && cap sync android && cd android && .\\gradlew.bat --project-cache-dir \"%LOCALAPPDATA%\\AfroLife\\gradle-project-cache\" --init-script gradle\\build-output.init.gradle assembleDebug && cd .. && node scripts/publish-android-debug.mjs",
     "android:release": "npm run android:branding && cap sync android && cd android && .\\gradlew.bat --project-cache-dir \"%LOCALAPPDATA%\\AfroLife\\gradle-project-cache\" --init-script gradle\\build-output.init.gradle assembleRelease",
     "ios:add": "cap add ios",
     "ios:sync": "cap sync ios",
