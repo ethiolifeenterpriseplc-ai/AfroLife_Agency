@@ -4,13 +4,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:translateX="6" android:translateY="6">
-        <group android:pivotX="48" android:pivotY="48" android:scaleX="0.6875" android:scaleY="0.6875">
-            <path android:fillColor="#00FFFFFF" android:strokeColor="#FFE8F1E9" android:strokeWidth="4" android:strokeLineCap="round" android:pathData="M43,44L32,35M53,44L64,35M48,56L48,63" />
-            <path android:fillColor="#FFFFFFFF" android:pathData="M25,15A12,12 0,1 0,25 39A12,12 0,1 0,25 15M71,15A12,12 0,1 0,71 39A12,12 0,1 0,71 15M48,63A12,12 0,1 0,48 87A12,12 0,1 0,48 63" />
-            <path android:fillColor="#FF174B3D" android:pathData="M25,21.3A2.7,2.7 0,1 0,25 26.7A2.7,2.7 0,1 0,25 21.3M71,21.3A2.7,2.7 0,1 0,71 26.7A2.7,2.7 0,1 0,71 21.3M48,69.3A2.7,2.7 0,1 0,48 74.7A2.7,2.7 0,1 0,48 69.3M19.5,32C19.9,28.8 21.7,27.2 25,27.2C28.3,27.2 30.1,28.8 30.5,32ZM65.5,32C65.9,28.8 67.7,27.2 71,27.2C74.3,27.2 76.1,28.8 76.5,32ZM42.5,80C42.9,76.8 44.7,75.2 48,75.2C51.3,75.2 53.1,76.8 53.5,80Z" />
-            <path android:fillColor="#FFD7AD59" android:pathData="M48,41A8,8 0,1 0,48 57A8,8 0,1 0,48 41" />
-            <path android:fillColor="#FFFFFFFF" android:pathData="M48,46.5A2.5,2.5 0,1 0,48 51.5A2.5,2.5 0,1 0,48 46.5" />
-        </group>
-    </group>
+    <path android:fillColor="#FFFFB000" android:pathData="M48,15.75A7.125,7.125 0,1 0,48 30A7.125,7.125 0,1 0,48 15.75Z" />
+    <path android:fillColor="#FF00B85A" android:pathData="M34.5,27.375C39.375,27.375 42.75,31.5 41.25,36.375L32.25,66C30.375,72 24.75,74.625 19.875,73.5C15,72.375 13.125,67.125 14.875,62.625L26.625,33.75C28.125,29.625 30.75,27.375 34.5,27.375Z" />
+    <path android:fillColor="#FF0066FF" android:pathData="M61.5,27.375C56.625,27.375 53.25,31.5 54.75,36.375L63.75,66C65.625,72 71.25,74.625 76.125,73.5C81,72.375 82.875,67.125 81.125,62.625L69.375,33.75C67.875,29.625 65.25,27.375 61.5,27.375Z" />
+    <path android:fillColor="#FFFFB000" android:pathData="M33.75,67.875C34.875,58.5 42,52.5 48,52.5C55.125,52.5 61.125,58.5 62.25,67.875C58.125,71.625 53.25,73.5 48,73.5C42.75,73.5 37.875,71.625 33.75,67.875Z" />
 </vector>

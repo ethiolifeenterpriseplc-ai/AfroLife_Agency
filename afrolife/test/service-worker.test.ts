@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 const workerSource = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 
 test('changed brand assets advance the public shell cache version', () => {
-  assert.match(workerSource, /const CACHE = 'afrolife-shell-v26'/);
+  assert.match(workerSource, /const CACHE = 'afrolife-shell-v33'/);
   assert.match(workerSource, /'\/financial-workspaces\.css'/);
   assert.match(workerSource, /'\/accounting-dashboard\.js'/);
   assert.match(workerSource, /'\/global-bi\.js'/);
@@ -16,7 +16,8 @@ test('changed brand assets advance the public shell cache version', () => {
   assert.match(workerSource, /'\/workspace-navigation\.js'/);
   assert.match(workerSource, /'\/workspace-search\.js'/);
   assert.match(workerSource, /'\/icon\.svg'/);
-  assert.match(workerSource, /'\/icons\/icon-512\.png'/);
+  assert.match(workerSource, /'\/icons\/afrolife-icon-512\.png'/);
+  assert.match(workerSource, /'\/tenant-data-admin\.js'/);
 });
 
 function bootWorker() {

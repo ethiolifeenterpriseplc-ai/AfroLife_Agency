@@ -10,11 +10,18 @@ test('each Agency mini-app declares a unique module, panel, and gateway API surf
     assert.ok(miniApp.id);
     assert.ok(miniApp.name);
     assert.ok(miniApp.logo?.startsWith('/mini-apps/') || miniApp.id === 'accounting' && miniApp.logo === '/icon.svg',
-      `${miniApp.id} must use a branded mini-app logo or the approved EthioLife mark`);
+      `${miniApp.id} must use a branded mini-app logo or the approved AfroLife mark`);
     const logo = readFileSync(new URL(`../public${miniApp.logo}`, import.meta.url), 'utf8');
     assert.match(logo, /<title/);
-    assert.match(logo, /#174b3d/);
-    assert.match(logo, /#d7ad59/);
+    if (miniApp.logo === '/icon.svg') {
+      assert.match(logo, /#00B85A/i);
+      assert.match(logo, /#0066FF/);
+      assert.match(logo, /#FFB000/);
+      assert.doesNotMatch(logo, /<rect\b[^>]*fill="#0B2D4A"/i);
+    } else {
+      assert.match(logo, /#174b3d/);
+      assert.match(logo, /#d7ad59/);
+    }
     assert.ok(miniApp.description);
     assert.ok(miniApp.panels.length > 0);
     assert.ok(miniApp.api.length > 0);
@@ -68,17 +75,19 @@ test('existing rent workspace drives the approved lease lifecycle without removi
 
 test('AfroLife identity and retained install artwork stay aligned with the brand shell', () => {
   const logo = readFileSync(new URL('../public/icon.svg', import.meta.url), 'utf8');
-  assert.match(logo, /<title[^>]*>EthioLife connected opportunity mark/);
-  assert.match(logo, /#174b3d/i);
-  assert.match(logo, /#d7ad59/i);
-  assert.match(logo, /three people connected through one shared service hub/i);
+  assert.match(logo, /<title[^>]*>AfroLife mark/);
+  assert.doesNotMatch(logo, /<rect\b[^>]*fill="#0B2D4A"/i);
+  assert.match(logo, /#00B85A/i);
+  assert.match(logo, /#0066FF/i);
+  assert.match(logo, /#FFB000/i);
 
   const manifest = JSON.parse(readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8'));
   assert.equal(manifest.name, 'AfroLife Agency');
   assert.equal(manifest.short_name, 'AfroLife');
   assert.equal(manifest.theme_color, '#174b3d');
-  for (const size of [192, 512]) {
-    const iconPath = `/icons/ethio-life-icon-${size}.png`;
+  assert.ok(manifest.icons.slice(0, 2).every((entry: { purpose: string }) => entry.purpose === 'any'));
+  for (const size of [192, 256, 512]) {
+    const iconPath = `/icons/afrolife-icon-${size}.png`;
     const icon = readFileSync(new URL(`../public${iconPath}`, import.meta.url));
     assert.equal(icon.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
     assert.equal(icon.readUInt32BE(16), size);
@@ -88,24 +97,22 @@ test('AfroLife identity and retained install artwork stay aligned with the brand
   }
 
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.match(html, /class="brand-name">AfroLife/);
-  assert.match(html, /src="\/icon\.svg\?v=3"/);
-  assert.match(html, /ethio-life-icon-192\.png/);
+  assert.match(html, /src="\/brand\/afrolife-brand-lockup\.svg"/);
+  assert.match(html, /afrolife-icon-192\.png/);
   assert.match(html, /placeholder="https:\/\/afrolife-agency\.duckdns\.org"/);
   const manifestColor = html.match(/<meta name="theme-color" content="([^"]+)"/);
   assert.equal(manifestColor?.[1], manifest.theme_color);
 });
 
-test('native Android launcher and splash resources use the EthioLife brand', () => {
+test('native Android launcher and splash resources use the AfroLife brand', () => {
   const resources = new URL('../android/app/src/main/res/', import.meta.url);
   const adaptiveMark = readFileSync(new URL('drawable-v24/ic_launcher_foreground.xml', resources), 'utf8');
   const adaptiveBackground = readFileSync(new URL('values/ic_launcher_background.xml', resources), 'utf8');
   const splash = readFileSync(new URL('drawable/splash.png', resources));
-  assert.match(adaptiveMark, /#FFD7AD59/i);
-  assert.match(adaptiveMark, /android:strokeColor="#FFE8F1E9"/);
-  assert.match(adaptiveMark, /android:fillColor="#FFFFFFFF"/);
-  assert.match(adaptiveMark, /#FFFFFFFF/);
-  assert.match(adaptiveBackground, /#174b3d/i);
+  assert.match(adaptiveMark, /#FF00B85A/i);
+  assert.match(adaptiveMark, /#FF0066FF/i);
+  assert.match(adaptiveMark, /#FFFFB000/i);
+  assert.match(adaptiveBackground, /#00000000/i);
   const manifest = readFileSync(new URL('AndroidManifest.xml', new URL('../android/app/src/main/', import.meta.url)), 'utf8');
   const appStrings = readFileSync(new URL('values/strings.xml', resources), 'utf8');
   const capacitorConfig = JSON.parse(readFileSync(new URL('../capacitor.config.json', import.meta.url), 'utf8'));

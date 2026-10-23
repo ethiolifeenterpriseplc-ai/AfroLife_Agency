@@ -1,4 +1,4 @@
-import { initializeLocale, setLocalizedNodeText, t, translateContent } from './i18n.js';
+import { getLocalizedNodeSource, initializeLocale, setLocalizedAttribute, setLocalizedNodeText, t, translateContent } from './i18n.js';
 import { ApiError, optionalApiFallback } from './api-errors.js';
 import { createMfiWorkspace } from './mfi.js';
 import { createAccountingWorkspace } from './accounting.js';
@@ -357,8 +357,8 @@ async function login(event) {
 
 function territoryLabel(area) {
   const levels = { region: 'Region', city: 'City', sub_city: 'Sub-city', woreda: 'Woreda', kebele: 'Kebele' };
-  const ancestors = String(area.path ?? '').split(' · ').slice(0, -1).reverse();
-  return `${area.name} (${t(levels[area.level] ?? 'Territory')})${ancestors.length ? ` — ${ancestors.join(' · ')}` : ''}`;
+  const path = String(area.path ?? area.name).split(' · ').slice(1).join(' · ');
+  return `${path || area.name} (${t(levels[area.level] ?? 'Territory')})`;
 }
 
 function renderSignupTerritoryOptions() {
@@ -471,10 +471,16 @@ function refreshSignupKyc() {
 
 function syncSignupTerritory() {
   const search = $('#signup-territory-search');
-  const selected = state.signupOptions?.territories.find((area) => territoryLabel(area).localeCompare(search.value.trim(), undefined, { sensitivity: 'accent' }) === 0);
+  const value = search.value.trim();
+  const territories = state.signupOptions?.territories ?? [];
+  const matches = territories.filter((area) => [
+    territoryLabel(area),
+    String(area.path ?? '').split(' · ').slice(1).join(' · '),
+    area.name,
+  ].some((label) => label.localeCompare(value, undefined, { sensitivity: 'base' }) === 0));
+  const selected = matches.length === 1 ? matches[0] : undefined;
   $('#signup-territory').value = selected ? String(selected.id) : '';
-  const isAgent = $('#signup-account-type').value === 'agent';
-  search.setCustomValidity(isAgent && search.value.trim() && !selected ? t('Choose a territory from the suggestions.') : '');
+  search.setCustomValidity('');
   return selected;
 }
 function updatePlanLabels() {
@@ -1664,9 +1670,19 @@ function decoratePublicServiceLogos() {
     ['SACCO / MFI', miniAppLogo('mfi')],
     ['Agent services', '/icon.svg'],
   ]);
+  const panels = new Map([
+    ['Homes & rentals', 'properties'],
+    ['Marketplace', 'marketplace'],
+    ['Workforce', 'workers'],
+    ['AfroLife Edir', 'edir'],
+    ['SACCO / MFI', 'mfi'],
+    ['Agent services', 'agents'],
+  ]);
   for (const card of document.querySelectorAll('#public-hub .service-card')) {
-    const src = logos.get(card.querySelector('strong')?.textContent.trim());
+    const name = card.querySelector('strong')?.textContent.trim();
+    const src = logos.get(name);
     const current = card.querySelector('.service-icon');
+    if (panels.has(name)) card.dataset.panel = panels.get(name);
     if (!src || !current) continue;
     const logo = node('img', undefined, 'service-icon service-icon-image');
     logo.src = src;
@@ -1981,6 +1997,7 @@ function renderServiceLauncher(panelNames) {
     const miniApp = miniAppByPanel[panel];
     const logoSource = miniAppLogo(panel);
     const card = node('article', undefined, 'service-launcher-card');
+    card.dataset.panel = panel;
     if (logoSource) {
       const logo = node('img', undefined, 'service-launcher-logo');
       logo.src = logoSource;
@@ -2021,14 +2038,15 @@ const workspaceNavIcons = {
 
 function createWorkspaceNavLink(tab, className = 'workspace-nav-link') {
   const panel = tab.dataset.panel;
+  const sourceLabel = getLocalizedNodeSource(tab.firstChild).trim() || tab.textContent.trim();
   const link = node('button', undefined, className);
   link.type = 'button';
   link.dataset.panel = panel;
-  link.setAttribute('aria-label', tab.textContent.trim());
+  setLocalizedAttribute(link, 'aria-label', sourceLabel);
   const logoSource = miniAppLogo(panel);
   const icon = node('span', workspaceNavIcons[panel] ?? '•', 'workspace-nav-icon');
   icon.setAttribute('aria-hidden', 'true');
-  const label = node('span', tab.textContent.trim(), 'workspace-nav-label');
+  const label = node('span', sourceLabel, 'workspace-nav-label');
   link.append(icon, label);
   if (logoSource) {
     const logo = node('img', undefined, 'workspace-nav-logo');
@@ -2065,7 +2083,7 @@ function renderMobileWorkspaceNav() {
   moreButton.type = 'button';
   moreButton.id = 'mobile-workspace-more';
   moreButton.hidden = moreNav.childElementCount === 0;
-  moreButton.setAttribute('aria-label', t('More workspace sections'));
+  setLocalizedAttribute(moreButton, 'aria-label', 'More workspace sections');
   moreButton.setAttribute('aria-haspopup', 'dialog');
   moreButton.setAttribute('aria-controls', 'workspace-more-dialog');
   moreButton.setAttribute('aria-expanded', 'false');
@@ -5896,6 +5914,8 @@ $('#signup-agent-type').addEventListener('change', updateSignupFields);
 $('#signup-plan').addEventListener('change', updatePlanLabels);
 $('#signup-territory-search').addEventListener('input', syncSignupTerritory);
 $('#signup-territory-search').addEventListener('change', syncSignupTerritory);
+$('#create-account').addEventListener('click', () => openSignup(false));
+$('#public-create-account').addEventListener('click', () => openSignup(false));
 $('#join-edir').addEventListener('click', () => openSignup(false, true));
 $('#show-agent-plans').addEventListener('click', () => openSignup(true));
 document.querySelectorAll('[data-open-edir-registration]').forEach((button) => button.addEventListener('click', () => {

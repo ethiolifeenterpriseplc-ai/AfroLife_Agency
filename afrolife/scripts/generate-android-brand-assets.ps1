@@ -4,54 +4,50 @@ Add-Type -AssemblyName System.Drawing
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $resourceRoot = Join-Path $projectRoot 'android\app\src\main\res'
 $publicIconRoot = Join-Path $projectRoot 'public\icons'
-$green = [System.Drawing.Color]::FromArgb(23, 75, 61)
-$gold = [System.Drawing.Color]::FromArgb(215, 173, 89)
-$white = [System.Drawing.Color]::White
+$green = [System.Drawing.Color]::FromArgb(0, 184, 90)
+$blue = [System.Drawing.Color]::FromArgb(0, 102, 255)
+$yellow = [System.Drawing.Color]::FromArgb(255, 176, 0)
 $neutral = [System.Drawing.Color]::FromArgb(244, 246, 242)
 
-function Fill-RoundedRectangle($graphics, $brush, [float]$x, [float]$y, [float]$width, [float]$height, [float]$radius) {
-  $diameter = 2 * $radius
-  $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
-  $path.AddArc($x, $y, $diameter, $diameter, 180, 90)
-  $path.AddArc($x + $width - $diameter, $y, $diameter, $diameter, 270, 90)
-  $path.AddArc($x + $width - $diameter, $y + $height - $diameter, $diameter, $diameter, 0, 90)
-  $path.AddArc($x, $y + $height - $diameter, $diameter, $diameter, 90, 90)
-  $path.CloseFigure()
-  $graphics.FillPath($brush, $path)
-  $path.Dispose()
-}
+function Draw-BrandMark($graphics, [float]$originX, [float]$originY, [float]$scale) {
+  $greenBrush = [System.Drawing.SolidBrush]::new($green)
+  $blueBrush = [System.Drawing.SolidBrush]::new($blue)
+  $yellowBrush = [System.Drawing.SolidBrush]::new($yellow)
+  $left = [System.Drawing.Drawing2D.GraphicsPath]::new()
+  $left.AddBezier($originX + 34.5 * $scale, $originY + 27.375 * $scale, $originX + 39.375 * $scale, $originY + 27.375 * $scale, $originX + 42.75 * $scale, $originY + 31.5 * $scale, $originX + 41.25 * $scale, $originY + 36.375 * $scale)
+  $left.AddLine($originX + 41.25 * $scale, $originY + 36.375 * $scale, $originX + 32.25 * $scale, $originY + 66 * $scale)
+  $left.AddBezier($originX + 32.25 * $scale, $originY + 66 * $scale, $originX + 30.375 * $scale, $originY + 72 * $scale, $originX + 24.75 * $scale, $originY + 74.625 * $scale, $originX + 19.875 * $scale, $originY + 73.5 * $scale)
+  $left.AddBezier($originX + 19.875 * $scale, $originY + 73.5 * $scale, $originX + 15 * $scale, $originY + 72.375 * $scale, $originX + 13.125 * $scale, $originY + 67.125 * $scale, $originX + 14.875 * $scale, $originY + 62.625 * $scale)
+  $left.AddLine($originX + 14.875 * $scale, $originY + 62.625 * $scale, $originX + 26.625 * $scale, $originY + 33.75 * $scale)
+  $left.AddBezier($originX + 26.625 * $scale, $originY + 33.75 * $scale, $originX + 28.125 * $scale, $originY + 29.625 * $scale, $originX + 30.75 * $scale, $originY + 27.375 * $scale, $originX + 34.5 * $scale, $originY + 27.375 * $scale)
+  $left.CloseFigure()
+  $graphics.FillPath($greenBrush, $left)
 
-function Draw-OpportunityMark($graphics, [float]$originX, [float]$originY, [float]$scale) {
-  $connectorPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(232, 241, 233), 4 * $scale)
-  $connectorPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $connectorPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $nodeBrush = [System.Drawing.SolidBrush]::new($white)
-  $personBrush = [System.Drawing.SolidBrush]::new($green)
-  $goldBrush = [System.Drawing.SolidBrush]::new($gold)
-  $whiteBrush = [System.Drawing.SolidBrush]::new($white)
+  $right = [System.Drawing.Drawing2D.GraphicsPath]::new()
+  $right.AddBezier($originX + 61.5 * $scale, $originY + 27.375 * $scale, $originX + 56.625 * $scale, $originY + 27.375 * $scale, $originX + 53.25 * $scale, $originY + 31.5 * $scale, $originX + 54.75 * $scale, $originY + 36.375 * $scale)
+  $right.AddLine($originX + 54.75 * $scale, $originY + 36.375 * $scale, $originX + 63.75 * $scale, $originY + 66 * $scale)
+  $right.AddBezier($originX + 63.75 * $scale, $originY + 66 * $scale, $originX + 65.625 * $scale, $originY + 72 * $scale, $originX + 71.25 * $scale, $originY + 74.625 * $scale, $originX + 76.125 * $scale, $originY + 73.5 * $scale)
+  $right.AddBezier($originX + 76.125 * $scale, $originY + 73.5 * $scale, $originX + 81 * $scale, $originY + 72.375 * $scale, $originX + 82.875 * $scale, $originY + 67.125 * $scale, $originX + 81.125 * $scale, $originY + 62.625 * $scale)
+  $right.AddLine($originX + 81.125 * $scale, $originY + 62.625 * $scale, $originX + 69.375 * $scale, $originY + 33.75 * $scale)
+  $right.AddBezier($originX + 69.375 * $scale, $originY + 33.75 * $scale, $originX + 67.875 * $scale, $originY + 29.625 * $scale, $originX + 65.25 * $scale, $originY + 27.375 * $scale, $originX + 61.5 * $scale, $originY + 27.375 * $scale)
+  $right.CloseFigure()
+  $graphics.FillPath($blueBrush, $right)
 
-  $graphics.DrawLine($connectorPen, $originX + 43 * $scale, $originY + 44 * $scale, $originX + 32 * $scale, $originY + 35 * $scale)
-  $graphics.DrawLine($connectorPen, $originX + 53 * $scale, $originY + 44 * $scale, $originX + 64 * $scale, $originY + 35 * $scale)
-  $graphics.DrawLine($connectorPen, $originX + 48 * $scale, $originY + 56 * $scale, $originX + 48 * $scale, $originY + 63 * $scale)
+  $base = [System.Drawing.Drawing2D.GraphicsPath]::new()
+  $base.AddBezier($originX + 33.75 * $scale, $originY + 67.875 * $scale, $originX + 34.875 * $scale, $originY + 58.5 * $scale, $originX + 42 * $scale, $originY + 52.5 * $scale, $originX + 48 * $scale, $originY + 52.5 * $scale)
+  $base.AddBezier($originX + 48 * $scale, $originY + 52.5 * $scale, $originX + 55.125 * $scale, $originY + 52.5 * $scale, $originX + 61.125 * $scale, $originY + 58.5 * $scale, $originX + 62.25 * $scale, $originY + 67.875 * $scale)
+  $base.AddBezier($originX + 62.25 * $scale, $originY + 67.875 * $scale, $originX + 58.125 * $scale, $originY + 71.625 * $scale, $originX + 53.25 * $scale, $originY + 73.5 * $scale, $originX + 48 * $scale, $originY + 73.5 * $scale)
+  $base.AddBezier($originX + 48 * $scale, $originY + 73.5 * $scale, $originX + 42.75 * $scale, $originY + 73.5 * $scale, $originX + 37.875 * $scale, $originY + 71.625 * $scale, $originX + 33.75 * $scale, $originY + 67.875 * $scale)
+  $base.CloseFigure()
+  $graphics.FillPath($yellowBrush, $base)
+  $graphics.FillEllipse($yellowBrush, $originX + 40.875 * $scale, $originY + 15.75 * $scale, 14.25 * $scale, 14.25 * $scale)
 
-  foreach ($node in @(@{ X = 25; Y = 27 }, @{ X = 71; Y = 27 }, @{ X = 48; Y = 75 })) {
-    $x = $originX + $node.X * $scale
-    $y = $originY + $node.Y * $scale
-    $radius = 12 * $scale
-    $graphics.FillEllipse($nodeBrush, $x - $radius, $y - $radius, 2 * $radius, 2 * $radius)
-    $graphics.FillEllipse($personBrush, $x - 2.7 * $scale, $y - 6 * $scale, 5.4 * $scale, 5.4 * $scale)
-    $personPen = [System.Drawing.Pen]::new($green, 2.4 * $scale)
-    $graphics.DrawArc($personPen, $x - 6 * $scale, $y - 1 * $scale, 12 * $scale, 9 * $scale, 180, 180)
-    $personPen.Dispose()
-  }
-
-  $graphics.FillEllipse($goldBrush, $originX + 40 * $scale, $originY + 41 * $scale, 16 * $scale, 16 * $scale)
-  $graphics.FillEllipse($whiteBrush, $originX + 45.5 * $scale, $originY + 46.5 * $scale, 5 * $scale, 5 * $scale)
-  $connectorPen.Dispose()
-  $nodeBrush.Dispose()
-  $personBrush.Dispose()
-  $goldBrush.Dispose()
-  $whiteBrush.Dispose()
+  $greenBrush.Dispose()
+  $blueBrush.Dispose()
+  $yellowBrush.Dispose()
+  $left.Dispose()
+  $right.Dispose()
+  $base.Dispose()
 }
 
 function Save-Png([System.Drawing.Bitmap]$bitmap, [string]$path) {
@@ -69,10 +65,7 @@ foreach ($density in @(
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.Clear([System.Drawing.Color]::Transparent)
     $scale = $density.Size / 96.0
-    $background = [System.Drawing.SolidBrush]::new($green)
-    Fill-RoundedRectangle $graphics $background 0 0 $density.Size $density.Size (20 * $scale)
-    Draw-OpportunityMark $graphics 0 0 $scale
-    $background.Dispose()
+    Draw-BrandMark $graphics 0 0 $scale
     $graphics.Dispose()
     Save-Png $bitmap (Join-Path $resourceRoot "mipmap-$($density.Name)\$iconName")
   }
@@ -83,7 +76,7 @@ foreach ($density in @(
   $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
   $graphics.Clear([System.Drawing.Color]::Transparent)
   $scale = $foregroundSize / 96.0 * 0.6875
-  Draw-OpportunityMark $graphics (($foregroundSize / 2.0) - 48 * $scale) (($foregroundSize / 2.0) - 48 * $scale) $scale
+  Draw-BrandMark $graphics (($foregroundSize / 2.0) - 48 * $scale) (($foregroundSize / 2.0) - 48 * $scale) $scale
   $graphics.Dispose()
   Save-Png $foreground (Join-Path $resourceRoot "mipmap-$($density.Name)\ic_launcher_foreground.png")
 }
@@ -101,31 +94,20 @@ foreach ($file in Get-ChildItem -Path $resourceRoot -Recurse -Filter splash.png)
   $tileX = ($width - $tileSize) / 2.0
   $tileY = ($height - $tileSize) / 2.0
   $scale = $tileSize / 96.0
-  $background = [System.Drawing.SolidBrush]::new($green)
-  Fill-RoundedRectangle $graphics $background $tileX $tileY $tileSize $tileSize (20 * $scale)
-  Draw-OpportunityMark $graphics $tileX $tileY $scale
-  $background.Dispose()
+  Draw-BrandMark $graphics $tileX $tileY $scale
   $graphics.Dispose()
   Save-Png $bitmap $file.FullName
 }
 
-foreach ($size in @(192, 512)) {
+foreach ($size in @(192, 256, 512)) {
   $bitmap = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
   $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-  $graphics.Clear($green)
+  $graphics.Clear([System.Drawing.Color]::Transparent)
   $scale = $size / 96.0
-  Draw-OpportunityMark $graphics 0 0 $scale
+  Draw-BrandMark $graphics 0 0 $scale
   $graphics.Dispose()
-  Save-Png $bitmap (Join-Path $publicIconRoot "icon-$size.png")
-
-  $bitmap = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-  $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-  $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-  $graphics.Clear($green)
-  Draw-OpportunityMark $graphics 0 0 $scale
-  $graphics.Dispose()
-  Save-Png $bitmap (Join-Path $publicIconRoot "ethio-life-icon-$size.png")
+  Save-Png $bitmap (Join-Path $publicIconRoot "afrolife-icon-$size.png")
 }
 
-Write-Output 'Generated matching EthioLife PWA, Android launcher, adaptive foreground, and splash assets.'
+Write-Output 'Generated matching AfroLife PWA, Android launcher, adaptive foreground, and splash assets.'

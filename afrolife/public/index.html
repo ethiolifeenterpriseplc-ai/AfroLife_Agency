@@ -9,9 +9,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="description" content="AfroLife connects people with services for work, homes, business, and community.">
     <link rel="manifest" href="/manifest.webmanifest">
-    <link rel="icon" href="/icon.svg?v=3" type="image/svg+xml">
-    <link rel="icon" href="/icons/ethio-life-icon-192.png" type="image/png" sizes="192x192">
-    <link rel="apple-touch-icon" href="/icons/ethio-life-icon-192.png">
+    <link rel="icon" href="/icon.svg?v=5" type="image/svg+xml">
+    <link rel="icon" href="/icons/afrolife-icon-192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="/icons/afrolife-icon-192.png">
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/financial-workspaces.css">
     <title>AfroLife Agency | አፍሮ-ላይፍ ኤጄንሲ</title>
@@ -20,8 +20,7 @@
     <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="topbar">
       <a class="brand" href="/" aria-label="አፍሮ-ላይፍ ኤጄንሲ / AfroLife Agency">
-        <img src="/icon.svg?v=3" alt="" width="38" height="38">
-        <span class="brand-copy"><span class="brand-name">AfroLife <span class="brand-agency">Agency</span></span><small>PEOPLE · SERVICES · OPPORTUNITY</small></span>
+        <img src="/brand/afrolife-brand-lockup.svg" alt="" width="312" height="120">
       </a>
       <label class="language-picker">
         <span class="visually-hidden">Language</span>
@@ -46,10 +45,11 @@
       <section id="login-view" class="login-layout">
         <div class="welcome-panel">
           <p class="eyebrow">PEOPLE · SERVICES · OPPORTUNITY</p>
+          <a class="welcome-signin-shortcut" href="#login-form">Sign in</a>
           <h1>One trusted place to get work moving.</h1>
           <p>Coordinate leads, verified workers and service requests with clear ownership at every step.</p>
           <figure class="brand-illustration">
-            <img src="/brand/ethiolife-service-network.svg" alt="A worker, home, job opportunity and community connected through AfroLife" width="640" height="340">
+            <img src="/brand/afrolife-campaign-hero.png" alt="A woman in Addis Ababa beside the campaign message: More Opportunities. Stronger Communities." width="488" height="232">
           </figure>
           <div class="trust-points">
             <span><i></i> Verified workforce</span>
@@ -67,6 +67,7 @@
           <p id="login-error" class="form-error" role="alert"></p>
           <button id="retry-session" class="button button-outline button-wide" type="button" hidden>Retry workspace connection</button>
           <button class="button button-primary button-wide" type="submit">Sign in <span aria-hidden="true">→</span></button>
+          <button id="create-account" class="button button-outline button-wide" type="button">Create account</button>
           <div class="login-registration-actions" aria-label="Choose an Edir registration path">
             <button id="join-edir" class="button button-outline" type="button">Join AfroLife Edir</button>
             <button class="button button-outline" type="button" data-open-edir-registration>Register an Edir</button>
@@ -129,10 +130,10 @@
               </select>
             </label>
             <label>Your territory
-            <input id="signup-territory-search" type="search" list="signup-territory-options" autocomplete="off" placeholder="Start typing an area name" aria-describedby="signup-territory-help">
+            <input id="signup-territory-search" type="text" list="signup-territory-options" autocomplete="off" placeholder="Start typing an area name" aria-describedby="signup-territory-help">
             <datalist id="signup-territory-options"></datalist>
             <select id="signup-territory" name="territory_id" hidden aria-hidden="true" tabindex="-1"></select>
-            <small id="signup-territory-help" class="field-hint">Type a city, sub-city, woreda, or kebele, then choose a matching suggestion.</small>
+            <small id="signup-territory-help" class="field-hint">Choose a region or type a territory name.</small>
             </label>
             <label id="parent-agent-field" hidden>Master agent phone number
               <input name="parent_agent_phone" type="tel" placeholder="+251 9…">
@@ -179,11 +180,16 @@
 
       <section id="public-hub" class="public-hub" aria-label="AfroLife services and industry news">
         <div class="hub-heading">
-          <p class="eyebrow">ETHIOLIFE SUPER APP</p>
-          <h2>Services for work, homes, business, and community.</h2>
-          <p>Explore AfroLife’s connected services. Install the app for a home-screen shortcut and a cached public shell; sign in to access account-specific tools.</p>
-          <div class="hub-actions"><a class="button button-primary" href="#login-form">Sign in or register</a><button class="button button-outline" type="button" data-install-pwa>Install AfroLife</button></div>
-          <p id="install-help" class="hub-caption" role="status" hidden>Open your browser menu and choose Install app or Add to Home Screen.</p>
+          <div class="hub-copy">
+            <p class="eyebrow">PEOPLE · SERVICES · OPPORTUNITY</p>
+            <h2>Services for work, homes, business, and community.</h2>
+            <p>Explore AfroLife’s connected services. Install the app for a home-screen shortcut and a cached public shell; sign in to access account-specific tools.</p>
+            <div class="hub-actions"><a class="button button-primary" href="#login-form">Sign in</a><button id="public-create-account" class="button button-outline" type="button">Create account</button><button class="button button-outline" type="button" data-install-pwa>Install AfroLife</button></div>
+            <p id="install-help" class="hub-caption" role="status" hidden>Open your browser menu and choose Install app or Add to Home Screen.</p>
+          </div>
+          <figure class="hub-campaign">
+            <img src="/brand/afrolife-campaign-hero.png" alt="A woman in Addis Ababa beside the campaign message: More Opportunities. Stronger Communities." width="488" height="232" loading="lazy" decoding="async">
+          </figure>
         </div>
         <div id="subscription-home-host">
         <section id="subscription-catalog" class="hub-section subscription-catalog" aria-labelledby="subscription-catalog-title">
@@ -208,12 +214,12 @@
         <section class="hub-section" aria-labelledby="services-title">
           <div class="hub-section-heading"><div><p class="eyebrow">SERVICE MENU</p><h2 id="services-title">One app, useful services</h2></div><span class="hub-caption">Choose a service to continue</span></div>
           <div class="service-grid">
-            <a class="service-card" href="#login-form"><span class="service-icon">⌂</span><strong>Homes &amp; rentals</strong><span>Browse property listings, connect landlords and tenants, and manage rent workflows where enabled.</span><small>Property mini app →</small></a>
-            <a class="service-card" href="#login-form"><span class="service-icon">◎</span><strong>Marketplace</strong><span>Discover products and services from registered sellers and local businesses.</span><small>Market mini app →</small></a>
-            <a class="service-card" href="#login-form"><span class="service-icon">✳</span><strong>Workforce</strong><span>Find work opportunities, verified worker profiles, and employer service requests.</span><small>Jobs mini app →</small></a>
-            <a class="service-card" href="#login-form"><span class="service-icon">◉</span><strong>AfroLife Edir</strong><span>Request community membership after KYC. Available membership products and terms are shown in the Edir workspace.</span><small>Community mini app →</small></a>
-            <a class="service-card" href="#login-form"><span class="service-icon">▤</span><strong>SACCO / MFI</strong><span>Financial cooperative tools appear only when the organization enables the pilot for your account.</span><small>Finance mini app →</small></a>
-            <a class="service-card" href="#login-form"><span class="service-icon">▣</span><strong>Agent services</strong><span>Manage referrals, service requests, contracts, and team activity based on your role.</span><small>Agency mini app →</small></a>
+            <a class="service-card" data-panel="properties" href="#login-form"><span class="service-icon">⌂</span><strong>Homes &amp; rentals</strong><span>Browse property listings, connect landlords and tenants, and manage rent workflows where enabled.</span><small>Property mini app →</small></a>
+            <a class="service-card" data-panel="marketplace" href="#login-form"><span class="service-icon">◎</span><strong>Marketplace</strong><span>Discover products and services from registered sellers and local businesses.</span><small>Market mini app →</small></a>
+            <a class="service-card" data-panel="workers" href="#login-form"><span class="service-icon">✳</span><strong>Workforce</strong><span>Find work opportunities, verified worker profiles, and employer service requests.</span><small>Jobs mini app →</small></a>
+            <a class="service-card" data-panel="edir" href="#login-form"><span class="service-icon">◉</span><strong>AfroLife Edir</strong><span>Request community membership after KYC. Available membership products and terms are shown in the Edir workspace.</span><small>Community mini app →</small></a>
+            <a class="service-card" data-panel="mfi" href="#login-form"><span class="service-icon">▤</span><strong>SACCO / MFI</strong><span>Financial cooperative tools appear only when the organization enables the pilot for your account.</span><small>Finance mini app →</small></a>
+            <a class="service-card" data-panel="agents" href="#login-form"><span class="service-icon">▣</span><strong>Agent services</strong><span>Manage referrals, service requests, contracts, and team activity based on your role.</span><small>Agency mini app →</small></a>
           </div>
         </section>
         <section class="hub-section community-benefits-section" aria-labelledby="member-benefits-title">

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   workforceDashboardMetrics,
   staffingDashboardMetrics,
@@ -125,9 +125,11 @@ test('dynamically created labels retain their source text when the locale change
     value: 'en',
     addEventListener(_event, callback) { changeLocale = callback; },
   };
-  const textNode = { nodeValue: '', parentElement: { tagName: 'SPAN' } };
-  const textNodes = [textNode];
-  const root = { querySelectorAll: () => [] };
+  const sourceNode = { nodeValue: 'Overview', parentElement: { tagName: 'BUTTON' } };
+  const textNodes = [sourceNode];
+  let link;
+  let labelText;
+  const root = { querySelectorAll: () => link ? [link] : [] };
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => 'en', setItem: () => {} } });
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { languages: ['en'] } });
   Object.defineProperty(globalThis, 'NodeFilter', { configurable: true, value: { SHOW_TEXT: 4 } });
@@ -144,12 +146,40 @@ test('dynamically created labels retain their source text when the locale change
     },
   });
   try {
-    const { initializeLocale, setLocalizedNodeText, translateContent } = await import(`../public/i18n.js?locale-test=${Date.now()}`);
-    setLocalizedNodeText(textNode, 'Create a listing');
-    initializeLocale(() => {});
+    const {
+      getLocalizedNodeSource,
+      initializeLocale,
+      setLocalizedAttribute,
+      setLocalizedNodeText,
+      translateContent,
+    } = await import(`../public/i18n.js?locale-test=${Date.now()}`);
+    const renderLink = () => {
+      link = {
+        attributes: {},
+        hasAttribute(attribute) { return attribute in this.attributes; },
+        getAttribute(attribute) { return this.attributes[attribute]; },
+        setAttribute(attribute, value) { this.attributes[attribute] = value; },
+      };
+      labelText = { nodeValue: '', parentElement: { tagName: 'SPAN' } };
+      textNodes.push(labelText);
+      const sourceLabel = getLocalizedNodeSource(sourceNode).trim();
+      setLocalizedNodeText(labelText, sourceLabel);
+      setLocalizedAttribute(link, 'aria-label', sourceLabel);
+    };
+    initializeLocale(renderLink);
+    renderLink();
     selector.value = 'am';
     changeLocale();
-    assert.equal(textNode.nodeValue, 'ዝርዝር ይፍጠሩ');
+    assert.equal(labelText.nodeValue, 'አጠቃላይ እይታ');
+    assert.equal(link.getAttribute('aria-label'), 'አጠቃላይ እይታ');
+    selector.value = 'om';
+    changeLocale();
+    assert.equal(labelText.nodeValue, 'Cuunfaa');
+    assert.equal(link.getAttribute('aria-label'), 'Cuunfaa');
+    selector.value = 'am';
+    changeLocale();
+    assert.equal(labelText.nodeValue, 'አጠቃላይ እይታ');
+    assert.equal(link.getAttribute('aria-label'), 'አጠቃላይ እይታ');
     const accountingText = { nodeValue: 'Chart of accounts', parentElement: { tagName: 'H2' } };
     textNodes.push(accountingText);
     translateContent(root);
@@ -160,6 +190,127 @@ test('dynamically created labels retain their source text when the locale change
       else delete globalThis[key];
     }
   }
+});
+
+test('public signup actions open generic registration and allow returning to sign-in', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(html, /id="public-create-account"[^>]*>Create account<\/button>/);
+  assert.match(html, /id="create-account"[^>]*>Create account<\/button>/);
+  assert.match(app, /#public-create-account'\)\.addEventListener\('click', \(\) => openSignup\(false\)\)/);
+  assert.match(app, /#create-account'\)\.addEventListener\('click', \(\) => openSignup\(false\)\)/);
+  assert.match(html, /id="show-login"[^>]*>Already have an account\? Sign in<\/button>/);
+});
+
+test('agent signup accepts typed territory names and offers seeded Ethiopian regions', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../migrations/096_ethiopian_territory_regions.sql', import.meta.url), 'utf8');
+  assert.match(html, /id="signup-territory-search" type="text" list="signup-territory-options"[^>]*placeholder="Start typing an area name"/);
+  assert.match(html, /Choose a region or type a territory name/);
+  const translations = readFileSync(new URL('../public/i18n.js', import.meta.url), 'utf8');
+  assert.match(translations, /'Choose a region or type a territory name\.':/);
+  assert.match(app, /const matches = territories\.filter\(\(area\) => \[/);
+  assert.match(app, /area\.name,\s*\]\.some\(\(label\) => label\.localeCompare\(value, undefined, \{ sensitivity: 'base' \}\) === 0\)\)/);
+  assert.match(migration, /ON CONFLICT \(parent_id, name\) DO NOTHING/);
+  for (const region of ['Afar', 'Amhara', 'Benishangul-Gumuz', 'Central Ethiopia', 'Dire Dawa', 'Gambela', 'Harari', 'Oromia', 'Sidama', 'Somali', 'South Ethiopia', 'Southwest Ethiopia Peoples', 'Tigray']) {
+    assert.ok(migration.includes(`('${region}')`), `territory seed should include ${region}`);
+  }
+});
+
+test('AfroLife sign-in uses the campaign logo and welcome artwork', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const logo = readFileSync(new URL('../public/icon.svg', import.meta.url), 'utf8');
+  const hero = readFileSync(new URL('../public/brand/afrolife-campaign-hero.png', import.meta.url));
+  const pngDimensions = (image) => {
+    assert.equal(image.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    return [image.readUInt32BE(16), image.readUInt32BE(20)];
+  };
+  assert.match(html, /<a class="brand" href="\/"[^>]*>\s*<img src="\/brand\/afrolife-brand-lockup\.svg" alt="" width="312" height="120">\s*<\/a>/);
+  assert.match(html, /<img src="\/brand\/afrolife-campaign-hero\.png" alt="A woman in Addis Ababa beside the campaign message: More Opportunities\. Stronger Communities\." width="488" height="232">/);
+  assert.match(logo, /<title[^>]*>AfroLife mark/);
+  assert.doesNotMatch(logo, /<rect\b[^>]*fill="#0B2D4A"/i);
+  const lockup = readFileSync(new URL('../public/brand/afrolife-brand-lockup.svg', import.meta.url), 'utf8');
+  assert.match(lockup, /viewBox="0 0 312 120"/);
+  assert.match(lockup, /#0B2D4A/);
+  assert.match(lockup, /አፍሮ • አገልግሎት • እድል/);
+  assert.match(lockup, /font-size="17"/);
+  assert.doesNotMatch(lockup, /<rect\b/i);
+  assert.doesNotMatch(lockup, /አደል/);
+  assert.deepEqual(pngDimensions(hero), [488, 232]);
+  assert.equal(existsSync(new URL('../public/brand/afrolife-woven-knot.svg', import.meta.url)), false);
+  assert.match(styles, /\.brand img\s*\{[^}]*width:\s*312px;[^}]*height:\s*120px;[^}]*object-fit:\s*contain/s);
+  assert.match(styles, /@media \(max-width: 650px\) \{\s*\.topbar\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;[\s\S]*?\.brand img\s*\{[^}]*width:\s*min\(312px,\s*100%\);[^}]*height:\s*auto;/);
+  assert.match(styles, /@media \(max-width: 920px\) and \(min-width: 651px\) \{\s*\.topbar\s*\{[^}]*grid-template-areas:\s*"brand language" "install account";/);
+  assert.match(html, /class="welcome-signin-shortcut" href="#login-form">Sign in<\/a>/);
+  assert.match(styles, /\.welcome-signin-shortcut\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(styles, /@media \(max-width: 700px\) \{\s*\.welcome-signin-shortcut\s*\{\s*display:\s*inline-flex;[\s\S]*?min-height:\s*46px;/);
+});
+
+test('mobile sign-in places the campaign welcome before sign-in and signup forms', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const mobileRules = [...styles.matchAll(/@media \(max-width: 700px\) \{([\s\S]*?)\n\}/g)]
+    .map(([, rules]) => rules)
+    .find((rules) => rules.includes('.welcome-panel { order: 0; }'));
+  assert.ok(mobileRules, 'the mobile breakpoint should move the welcome panel first');
+  assert.match(mobileRules, /\.login-card,\s*\.signup-card\s*\{\s*order:\s*1;\s*\}/);
+
+  const loginView = html.match(/<section id="login-view"[\s\S]*?<\/section>\s*<section id="public-hub"/)?.[0];
+  assert.ok(loginView, 'the login view should remain intact');
+  assert.ok(loginView.indexOf('class="welcome-panel"') < loginView.indexOf('id="login-form"'));
+  assert.ok(loginView.indexOf('id="login-form"') < loginView.indexOf('id="signup-form"'));
+  assert.ok(loginView.indexOf('id="signup-form"') < loginView.indexOf('id="server-setup-home"'));
+});
+
+test('AfroLife icon is a textless brand mark with matching PWA icons and mini-app tokens', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const icon = readFileSync(new URL('../public/icon.svg', import.meta.url), 'utf8');
+  const manifest = JSON.parse(readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8'));
+  const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(icon, /viewBox="0 0 256 256"/);
+  assert.doesNotMatch(icon, /<text\b/i);
+  for (const color of ['#0066FF', '#00B85A', '#FFB000']) assert.ok(icon.includes(color));
+  assert.doesNotMatch(icon, /<rect\b/i, 'the app mark must not include a background rectangle');
+  assert.match(html, /<link rel="icon" href="\/icon\.svg\?v=5" type="image\/svg\+xml">/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/afrolife-icon-192\.png">/);
+  assert.match(html, new RegExp(`<meta name="theme-color" content="${manifest.theme_color}">`));
+  assert.equal(manifest.theme_color, '#174b3d');
+  assert.deepEqual(manifest.icons.slice(0, 3).map(({ src, sizes }) => [src, sizes]), [
+    ['/icons/afrolife-icon-192.png', '192x192'],
+    ['/icons/afrolife-icon-256.png', '256x256'],
+    ['/icons/afrolife-icon-512.png', '512x512'],
+  ]);
+  assert.match(styles, /--platform-blue:\s*#0066ff/i);
+  assert.match(styles, /--brand-green:\s*#174b3d/i);
+  assert.match(styles, /--green:\s*#174b3d/i);
+  assert.match(styles, /--growth-green:\s*#174b3d/i);
+  assert.match(styles, /--opportunity-yellow:\s*#d7ad59/i);
+  assert.match(styles, /\[data-panel="agents"\]/);
+});
+
+test('public hub integrates the campaign artwork with the existing public actions', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const serviceWorker = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(html, /<section id="public-hub"[\s\S]*?<div class="hub-heading">[\s\S]*?<p class="eyebrow">PEOPLE · SERVICES · OPPORTUNITY<\/p>[\s\S]*?<h2>Services for work, homes, business, and community\.<\/h2>[\s\S]*?<figure class="hub-campaign">[\s\S]*?<img src="\/brand\/afrolife-campaign-hero\.png"[^>]*>/);
+  assert.match(html, /<a class="button button-primary" href="#login-form">Sign in<\/a>/);
+  assert.match(html, /<button id="public-create-account" class="button button-outline" type="button">Create account<\/button>/);
+  assert.match(html, /<button class="button button-outline" type="button" data-install-pwa>Install AfroLife<\/button>/);
+  for (const panel of ['properties', 'marketplace', 'workers', 'edir', 'mfi', 'agents']) {
+    assert.match(html, new RegExp(`<a class="service-card" data-panel="${panel}" href="#login-form">`));
+  }
+  assert.match(styles, /\.hub-heading\s*\{[^}]*linear-gradient\(125deg,\s*var\(--brand-green\)/s);
+  assert.match(styles, /\.hub-campaign img\s*\{[^}]*aspect-ratio:\s*488 \/ 232/s);
+  assert.match(styles, /\.hub-heading \{ grid-template-columns: minmax\(0, 1fr\); gap:/);
+  assert.match(styles, /#public-hub \.service-card\[data-panel\] \.service-icon\s*\{[^}]*background:\s*var\(--mini-app-tint\);[^}]*color:\s*var\(--mini-app-ink/s);
+  assert.match(serviceWorker, /const CACHE = 'afrolife-shell-v33'/);
+  assert.match(serviceWorker, /'\/tenant-data-admin\.js'/);
+  for (const asset of [
+    '/icons/afrolife-icon-192.png', '/icons/afrolife-icon-256.png', '/icons/afrolife-icon-512.png',
+    '/brand/afrolife-brand-lockup.svg', '/brand/afrolife-campaign-hero.png',
+  ]) assert.ok(serviceWorker.includes(`'${asset}'`), `service worker should cache ${asset}`);
 });
 
 test('public subscription catalog has only the eight approved ETB 1,000 services', () => {

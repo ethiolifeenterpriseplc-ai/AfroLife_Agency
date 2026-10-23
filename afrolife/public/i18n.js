@@ -631,6 +631,14 @@ const publicSurfaceTranslations = {
   'Choose a territory from the suggestions.': {
     am: 'ከቀረቡት አማራጮች አካባቢ ይምረጡ።', om: 'Yaada dhiyaate keessaa naannoo filadhaa.', ti: 'ካብ ዝቐረቡ ምርጫታት ከባቢ ምረጹ።', so: 'Ka dooro deegaanada la soo jeediyay.', ar: 'اختر منطقة من الاقتراحات.', sw: 'Chagua eneo kutoka kwenye mapendekezo.',
   },
+  'Choose a region or type a territory name.': {
+    am: 'ክልል ይምረጡ ወይም የአካባቢ ስም ይጻፉ።',
+    om: 'Naannoo filadhaa yookaan maqaa naannoo barreessaa.',
+    ti: 'ክልል ምረጹ ወይ ስም ከባቢ ጽሓፉ።',
+    so: 'Dooro gobol ama qor magaca deegaanka.',
+    ar: 'اختر إقليمًا أو اكتب اسم المنطقة.',
+    sw: 'Chagua eneo au uandike jina la eneo.',
+  },
   'Join AfroLife Edir': {
     am: 'AfroLife Edirን ይቀላቀሉ', om: 'AfroLife Edir waliin makamaa', ti: 'AfroLife Edir ተጸንበሩ', so: 'Ku biir AfroLife Edir', ar: 'انضم إلى AfroLife Edir', sw: 'Jiunge na AfroLife Edir',
   },
@@ -1274,6 +1282,20 @@ export function t(message, values = {}) {
 export function setLocalizedNodeText(textNode, message, values = {}) {
   originalText.set(textNode, { message, values });
   textNode.nodeValue = t(message, values);
+}
+
+export function getLocalizedNodeSource(textNode) {
+  return originalText.get(textNode)?.message ?? textNode?.nodeValue ?? '';
+}
+
+export function setLocalizedAttribute(element, attribute, message) {
+  let sources = originalAttributes.get(element);
+  if (!sources) {
+    sources = {};
+    originalAttributes.set(element, sources);
+  }
+  sources[attribute] = message;
+  element.setAttribute(attribute, t(message));
 }
 
 function applyStaticTranslations(root = document.body) {
