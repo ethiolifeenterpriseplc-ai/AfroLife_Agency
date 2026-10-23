@@ -234,7 +234,7 @@ test('AfroLife sign-in uses the campaign logo and welcome artwork', () => {
   const lockup = readFileSync(new URL('../public/brand/afrolife-brand-lockup.svg', import.meta.url), 'utf8');
   assert.match(lockup, /viewBox="0 0 312 120"/);
   assert.match(lockup, /#0B2D4A/);
-  assert.match(lockup, /አፍሮ • አገልግሎት • እድል/);
+  assert.match(lockup, /ማህበረሰብ \+ አገልግሎት \+ እድል/);
   assert.match(lockup, /font-size="17"/);
   assert.doesNotMatch(lockup, /<rect\b/i);
   assert.doesNotMatch(lockup, /አደል/);
@@ -305,7 +305,7 @@ test('public hub integrates the campaign artwork with the existing public action
   assert.match(styles, /\.hub-campaign img\s*\{[^}]*aspect-ratio:\s*488 \/ 232/s);
   assert.match(styles, /\.hub-heading \{ grid-template-columns: minmax\(0, 1fr\); gap:/);
   assert.match(styles, /#public-hub \.service-card\[data-panel\] \.service-icon\s*\{[^}]*background:\s*var\(--mini-app-tint\);[^}]*color:\s*var\(--mini-app-ink/s);
-  assert.match(serviceWorker, /const CACHE = 'afrolife-shell-v33'/);
+  assert.match(serviceWorker, /const CACHE = 'afrolife-shell-v34'/);
   assert.match(serviceWorker, /'\/tenant-data-admin\.js'/);
   for (const asset of [
     '/icons/afrolife-icon-192.png', '/icons/afrolife-icon-256.png', '/icons/afrolife-icon-512.png',
