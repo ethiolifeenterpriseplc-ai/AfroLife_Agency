@@ -5,6 +5,8 @@ import {
   workforceDashboardMetrics,
   staffingDashboardMetrics,
   propertyDashboardMetrics,
+  propertyOwnerDashboardMetrics,
+  agentDashboardMetrics,
 } from '../public/dashboard-metrics.js';
 import {
   canChangeServer,
@@ -56,6 +58,38 @@ test('mini-app dashboards summarize only supplied, authorized panel data', () =>
     totalListings: 2,
     totalUnits: 2,
     byStatus: [{ label: 'active', count: 1 }, { label: 'draft', count: 1 }],
+  });
+  assert.deepEqual(propertyOwnerDashboardMetrics(
+    [{ units: [{ occupancy: 'occupied' }, { occupancy: 'vacant' }] }],
+    [{ status: 'active', rent_reconciled: '1200.00', rent_pending_reconciliation: '200.00' }],
+    [{ status: 'open' }, { status: 'done' }],
+  ), {
+    properties: 1,
+    units: 2,
+    occupiedUnits: 1,
+    vacantUnits: 1,
+    activeLeases: 1,
+    rentReconciled: 1200,
+    rentPendingReconciliation: 200,
+    openMaintenance: 1,
+  });
+  assert.deepEqual(agentDashboardMetrics(
+    [{ status: 'new' }, { status: 'converted' }],
+    [{ verification: 'pending' }, { verification: 'verified' }],
+    [{ status: 'open' }, { status: 'matched' }],
+    [
+      { status: 'qualified', amount: '50' },
+      { status: 'approved', amount: '125.25', held_status: 'held', held_amount: '25.25' },
+    ],
+  ), {
+    leads: 2,
+    followUpLeads: 1,
+    workers: 2,
+    workersAwaitingVerification: 1,
+    openStaffingRequests: 1,
+    commissionsAwaitingReview: 1,
+    approvedCommissionAmount: 125.25,
+    heldCommissionAmount: 25.25,
   });
 });
 

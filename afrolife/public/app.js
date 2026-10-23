@@ -10,7 +10,7 @@ import { miniAppByPanel } from './mini-apps/registry.js';
 import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from './workspace-navigation.js';
 import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from './workspace-search.js';
 import { EDIR_APPLICATION_DOCUMENTS, canChangeServer, edirApplicationDocumentPath, missingSignupDocuments, nativeApiOrigin, signupRequiredDocuments } from './registration-flows.js';
-import { propertyDashboardMetrics, staffingDashboardMetrics, workforceDashboardMetrics } from './dashboard-metrics.js';
+import { agentDashboardMetrics, propertyDashboardMetrics, propertyOwnerDashboardMetrics, staffingDashboardMetrics, workforceDashboardMetrics } from './dashboard-metrics.js';
 import { normalizeMySubscriptions, normalizeSubscriptionCatalog, PUBLIC_SUBSCRIPTION_SERVICES, subscriptionRequestPayload } from './subscriptions.js';
 import { propertyOfferTerms } from './property-offers.js';
 import { marketplaceListingPayload } from './marketplace-form.js';
@@ -75,7 +75,7 @@ function roleLabel(role) {
     field_agent: 'Field agent',
     customer: 'Buyer / customer',
     worker: 'Worker',
-    property_owner: 'Property owner',
+    property_owner: 'Property owner / landlord',
   };
   return t(labels[role] ?? role.replaceAll('_', ' '));
 }
@@ -1045,6 +1045,10 @@ async function loadWorkspace() {
   $('#login-error').textContent = '';
   $('#retry-session').hidden = true;
   $('#account-name').textContent = `${state.user.legal_name} · ${roleLabel(state.user.role)}`;
+  const workerTab = document.querySelector('.tab[data-panel="workers"]');
+  if (workerTab) setLocalizedText(workerTab, state.user.role === 'worker' ? 'Worker portal' : 'Workers');
+  const propertyTab = document.querySelector('.tab[data-panel="properties"]');
+  if (propertyTab) setLocalizedText(propertyTab, state.user.role === 'property_owner' ? 'Landlord portal' : 'Properties');
   const workersTab = document.querySelector('.tab[data-panel="workers"]');
   if (workersTab) setLocalizedText(workersTab, state.user.role === 'worker' ? 'Worker portal' : 'Workers');
   $('#page-subtitle').textContent = t('Signed in as {{role}}. Your access is limited to your assigned role and territory.', { role: roleLabel(state.user.role) });
@@ -1179,6 +1183,13 @@ async function loadPanelData(panel) {
       [state.leads, state.workers, state.requests, state.commissions] = await Promise.all([
         safeGet('/leads', []), safeGet('/workers', []), safeGet('/requests', []), safeGet('/commissions', []),
       ]);
+      if (state.user.role === 'property_owner') {
+        [state.properties, state.ownerStatements, state.maintenanceRequests] = await Promise.all([
+          safeGet('/properties', []),
+          safeGet('/owner/statements', { statements: [] }).then((result) => result.statements ?? []),
+          safeGet('/maintenance?offset=0', []),
+        ]);
+      }
       state.serviceStatus = await safeGet('/system/status', null);
       state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
         ? await safeGet('/reports/summary', null)
@@ -1470,8 +1481,91 @@ function card(title, details, status) {
 function renderOverview() {
   const wrap = node('div');
   wrap.append(sectionHeading('Your activity', 'Your latest records and work in progress.'));
+  if (state.user.role === 'property_owner') wrap.append(renderOwnerPortfolio());
+  if (['master_agent', 'field_agent'].includes(state.user.role)) wrap.append(renderAgentPortfolio());
   if (['finance_manager','super_admin','global_admin'].includes(state.user.role)) {
     wrap.append(renderStaffingFinanceQueue());
+  }
+
+  function renderOwnerPortfolio() {
+    const metrics = propertyOwnerDashboardMetrics(state.properties, state.ownerStatements, state.maintenanceRequests);
+    const sources = ['/properties', '/owner/statements', '/maintenance?offset=0'];
+    const unavailable = sources.some((path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path));
+    const section = node('section', undefined, 'panel form-card owner-portfolio');
+    section.append(node('p', 'LANDLORD SELF-SERVICE', 'eyebrow'));
+    section.append(node('h2', 'Your property portfolio'));
+    section.append(node('p', 'Review your listings, occupancy, maintenance requests, and recorded lease receipts. Reconciled receipts are not a payout confirmation.', 'muted'));
+    const cards = node('div', undefined, 'enterprise-metrics');
+    for (const [label, value] of [
+      ['Properties', metrics.properties],
+      ['Units · occupied / vacant', `${metrics.units} · ${metrics.occupiedUnits} / ${metrics.vacantUnits}`],
+      ['Active leases', metrics.activeLeases],
+      ['Open maintenance requests', metrics.openMaintenance],
+      ['Reconciled rent receipts · ETB', metrics.rentReconciled.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+      ['Receipts pending reconciliation · ETB', metrics.rentPendingReconciliation.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+    ]) {
+      const metric = node('div', undefined, 'enterprise-metric');
+      metric.append(node('span', label), node('strong', unavailable ? '—' : String(value)));
+      cards.append(metric);
+    }
+    section.append(cards);
+    const actions = node('div', undefined, 'property-actions');
+    actions.append(button('Manage properties', 'open-panel', 'button button-primary', { panel: 'properties' }));
+    actions.append(button('Download rent statement CSV', 'owner-statement-download', 'button button-outline'));
+    section.append(actions);
+    if (unavailable) {
+      const warning = node('p', 'Some portfolio information is unavailable to this account or could not be loaded. Refresh or check access before relying on these totals.', 'alert error');
+      warning.setAttribute('role', 'status');
+      section.append(warning);
+    }
+    return section;
+  }
+
+  function renderAgentPortfolio() {
+    const metrics = agentDashboardMetrics(state.leads, state.workers, state.requests, state.commissions);
+    const sources = ['/leads', '/workers', '/requests', '/commissions'];
+    const unavailable = sources.some((path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path));
+    const section = node('section', undefined, 'panel form-card agent-portfolio');
+    section.append(node('p', 'AGENT WORKSPACE', 'eyebrow'));
+    section.append(node('h2', 'Your activity snapshot'));
+    section.append(node('p', 'A live summary of records available to your account. Commission figures reflect approval status, not confirmed payment.', 'muted'));
+    const cards = node('div', undefined, 'enterprise-metrics');
+    for (const [label, value] of [
+      ['Leads', metrics.leads],
+      ['Leads needing follow-up', metrics.followUpLeads],
+      ['Workers registered', metrics.workers],
+      ['Workers awaiting verification', metrics.workersAwaitingVerification],
+      ['Open staffing requests', metrics.openStaffingRequests],
+      ['Commissions awaiting review', metrics.commissionsAwaitingReview],
+      ['Approved commissions · ETB', metrics.approvedCommissionAmount.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+      ['Held commission amount · ETB', metrics.heldCommissionAmount.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+    ]) {
+      const metric = node('div', undefined, 'enterprise-metric');
+      metric.append(node('span', label), node('strong', unavailable ? '—' : String(value)));
+      cards.append(metric);
+    }
+    section.append(cards);
+    const actions = node('div', undefined, 'property-actions');
+    for (const [label, panel] of [
+      ['Open lead book', 'leads'],
+      ['Register or review workers', 'workers'],
+      ['Manage staffing requests', 'requests'],
+      ['Open property listings', 'properties'],
+      ['Review contracts', 'contracts'],
+      ['Review commissions', 'commissions'],
+    ]) {
+      if (panel === 'requests' && !hasActivity('staffing.requests.manage')) continue;
+      const tab = document.querySelector(`.tab[data-panel="${CSS.escape(panel)}"]`);
+      if (!tab || tab.hidden) continue;
+      actions.append(button(label, 'open-panel', 'button button-outline', { panel }));
+    }
+    section.append(actions);
+    if (unavailable) {
+      const warning = node('p', 'Some activity records are unavailable to this account or could not be loaded. Refresh or check access before relying on these totals.', 'alert error');
+      warning.setAttribute('role', 'status');
+      section.append(warning);
+    }
+    return section;
   }
   const unavailableServices = state.serviceStatus?.services?.filter((service) => service.status === 'unavailable') ?? [];
   if (unavailableServices.length) {
@@ -2612,15 +2706,20 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
 function renderProperties() {
   const wrap = node('div');
   const buyer = state.user.role === 'customer';
+  const owner = state.user.role === 'property_owner';
   const canManage = hasActivity('property.listings.manage');
   wrap.append(sectionHeading(
-    buyer ? 'Available property listings' : 'Property listings',
-    buyer ? 'Browse available properties and view their pictures.' : 'Create and manage property records, units, rent details, and private listing pictures.',
+    buyer ? 'Available property listings' : owner ? 'Landlord property portfolio' : 'Property listings',
+    buyer ? 'Browse available properties and view their pictures.' : owner
+      ? 'Manage your properties and units, track listing review, and follow maintenance and rent statements.'
+      : 'Create and manage property records, units, rent details, and private listing pictures.',
   ));
   const metrics = propertyDashboardMetrics(state.properties);
   wrap.append(renderAppDashboard({
-    title: 'Property Management dashboard',
-    description: 'A summary of property listings available to your account. Counts use the currently loaded listing data only.',
+    title: owner ? 'Landlord dashboard' : 'Property Management dashboard',
+    description: owner
+      ? 'Your property listings and units. Counts use records currently available to your account.'
+      : 'A summary of property listings available to your account. Counts use the currently loaded listing data only.',
     source: '/properties',
     metrics,
     statusTitle: 'Listing status',
@@ -2691,7 +2790,7 @@ function renderProperties() {
   wrap.append(columns);
   if (state.user.role === 'property_owner') {
     const statements = node('section', undefined, 'panel form-card');
-    statements.append(node('h2','Owner rent & deposit statements'));
+    statements.append(node('h2','Landlord rent & deposit statements'));
     statements.append(node('p','These read-only records show lease charges and reconciled rent/deposit receipts. They do not initiate or confirm a payout to you.'));
     statements.append(button('Download CSV statement', 'owner-statement-download', 'button button-outline'));
     if (!state.ownerStatements.length) statements.append(empty('No lease statements are available for your listings yet.'));
