@@ -30,6 +30,9 @@ test('custom mini-app grants narrow but never elevate role access', () => {
   assert.equal(hasMiniAppAccess(user('finance', 'custom', ['global-bi']), 'global-bi'), true);
   assert.equal(hasMiniAppAccess(user('worker', 'custom', ['global-bi']), 'global-bi'), false);
   assert.equal(hasMiniAppAccess(user('super_admin'), 'global-bi'), false);
+  assert.equal(hasMiniAppAccess(user('worker'), 'workers'), true);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', []), 'workers'), false);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', ['workers']), 'workers'), true);
 });
 
 test('lease approvers and executors can reach the property and rent workflow', () => {
@@ -49,6 +52,13 @@ test('allowed mini-apps intersect role ceiling, deployment modules and user gran
     allowedMiniApps(user('customer', 'custom', ['accounting']), ['accounting']),
     ['accounting'],
   );
+});
+
+test('worker self-service portal access follows worker identity and custom grants', () => {
+  assert.equal(hasMiniAppAccess(user('worker'), 'workers'), true);
+  assert.equal(hasMiniAppAccess(user('corporate_business_manager'), 'workers'), true);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', []), 'workers'), false);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', ['workers']), 'workers'), true);
 });
 
 test('API middleware denies direct access when a custom assignment excludes the app', () => {
@@ -77,4 +87,14 @@ test('mini-app assignment storage is RLS-protected and its audit is append-only'
   assert.match(migration, /user_app_access_grants_platform_admin_write/);
   assert.match(migration, /prevent_user_app_access_audit_mutation/);
   assert.match(migration, /GRANT SELECT, INSERT ON TABLE user_app_access_audit/);
+});
+
+test('worker self-service tables and participant access are protected by RLS', async () => {
+  const migration = await readFile(new URL('../migrations/094_worker_self_service_portal.sql', import.meta.url), 'utf8');
+  assert.match(migration, /workforce_worker_self_read/);
+  assert.match(migration, /staffing_engagement_worker_client_read/);
+  assert.match(migration, /staffing_work_period_worker_submit/);
+  assert.match(migration, /worker_support_requests_owner_read/);
+  assert.match(migration, /worker_support_requests_support_update/);
+  assert.match(migration, /FORCE ROW LEVEL SECURITY/);
 });

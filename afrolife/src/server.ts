@@ -118,17 +118,24 @@ api.get('/subscriptions/catalog', (_req, res) => {
 
 api.use(authenticate);
 api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
+api.use('/worker-support', requireMiniAppAccess('workers'));
 api.use(['/requests', '/matches'], requireMiniAppAccess('requests'));
 api.use('/staffing-engagements', (req, res, next) => {
   const partyAcceptance = req.method === 'POST'
     && /\/staffing-engagements\/[^/]+\/accept(?:\?|$)/.test(req.originalUrl)
     && ['customer', 'worker'].includes(req.user!.role);
+  const workerSelfService = req.user!.role === 'worker'
+    && ((req.method === 'GET' && /\/staffing-engagements\/mine(?:\?|$)/.test(req.originalUrl))
+      || (req.method === 'POST' && /\/staffing-engagements\/[^/]+\/work-periods(?:\?|$)/.test(req.originalUrl)));
+  if (workerSelfService || (partyAcceptance && req.user!.role === 'worker')) {
+    return requireMiniAppAccess('workers')(req, res, next);
+  }
   if (partyAcceptance) return next();
   return requireAnyMiniAppAccess('requests', 'accounting')(req, res, next);
 });
 api.use(
   ['/staffing-work-periods', '/staffing-settlements'],
-  requireAnyMiniAppAccess('requests', 'accounting'),
+  requireAnyMiniAppAccess('requests', 'accounting', 'workers'),
 );
 api.use(['/properties'], requireMiniAppAccess('properties'));
 api.use('/marketplace', requireMiniAppAccess('marketplace'));
@@ -327,7 +334,7 @@ api.post('/workers/:id/documents/upload', express.raw({ type: () => true, limit:
 api.post('/properties/:id/photos/upload', express.raw({ type: () => true, limit: '100mb' }));
 api.post('/marketplace/listings/:id/media/upload', express.raw({ type: () => true, limit: '100mb' }));
 api.use(['/workers', '/documents'], workerManagementGateway);
-api.use(['/requests', '/matches', '/staffing-engagements', '/staffing-work-periods', '/staffing-settlements'], staffingGateway);
+api.use(['/requests', '/matches', '/staffing-engagements', '/staffing-work-periods', '/staffing-settlements', '/worker-support'], staffingGateway);
 api.use('/properties', propertyManagementGateway);
 api.use('/marketplace', marketplaceGateway);
 api.use(supply);

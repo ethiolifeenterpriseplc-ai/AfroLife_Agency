@@ -38,7 +38,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], workerDocumentExpiry: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerSupportRequests: [], workerSupportQueue: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
@@ -1045,6 +1045,8 @@ async function loadWorkspace() {
   $('#login-error').textContent = '';
   $('#retry-session').hidden = true;
   $('#account-name').textContent = `${state.user.legal_name} · ${roleLabel(state.user.role)}`;
+  const workersTab = document.querySelector('.tab[data-panel="workers"]');
+  if (workersTab) setLocalizedText(workersTab, state.user.role === 'worker' ? 'Worker portal' : 'Workers');
   $('#page-subtitle').textContent = t('Signed in as {{role}}. Your access is limited to your assigned role and territory.', { role: roleLabel(state.user.role) });
   void loadMySubscriptions();
   if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role)) {
@@ -1091,7 +1093,8 @@ async function loadWorkspace() {
         ...(state.user.role === 'corporate_business_manager' ? ['admin'] : []),
         'leads', 'contracts', 'commissions', 'agents',
       ]);
-      if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
+      if (['worker','corporate_business_manager'].includes(state.user.role)
+          || hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
       if (accountingAllowed) allowed.add('accounting');
       if (hasActivity('staffing.requests.manage')) allowed.add('requests');
       if (canUseListings) allowed.add('properties');
@@ -1101,7 +1104,7 @@ async function loadWorkspace() {
     }
   });
   for (const [panel, enabled] of [
-    ['workers', hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')],
+    ['workers', state.user.role === 'worker' || hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')],
     ['requests', hasActivity('staffing.requests.manage')],
     ['properties', canUseListings],
     ['learning', hasActivity('learning.content.view') || hasActivity('learning.content.manage')],
@@ -1194,10 +1197,20 @@ async function loadPanelData(panel) {
         ? await safeGet('/agents/team', []) : [];
       break;
     case 'workers':
+      if (state.user.role === 'worker') {
+        [state.workerPortalEngagements, state.workerPortalReports, state.workerSupportRequests] = await Promise.all([
+          safeGet('/staffing-engagements/mine', []),
+          safeGet('/staffing-work-periods/mine', []),
+          safeGet('/worker-support/mine', []),
+        ]);
+        break;
+      }
       [state.workers, state.territories, state.workerDocumentExpiry] = await Promise.all([
         safeGet('/workers', []), safeGet('/territories', []),
         hasActivity('workforce.documents.view') ? safeGet('/documents/expiry?within_days=30', []) : Promise.resolve([]),
       ]);
+      state.workerSupportQueue = ['global_admin','super_admin','corporate_business_manager','master_agent'].includes(state.user.role)
+        ? await safeGet('/worker-support/queue', []) : [];
       break;
     case 'requests':
       [state.requests, state.leads, state.territories] = await Promise.all([
@@ -2159,7 +2172,147 @@ function renderAppDashboard({ title, description, source, metrics, statusTitle, 
   return section;
 }
 
+const WORKER_TYPE_LABELS = {
+  full_time_employee: 'Full-time employee',
+  part_time_employee: 'Part-time employee',
+  hourly_professional: 'Hourly professional',
+  contracted_service_provider: 'Contracted labour / service provider',
+};
+
+function renderWorkerPortal() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Your work, reports and support', 'Manage employer-client engagement terms, submit work activity and follow your support requests.'));
+
+  const summary = node('section', undefined, 'stat-grid');
+  const approvedPay = state.workerPortalReports
+    .filter((report) => report.status === 'approved')
+    .reduce((total, report) => total + Number(report.worker_amount), 0);
+  for (const [label, value] of [
+    ['Engagements', state.workerPortalEngagements.length],
+    ['Active assignments', state.workerPortalEngagements.filter((item) => item.status === 'active').length],
+    ['Reports awaiting review', state.workerPortalReports.filter((item) => item.status === 'submitted').length],
+    ['Approved work value · ETB', approvedPay.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+  ]) {
+    const metric = node('article', undefined, 'stat-card');
+    metric.append(node('span', label), node('strong', String(value)));
+    summary.append(metric);
+  }
+  wrap.append(summary);
+
+  const offers = node('section', undefined, 'panel');
+  offers.append(sectionHeading('My employer-client engagements', 'Review approved terms before accepting. Work starts after both the worker and employer client accept.'));
+  const engagementList = node('div', undefined, 'list');
+  if (!state.workerPortalEngagements.length) engagementList.append(empty('No staffing offers or engagements are linked to your worker account yet.'));
+  for (const engagement of state.workerPortalEngagements) {
+    const typeLabel = WORKER_TYPE_LABELS[engagement.worker_type] ?? 'Employment type not recorded';
+    const item = card(
+      `${engagement.employer_client ?? 'Employer client'} · ${typeLabel}`,
+      `ETB ${Number(engagement.worker_rate).toLocaleString(document.documentElement.lang)} per ${engagement.billing_unit} · ${engagement.starts_on}${engagement.ends_on ? ` to ${engagement.ends_on}` : ''} · client ${engagement.client_accepted ? 'accepted' : 'pending'} · worker ${engagement.worker_accepted ? 'accepted' : 'pending'}`,
+      engagement.status,
+    );
+    if (engagement.status === 'terms_approved' && !engagement.worker_accepted) {
+      item.append(button('Review and accept terms', 'staffing-engagement-accept', 'button button-primary', { id: engagement.id }));
+    }
+    if (engagement.status === 'active') {
+      const form = node('form', undefined, 'panel form-card inline-form');
+      form.dataset.form = 'staffing-work-period';
+      form.dataset.engagement = engagement.id;
+      form.append(node('h4', 'Submit a work activity report'));
+      form.append(
+        field('Period start', 'period_start', 'date').label,
+        field('Period end', 'period_end', 'date').label,
+        field(`Quantity (${engagement.billing_unit})`, 'quantity', 'number', true, { min: '0.01', step: '0.01' }).label,
+        field('Describe the work completed', 'description', 'textarea', true, { minlength: 5, maxlength: 1000, rows: 3 }).label,
+        button('Submit report for review', 'submit', 'button button-primary'),
+      );
+      item.append(form);
+    }
+    engagementList.append(item);
+  }
+  offers.append(engagementList);
+  wrap.append(offers);
+
+  const reports = node('section', undefined, 'panel');
+  reports.append(sectionHeading('My activity and earnings reports', 'Submitted work is reviewed independently. Approved work value is not confirmation that a payment has been made.'));
+  const reportList = node('div', undefined, 'list');
+  if (!state.workerPortalReports.length) reportList.append(empty('Work reports you submit for an active engagement will appear here.'));
+  for (const report of state.workerPortalReports) {
+    const item = card(
+      `${report.period_start} to ${report.period_end} · ${report.quantity} units`,
+      `${report.description} · ETB ${Number(report.worker_amount).toLocaleString(document.documentElement.lang)} worker amount${report.review_reason ? ` · ${report.review_reason}` : ''}`,
+      report.status,
+    );
+    reportList.append(item);
+  }
+  reports.append(reportList);
+  wrap.append(reports);
+
+  const support = node('section', undefined, 'panel');
+  support.append(sectionHeading('AfroLife worker support', 'Ask for help with an assignment, contract terms, work reports or pay, safety, or another work-related concern.'));
+  const supportForm = node('form', undefined, 'panel form-card inline-form');
+  supportForm.dataset.form = 'worker-support';
+  const category = field('Support topic', 'category', 'select');
+  for (const [value, label] of [
+    ['work_assignment', 'Work assignment'],
+    ['contract_terms', 'Contract terms'],
+    ['work_report_or_pay', 'Work report or pay'],
+    ['safety_and_wellbeing', 'Safety and wellbeing'],
+    ['other', 'Other'],
+  ]) {
+    const option = node('option', label);
+    option.value = value;
+    category.input.append(option);
+  }
+  supportForm.append(
+    category.label,
+    field('Subject', 'subject', 'text', true, { minlength: 3, maxlength: 160 }).label,
+    field('How can we help?', 'description', 'textarea', true, { minlength: 10, maxlength: 4000, rows: 4 }).label,
+    button('Send support request', 'submit', 'button button-primary'),
+  );
+  support.append(supportForm);
+  const ticketList = node('div', undefined, 'list');
+  if (!state.workerSupportRequests.length) ticketList.append(empty('Your support requests and replies will appear here.'));
+  for (const request of state.workerSupportRequests) {
+    const item = card(request.subject, `${request.category.replaceAll('_', ' ')} · ${request.description}${request.response ? ` · AfroLife response: ${request.response}` : ''}`, request.status);
+    ticketList.append(item);
+  }
+  support.append(ticketList);
+  wrap.append(support);
+  return wrap;
+}
+
+function renderWorkerSupportQueue() {
+  const section = node('section', undefined, 'panel');
+  section.append(sectionHeading('Worker support queue', 'Respond to worker requests and record the current resolution status.'));
+  const list = node('div', undefined, 'list');
+  if (!state.workerSupportQueue.length) list.append(empty('There are no worker support requests in the queue.'));
+  for (const request of state.workerSupportQueue) {
+    const item = card(
+      request.subject,
+      `${request.legal_name} · ${request.phone} · ${request.category.replaceAll('_', ' ')} · ${request.description}${request.response ? ` · latest response: ${request.response}` : ''}`,
+      request.status,
+    );
+    if (request.status !== 'resolved') {
+      item.append(
+        button('Reply and keep open', 'worker-support-respond', 'button button-outline', { id: request.id, status: 'in_progress' }),
+        button('Reply and resolve', 'worker-support-respond', 'button button-primary', { id: request.id, status: 'resolved' }),
+      );
+    }
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
 function renderWorkers() {
+  if (state.user.role === 'worker') return renderWorkerPortal();
+  if (!hasActivity('workforce.workers.view') && !hasActivity('workforce.workers.register')
+      && ['global_admin','super_admin','corporate_business_manager','master_agent'].includes(state.user.role)) {
+    const supportWorkspace = node('div');
+    supportWorkspace.append(sectionHeading('Worker support service', 'Review worker questions and follow up on work, contract, reporting and safety concerns.'));
+    supportWorkspace.append(renderWorkerSupportQueue());
+    return supportWorkspace;
+  }
   const wrap = node('div');
   wrap.append(sectionHeading('Worker directory', 'Register potential workers. Compliance must verify required documents before matching.'));
   const metrics = workforceDashboardMetrics(state.workers);
@@ -2226,6 +2379,9 @@ function renderWorkers() {
   }
   columns.append(form, list);
   wrap.append(columns);
+  if (['global_admin','super_admin','corporate_business_manager','master_agent'].includes(state.user.role)) {
+    wrap.append(renderWorkerSupportQueue());
+  }
   return wrap;
 }
 
@@ -4035,7 +4191,7 @@ function renderPanel() {
     insurance: 'Insurance information',
     marketplace: 'Marketplace',
     leads: 'Leads',
-    workers: 'Workers',
+    workers: state.user.role === 'worker' ? 'Worker portal' : 'Workers',
     requests: 'Requests & matching',
     properties: 'Properties',
     contracts: 'Contracts',
@@ -4128,7 +4284,7 @@ async function submitForm(form) {
   const values = formData(form);
   if (form.dataset.form === 'staffing-engagement') {
     await api('/staffing-engagements', { method: 'POST', body: JSON.stringify({
-      match_id: form.dataset.match, billing_unit: values.billing_unit,
+      match_id: form.dataset.match, worker_type: values.worker_type, billing_unit: values.billing_unit,
       client_rate: number(values.client_rate), worker_rate: number(values.worker_rate),
       starts_on: values.starts_on, ends_on: values.ends_on || undefined,
     }) });
@@ -4139,7 +4295,18 @@ async function submitForm(form) {
       period_start: values.period_start, period_end: values.period_end,
       quantity: number(values.quantity), description: values.description.trim(),
     }) });
-    form.reset(); await refresh(); showAlert('Work evidence submitted for independent review.'); return;
+    form.reset(); await refresh();
+    showAlert(state.user.role === 'worker' ? 'Your work report was submitted for independent review.' : 'Work evidence submitted for independent review.');
+    return;
+  }
+  if (form.dataset.form === 'worker-support') {
+    await api('/worker-support', { method: 'POST', body: JSON.stringify({
+      category: values.category, subject: values.subject.trim(), description: values.description.trim(),
+    }) });
+    form.reset();
+    await refresh();
+    showAlert('Your support request was sent to AfroLife.');
+    return;
   }
   if (form.dataset.form === 'maintenance') {
     const payload = {
@@ -4722,9 +4889,21 @@ async function showMatches(requestId, container) {
           const form = node('form', undefined, 'inline-form staffing-engagement-form');
           form.dataset.form = 'staffing-engagement'; form.dataset.match = match.id;
           form.append(node('h4', 'Prepare engagement terms'));
+          const workerType = field('Worker arrangement', 'worker_type', 'select');
+          const workerTypePrompt = node('option', 'Choose a worker arrangement');
+          workerTypePrompt.value = '';
+          workerTypePrompt.disabled = true;
+          workerTypePrompt.selected = true;
+          workerType.input.required = true;
+          workerType.input.append(workerTypePrompt);
+          for (const [value, label] of Object.entries(WORKER_TYPE_LABELS)) {
+            const option = node('option', label);
+            option.value = value;
+            workerType.input.append(option);
+          }
           const unit = field('Billing unit', 'billing_unit', 'select');
           for (const [value,label] of [['hour','Hour'],['day','Day'],['week','Week'],['month','Month'],['fixed','Fixed amount']]) { const option=node('option',label);option.value=value;unit.input.append(option); }
-          form.append(unit.label, field('Client rate (ETB per unit)', 'client_rate', 'number', true, { min: '0.01', step: '0.01' }).label,
+          form.append(workerType.label, unit.label, field('Client rate (ETB per unit)', 'client_rate', 'number', true, { min: '0.01', step: '0.01' }).label,
             field('Worker rate (ETB per unit)', 'worker_rate', 'number', true, { min: '0.01', step: '0.01' }).label,
             field('Start date', 'starts_on', 'date').label, field('End date (optional)', 'ends_on', 'date', false).label,
             node('p', 'Finance independently reviews these terms. They do not create payroll or ledger entries.'),
@@ -5410,6 +5589,19 @@ document.addEventListener('click', async (event) => {
     try {
       await api(`/staffing-engagements/${encodeURIComponent(id)}/accept`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
       await refresh(); showAlert('Your acceptance was recorded. The engagement is active when both parties accept.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'worker-support-respond') {
+    const response = window.prompt(t('Enter the response for the worker (at least 5 characters).'));
+    if (!response || response.trim().length < 5) return;
+    try {
+      await api(`/worker-support/${encodeURIComponent(id)}/respond`, {
+        method: 'POST',
+        body: JSON.stringify({ status: action.dataset.status, response: response.trim() }),
+      });
+      await refresh();
+      showAlert(action.dataset.status === 'resolved' ? 'Worker support request resolved.' : 'Response sent to the worker.');
     } catch (error) { showAlert(error.message, true); }
     return;
   }
