@@ -15,15 +15,17 @@ const event=(c:Parameters<typeof enqueueAccountingEvent>[0],input:Parameters<typ
 export const staffingAccounting=Router();
 
 staffingAccounting.post('/staffing-engagements',requireRole('master_agent','field_agent','finance','finance_manager','super_admin','global_admin'),h(async(req,res)=>{
-  const b=z.object({match_id:z.string().uuid(),billing_unit:z.enum(['hour','day','week','month','fixed']),client_rate:z.number().positive().finite(),worker_rate:z.number().positive().finite(),starts_on:z.string().date(),ends_on:z.string().date().optional()}).strict().parse(req.body);
+  const b=z.object({match_id:z.string().uuid(),worker_type:z.enum(['full_time_employee','part_time_employee','hourly_professional','contracted_service_provider']),billing_unit:z.enum(['hour','day','week','month','fixed']),client_rate:z.number().positive().finite(),worker_rate:z.number().positive().finite(),starts_on:z.string().date(),ends_on:z.string().date().optional()}).strict().parse(req.body);
   const clientRate=amount(b.client_rate),workerRate=amount(b.worker_rate);if(Number(workerRate)>Number(clientRate))throw new HttpError(422,'Worker pay rate cannot exceed the agreed client bill rate');if(b.ends_on&&b.ends_on<b.starts_on)throw new HttpError(422,'Engagement end date must be on or after its start date');
   const row=await withUser(req.user!,async c=>{
     const match=(await c.query(`SELECT m.id AS match_id,m.request_id,m.worker_id,m.status AS match_status,r.lead_id,r.source_agent_id
       FROM matches m JOIN job_requests r ON r.id=m.request_id WHERE m.id=$1`,[b.match_id])).rows[0];
     if(!match)throw new HttpError(404,'Staffing match not found');if(match.match_status!=='accepted')throw new HttpError(409,'Only an accepted Staffing match can become an engagement');
-    const e=(await c.query(`INSERT INTO staffing_engagements(match_id,request_id,worker_id,client_lead_id,source_agent_id,billing_unit,client_rate,worker_rate,starts_on,ends_on,recorded_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,[match.match_id,match.request_id,match.worker_id,match.lead_id,match.source_agent_id,b.billing_unit,clientRate,workerRate,b.starts_on,b.ends_on??null,req.user!.id])).rows[0];
-    await audit(c,req.user!.id,'staffing_engagement_terms_submitted','staffing_engagement',e.id,null,{billing_unit:b.billing_unit,client_rate:clientRate,worker_rate:workerRate,starts_on:b.starts_on,ends_on:b.ends_on??null,terms_status:'pending_approval'});return e;
+    const worker=(await c.query('SELECT employment_status FROM workers WHERE id=$1 FOR UPDATE',[match.worker_id])).rows[0];
+    if(!worker||worker.employment_status!=='active')throw new HttpError(409,'A terminated worker cannot be assigned to a new engagement');
+    const e=(await c.query(`INSERT INTO staffing_engagements(match_id,request_id,worker_id,client_lead_id,source_agent_id,worker_type,billing_unit,client_rate,worker_rate,starts_on,ends_on,recorded_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[match.match_id,match.request_id,match.worker_id,match.lead_id,match.source_agent_id,b.worker_type,b.billing_unit,clientRate,workerRate,b.starts_on,b.ends_on??null,req.user!.id])).rows[0];
+    await audit(c,req.user!.id,'staffing_engagement_terms_submitted','staffing_engagement',e.id,null,{worker_type:b.worker_type,billing_unit:b.billing_unit,client_rate:clientRate,worker_rate:workerRate,starts_on:b.starts_on,ends_on:b.ends_on??null,terms_status:'pending_approval'});return e;
   });res.status(201).json(row);
 }));
 
@@ -36,10 +38,12 @@ staffingAccounting.get('/staffing-engagements',requireRole(...finance),h(async(r
 
 // Worker/client self-service uses the participant RLS policy added for party acceptance.
 staffingAccounting.get('/staffing-engagements/mine',requireRole('customer','worker'),h(async(req,res)=>{
-  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT id,status,billing_unit,client_rate::text,worker_rate::text,starts_on,ends_on,
-      (client_accepted_by IS NOT NULL) AS client_accepted,(worker_accepted_by IS NOT NULL) AS worker_accepted,
-      terms_approved_at,created_at
-    FROM staffing_engagements ORDER BY created_at DESC LIMIT 100`)).rows));
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT e.id,e.status,e.billing_unit,e.worker_type,l.name AS employer_client,
+      e.client_rate::text,e.worker_rate::text,e.starts_on,e.ends_on,
+      (e.client_accepted_by IS NOT NULL) AS client_accepted,(e.worker_accepted_by IS NOT NULL) AS worker_accepted,
+      e.terms_approved_at,e.created_at
+    FROM staffing_engagements e LEFT JOIN leads l ON l.id=e.client_lead_id
+    ORDER BY e.created_at DESC LIMIT 100`)).rows));
 }));
 
 staffingAccounting.post('/staffing-engagements/:id/terms-decision',requireRole(...reviewers),h(async(req,res)=>{
@@ -61,11 +65,12 @@ staffingAccounting.post('/staffing-engagements/:id/accept',requireRole('customer
   });res.json(row);
 }));
 
-staffingAccounting.post('/staffing-engagements/:id/work-periods',requireRole('master_agent','field_agent','finance','finance_manager','super_admin','global_admin'),h(async(req,res)=>{
+staffingAccounting.post('/staffing-engagements/:id/work-periods',requireRole('master_agent','field_agent','finance','finance_manager','super_admin','global_admin','worker'),h(async(req,res)=>{
   const b=z.object({period_start:z.string().date(),period_end:z.string().date(),quantity:z.number().positive().finite(),description:z.string().trim().min(5).max(1000)}).strict().parse(req.body);
   if(b.period_end<b.period_start)throw new HttpError(422,'Work period end must be on or after its start');
   const row=await withUser(req.user!,async c=>{
     const e=(await c.query('SELECT * FROM staffing_engagements WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];if(!e)throw new HttpError(404,'Staffing engagement not found');if(e.status!=='active')throw new HttpError(409,'Approved active engagement terms are required before work is recorded');if(b.period_start< String(e.starts_on).slice(0,10)||(e.ends_on&&b.period_end>String(e.ends_on).slice(0,10)))throw new HttpError(422,'Work period must fall within the engagement dates');
+    if(req.user!.role==='worker'&&!(await c.query('SELECT 1 FROM workers w JOIN users u ON u.id=$2 WHERE w.id=$1 AND w.phone=u.phone',[e.worker_id,req.user!.id])).rowCount)throw new HttpError(404,'Staffing engagement not found');
     const qty=Math.round(b.quantity*100)/100;if(qty<=0||Math.abs(qty-b.quantity)>1e-7)throw new HttpError(422,'Work quantity must be positive and limited to two decimal places');
     const clientAmount=amount(Number(e.client_rate)*qty),workerAmount=amount(Number(e.worker_rate)*qty);
     return (await c.query(`INSERT INTO staffing_work_periods(engagement_id,period_start,period_end,quantity,client_amount,worker_amount,description,recorded_by)
@@ -73,11 +78,75 @@ staffingAccounting.post('/staffing-engagements/:id/work-periods',requireRole('ma
   });res.status(201).json(row);
 }));
 
+staffingAccounting.get('/staffing-work-periods/mine',requireRole('worker'),h(async(req,res)=>{
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT p.id,p.engagement_id,p.period_start,p.period_end,p.quantity,
+      p.worker_amount::text,p.description,p.status,p.review_reason,p.reviewed_at,p.created_at
+    FROM staffing_work_periods p JOIN staffing_engagements e ON e.id=p.engagement_id
+    JOIN workers w ON w.id=e.worker_id JOIN users u ON u.id=$1
+    WHERE w.phone=u.phone ORDER BY p.period_start DESC,p.created_at DESC LIMIT 200`,[req.user!.id])).rows));
+}));
+
 staffingAccounting.get('/staffing-work-periods/pending',requireRole(...reviewers),h(async(req,res)=>{
   res.json(await withUser(req.user!,async c=>(await c.query(`SELECT p.*,e.source_agent_id,e.client_lead_id,e.worker_id,l.name AS client_name,w.name AS worker_name
     FROM staffing_work_periods p JOIN staffing_engagements e ON e.id=p.engagement_id
     JOIN leads l ON l.id=e.client_lead_id JOIN workers w ON w.id=e.worker_id
     WHERE p.status='submitted' ORDER BY p.created_at LIMIT 200`)).rows));
+}));
+
+staffingAccounting.get('/staffing-settlements/mine',requireRole('worker'),h(async(req,res)=>{
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT s.id,s.engagement_id,s.amount::text,s.channel,s.reference,s.payment_date,
+      s.status,s.reason,s.reconciled_at,s.created_at
+    FROM staffing_settlements s JOIN staffing_engagements e ON e.id=s.engagement_id
+    JOIN workers w ON w.id=e.worker_id JOIN users u ON u.id=$1
+    WHERE w.phone=u.phone AND s.kind='worker_payment'
+    ORDER BY s.payment_date DESC,s.created_at DESC LIMIT 200`,[req.user!.id])).rows));
+}));
+
+const workerSupportStaff=['global_admin','super_admin','corporate_business_manager','master_agent'] as const;
+const WorkerSupportRequest=z.object({
+  category:z.enum(['work_assignment','contract_terms','work_report_or_pay','safety_and_wellbeing','other']),
+  subject:z.string().trim().min(3).max(160),
+  description:z.string().trim().min(10).max(4000),
+}).strict();
+
+staffingAccounting.post('/worker-support',requireRole('worker'),h(async(req,res)=>{
+  const b=WorkerSupportRequest.parse(req.body);
+  const row=await withUser(req.user!,async c=>{
+    const ticket=(await c.query(`INSERT INTO worker_support_requests(user_id,category,subject,description)
+      VALUES($1,$2,$3,$4) RETURNING id,category,subject,description,status,response,created_at,updated_at`,
+    [req.user!.id,b.category,b.subject,b.description])).rows[0];
+    await audit(c,req.user!.id,'worker_support_request_created','worker_support_request',ticket.id,null,{category:b.category});
+    return ticket;
+  });
+  res.status(201).json(row);
+}));
+
+staffingAccounting.get('/worker-support/mine',requireRole('worker'),h(async(req,res)=>{
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT id,category,subject,description,status,response,responded_at,created_at,updated_at
+    FROM worker_support_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.user!.id])).rows));
+}));
+
+staffingAccounting.get('/worker-support/queue',requireRole(...workerSupportStaff),h(async(req,res)=>{
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT r.id,r.user_id,u.legal_name,u.phone,r.category,r.subject,r.description,
+      r.status,r.response,r.created_at,r.updated_at
+    FROM worker_support_requests r JOIN users u ON u.id=r.user_id
+    ORDER BY CASE WHEN r.status='open' THEN 0 WHEN r.status='in_progress' THEN 1 ELSE 2 END,r.created_at
+    LIMIT 200`)).rows));
+}));
+
+staffingAccounting.post('/worker-support/:id/respond',requireRole(...workerSupportStaff),h(async(req,res)=>{
+  const b=z.object({status:z.enum(['in_progress','resolved']),response:z.string().trim().min(5).max(2000)}).strict().parse(req.body);
+  const row=await withUser(req.user!,async c=>{
+    const ticket=(await c.query('SELECT id,status FROM worker_support_requests WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+    if(!ticket)throw new HttpError(404,'Worker support request not found');
+    if(ticket.status==='resolved')throw new HttpError(409,'Worker support request is already resolved');
+    const updated=(await c.query(`UPDATE worker_support_requests SET status=$2,response=$3,responded_by=$4,responded_at=now(),updated_at=now()
+      WHERE id=$1 RETURNING id,status,response,responded_at,updated_at`,
+    [ticket.id,b.status,b.response,req.user!.id])).rows[0];
+    await audit(c,req.user!.id,'worker_support_request_responded','worker_support_request',ticket.id,{status:ticket.status},{status:b.status});
+    return updated;
+  });
+  res.json(row);
 }));
 
 staffingAccounting.post('/staffing-work-periods/:id/decision',requireRole(...reviewers),h(async(req,res)=>{

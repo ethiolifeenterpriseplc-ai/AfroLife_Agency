@@ -16,12 +16,288 @@ import { PROPERTY_CHART_OF_ACCOUNTS, propertyPeriodCloseCheck } from './property
 import { enqueueAccountingEvent } from './accounting-outbox.js';
 import { propertyVendorAccounting } from './property-vendor-accounting.js';
 import { staffingAccounting } from './staffing-accounting.js';
+import { workforceOperations } from './workforce-operations.js';
 
 export const ops = Router();
 ops.use(propertyVendorAccounting);
 ops.use(staffingAccounting);
+ops.use(workforceOperations);
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
 const AGENT = ['master_agent', 'field_agent'];
+const SUPPORT_STAFF = ['global_admin', 'super_admin', 'compliance', 'corporate_business_manager'] as const;
+
+const SupportCaseInput = z.object({
+  category: z.enum(['general','service','agent_complaint','financial','legal','privacy','safety','fraud']),
+  subject_user_id: z.string().uuid().optional(),
+  subject: z.string().trim().min(3).max(160),
+  description: z.string().trim().min(10).max(4000),
+}).strict().superRefine((value, context) => {
+  if ((value.category === 'agent_complaint') !== Boolean(value.subject_user_id)) {
+    context.addIssue({ code: 'custom', message: 'Only an agent complaint may identify a subject user' });
+  }
+});
+
+ops.post('/support/cases', h(async (req, res) => {
+  const body = SupportCaseInput.parse(req.body);
+  const row = await withUser(req.user!, async (client) => {
+    if (body.subject_user_id) {
+      const subject = (await client.query(
+        `SELECT id FROM users WHERE id=$1 AND role IN ('master_agent','field_agent') AND active=true`,
+        [body.subject_user_id],
+      )).rows[0];
+      if (!subject) throw new HttpError(422, 'Choose an active Agent as the complaint subject');
+    }
+    const priority = ['safety','fraud','privacy','legal'].includes(body.category) ? 'urgent' : 'normal';
+    const created = (await client.query(
+      `INSERT INTO support_cases (user_id,category,subject_user_id,subject,description,priority)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id,category,subject,description,priority,status,created_at`,
+      [req.user!.id,body.category,body.subject_user_id ?? null,body.subject,body.description,priority],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO support_case_events (case_id,actor_id,event_type,new_status)
+       VALUES ($1,$2,'created','open')`,
+      [created.id,req.user!.id],
+    );
+    await audit(client,req.user!.id,'support_case_created','support_case',created.id,null,{
+      category: body.category,priority,
+    });
+    return created;
+  });
+  res.status(201).json(row);
+}));
+
+ops.get('/support/agents', h(async (req, res) => {
+  res.json(await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,legal_name FROM users
+     WHERE role IN ('master_agent','field_agent') AND active=true
+     ORDER BY legal_name LIMIT 500`,
+  )).rows));
+}));
+
+ops.get('/support/cases/mine', h(async (req, res) => {
+  res.json(await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,category,subject,description,priority,status,outcome,rationale,corrective_action,
+       refund_reference,formal_workflow_reference,appeal_route,created_at,updated_at,resolved_at
+     FROM support_cases WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,
+    [req.user!.id],
+  )).rows));
+}));
+
+ops.get('/support/cases/queue', requireRole(...SUPPORT_STAFF), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (client) => (await client.query(
+    `SELECT c.id,c.user_id,u.legal_name,c.category,c.subject_user_id,c.subject,c.priority,c.status,
+       c.created_at,c.updated_at
+     FROM support_cases c JOIN users u ON u.id=c.user_id
+     WHERE c.status<>'resolved'
+     ORDER BY CASE c.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,c.created_at
+     LIMIT 300`,
+  )).rows));
+}));
+
+ops.get('/support/cases/:id', h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const row = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT c.id,c.user_id,c.category,c.subject_user_id,c.subject,c.description,c.priority,c.status,
+       c.created_at,c.updated_at,c.outcome,c.rationale,c.corrective_action,c.refund_reference,
+       c.formal_workflow_reference,c.appeal_route,c.resolved_at,
+       (SELECT max(a.expires_at) FROM support_case_access_requests a
+        WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now())
+         AS sensitive_access_expires_at
+     FROM support_cases c
+     WHERE c.id=$1 AND (
+       c.user_id=$2 OR EXISTS (
+         SELECT 1 FROM support_case_access_requests a
+         WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now()
+       )
+     )`,
+    [id,req.user!.id],
+  )).rows[0]);
+  if (!row) throw new HttpError(404,'Support case not found or sensitive access is not approved');
+  res.json(row);
+}));
+
+ops.get('/support/cases/:id/events', h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const events = await withUser(req.user!, async (client) => {
+    const visible = (await client.query(
+      `SELECT 1 FROM support_cases c
+       WHERE c.id=$1 AND (
+         c.user_id=$2 OR EXISTS (
+           SELECT 1 FROM support_case_access_requests a
+           WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now()
+         )
+       )`,
+      [id,req.user!.id],
+    )).rowCount;
+    if (!visible) throw new HttpError(404,'Support case not found or sensitive access is not approved');
+    return (await client.query(
+      `SELECT e.id,e.event_type,e.prior_status,e.new_status,e.reason,e.created_at,u.legal_name AS actor_name
+       FROM support_case_events e JOIN users u ON u.id=e.actor_id
+       WHERE e.case_id=$1 ORDER BY e.created_at,e.id LIMIT 500`,
+      [id],
+    )).rows;
+  });
+  res.json(events);
+}));
+
+ops.post('/support/cases/:id/access-requests', requireRole(...SUPPORT_STAFF), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({ reason:z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const request = await withUser(req.user!, async (client) => {
+    const exists = (await client.query('SELECT id FROM support_cases WHERE id=$1',[id])).rows[0];
+    if (!exists) throw new HttpError(404,'Support case not found');
+    const pending = (await client.query(
+      `SELECT id FROM support_case_access_requests
+       WHERE case_id=$1 AND requested_by=$2 AND status='pending'`,
+      [id,req.user!.id],
+    )).rows[0];
+    if (pending) throw new HttpError(409,'A sensitive-access request is already pending');
+    const created = (await client.query(
+      `INSERT INTO support_case_access_requests (case_id,requested_by,request_reason)
+       VALUES ($1,$2,$3) RETURNING id,case_id,status,requested_at`,
+      [id,req.user!.id,body.reason],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO support_case_events (case_id,actor_id,event_type,reason)
+       VALUES ($1,$2,'access_requested',$3)`,
+      [id,req.user!.id,body.reason],
+    );
+    return created;
+  });
+  res.status(201).json(request);
+}));
+
+ops.get('/support/access-requests', requireRole('global_admin','super_admin','compliance'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (client) => (await client.query(
+    `SELECT a.id,a.case_id,a.requested_by,u.legal_name AS requester_name,a.request_reason,a.requested_at
+     FROM support_case_access_requests a JOIN users u ON u.id=a.requested_by
+     WHERE a.status='pending' ORDER BY a.requested_at LIMIT 200`,
+  )).rows));
+}));
+
+ops.post('/support/access-requests/:id/decision', requireRole('global_admin','super_admin','compliance'), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({ decision:z.enum(['approve','deny']), reason:z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const row = await withUser(req.user!, async (client) => {
+    const request = (await client.query(
+      `SELECT id,case_id,requested_by,status FROM support_case_access_requests WHERE id=$1 FOR UPDATE`,
+      [id],
+    )).rows[0];
+    if (!request) throw new HttpError(404,'Sensitive-access request not found');
+    if (request.status!=='pending') throw new HttpError(409,'Sensitive-access request has already been decided');
+    if (request.requested_by===req.user!.id) throw new HttpError(403,'The requester cannot approve their own sensitive access');
+    const status = body.decision==='approve' ? 'approved' : 'denied';
+    const updated = (await client.query(
+      `UPDATE support_case_access_requests SET status=$2,reviewed_by=$3,review_reason=$4,
+         reviewed_at=now(),expires_at=CASE WHEN $2='approved' THEN now()+interval '15 minutes' ELSE NULL END
+       WHERE id=$1 RETURNING id,case_id,status,reviewed_at,expires_at`,
+      [id,status,req.user!.id,body.reason],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO support_case_events (case_id,actor_id,event_type,reason)
+       VALUES ($1,$2,'access_decided',$3)`,
+      [request.case_id,req.user!.id,body.reason],
+    );
+    await audit(client,req.user!.id,'support_case_sensitive_access_'+body.decision,'support_case',request.case_id,
+      {status:'pending'},{status,request_id:id,expires_at:updated.expires_at ?? null});
+    return updated;
+  });
+  res.json(row);
+}));
+
+ops.patch('/support/cases/:id/status', requireRole(...SUPPORT_STAFF), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({
+    status:z.enum(['in_progress','pending_customer','escalated']),
+    reason:z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
+  const row = await withUser(req.user!, async (client) => {
+    const current = (await client.query(
+      `SELECT c.status,c.user_id FROM support_cases c WHERE c.id=$1 AND EXISTS (
+         SELECT 1 FROM support_case_access_requests a
+         WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now()
+       ) FOR UPDATE`,
+      [id,req.user!.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404,'Support case not found');
+    if (['resolved','appealed'].includes(current.status)) throw new HttpError(409,'Closed cases cannot be moved back to an open state');
+    await client.query("SELECT set_config('app.support_case_reason',$1,true)",[body.reason]);
+    const updated = (await client.query(
+      `UPDATE support_cases SET status=$2,updated_at=now() WHERE id=$1 RETURNING id,status,updated_at`,
+      [id,body.status],
+    )).rows[0];
+    await notify(client,current.user_id,'support_case_status_changed',{case_id:id,status:body.status});
+    return updated;
+  });
+  res.json(row);
+}));
+
+ops.post('/support/cases/:id/resolve', requireRole(...SUPPORT_STAFF), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({
+    outcome:z.string().trim().min(5).max(2000),
+    rationale:z.string().trim().min(10).max(2000),
+    corrective_action:z.string().trim().min(5).max(2000),
+    refund_reference:z.string().trim().min(2).max(200),
+    formal_workflow_reference:z.string().trim().min(3).max(200).optional(),
+    appeal_route:z.string().trim().min(5).max(1000),
+  }).strict().parse(req.body);
+  const row = await withUser(req.user!, async (client) => {
+    const current = (await client.query(
+      `SELECT c.user_id,c.category,c.status FROM support_cases c
+       WHERE c.id=$1 AND EXISTS (
+         SELECT 1 FROM support_case_access_requests a
+         WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now()
+       ) FOR UPDATE`,
+      [id,req.user!.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404,'Support case not found or sensitive access is not approved');
+    if (current.status==='resolved'||current.status==='appealed') throw new HttpError(409,'Support case is already closed');
+    if (['financial','legal'].includes(current.category) && !body.formal_workflow_reference) {
+      throw new HttpError(422,'Financial and legal corrections must reference their formal workflow');
+    }
+    await client.query("SELECT set_config('app.support_case_reason',$1,true)",[body.rationale]);
+    await client.query(
+      `UPDATE support_cases SET status='resolved',outcome=$2,rationale=$3,corrective_action=$4,
+         refund_reference=$5,formal_workflow_reference=$6,appeal_route=$7,resolved_by=$8,
+         resolved_at=now(),updated_at=now() WHERE id=$1`,
+      [id,body.outcome,body.rationale,body.corrective_action,body.refund_reference,
+        body.formal_workflow_reference ?? null,body.appeal_route,req.user!.id],
+    );
+    await audit(client,req.user!.id,'support_case_resolved','support_case',id,{status:current.status},{
+      status:'resolved',formal_workflow_reference:body.formal_workflow_reference ?? null,
+    });
+    await notify(client,current.user_id,'support_case_resolved',{case_id:id,appeal_route:body.appeal_route});
+    return (await client.query(
+      `SELECT id,status,outcome,rationale,corrective_action,refund_reference,formal_workflow_reference,
+         appeal_route,resolved_at FROM support_cases WHERE id=$1`,
+      [id],
+    )).rows[0];
+  });
+  res.json(row);
+}));
+
+ops.post('/support/cases/:id/appeal', h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({ reason:z.string().trim().min(10).max(2000) }).strict().parse(req.body);
+  const row = await withUser(req.user!, async (client) => {
+    const current = (await client.query(
+      `SELECT status FROM support_cases WHERE id=$1 AND user_id=$2 FOR UPDATE`,
+      [id,req.user!.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404,'Support case not found');
+    if (current.status!=='resolved') throw new HttpError(409,'Only a resolved case can be appealed');
+    await client.query("SELECT set_config('app.support_case_reason',$1,true)",[body.reason]);
+    const updated = (await client.query(
+      `UPDATE support_cases SET status='appealed',updated_at=now() WHERE id=$1 RETURNING id,status,updated_at`,
+      [id],
+    )).rows[0];
+    await audit(client,req.user!.id,'support_case_appealed','support_case',id,{status:'resolved'},{status:'appealed'});
+    return updated;
+  });
+  res.json(row);
+}));
 
 ops.get('/accounting-event-outbox/status', requireRole('global_admin','finance','finance_manager'), h(async(req,res)=>{
   const rows=await withUser(req.user!,async(client)=>(await client.query(

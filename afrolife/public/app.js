@@ -11,7 +11,7 @@ import { miniAppByPanel } from './mini-apps/registry.js';
 import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from './workspace-navigation.js';
 import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from './workspace-search.js';
 import { EDIR_APPLICATION_DOCUMENTS, canChangeServer, edirApplicationDocumentPath, missingSignupDocuments, nativeApiOrigin, signupRequiredDocuments } from './registration-flows.js';
-import { propertyDashboardMetrics, staffingDashboardMetrics, workforceDashboardMetrics } from './dashboard-metrics.js';
+import { agentDashboardMetrics, propertyDashboardMetrics, propertyOwnerDashboardMetrics, staffingDashboardMetrics, workforceDashboardMetrics } from './dashboard-metrics.js';
 import { normalizeMySubscriptions, normalizeSubscriptionCatalog, PUBLIC_SUBSCRIPTION_SERVICES, subscriptionRequestPayload } from './subscriptions.js';
 import { propertyOfferTerms } from './property-offers.js';
 import { marketplaceListingPayload } from './marketplace-form.js';
@@ -29,7 +29,7 @@ const EDIR_ORGANIZATION_KEY = 'afrolife.edir-organization';
 const DEFAULT_EDIR_ORGANIZATION = '00000000-0000-4000-8000-000000000002';
 const STAFF = new Set(['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager']);
 const KNOWN_PANELS = new Set([
-  'overview', 'subscriptions', 'leads', 'workers', 'requests', 'learning', 'properties', 'marketplace', 'tenant-data-admin',
+  'overview', 'subscriptions', 'leads', 'workers', 'requests', 'support', 'learning', 'properties', 'marketplace', 'tenant-data-admin',
   'contracts', 'commissions', 'agents', 'rent', 'mfi', 'accounting', 'edir',
   'insurance', 'privacy', 'global-bi', 'security', 'admin', 'status', 'password',
 ]);
@@ -39,10 +39,11 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, leads: [], workers: [], workerDocumentExpiry: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
+let supportAccessExpiryTimer = null;
 const propertyPhotoUrls = new Set();
 const subscriptionState = { catalog: null, catalogError: false, catalogLoading: true, mine: [], mineError: false, mineLoaded: false, selected: new Set(), requestSubmitted: false, reviews: [], reviewError: false, reviewLoaded: false };
 let sessionIdleTimer = null;
@@ -76,7 +77,7 @@ function roleLabel(role) {
     field_agent: 'Field agent',
     customer: 'Buyer / customer',
     worker: 'Worker',
-    property_owner: 'Property owner',
+    property_owner: 'Property owner / landlord',
   };
   return t(labels[role] ?? role.replaceAll('_', ' '));
 }
@@ -1060,6 +1061,12 @@ async function loadWorkspace() {
   $('#login-error').textContent = '';
   $('#retry-session').hidden = true;
   $('#account-name').textContent = `${state.user.legal_name} · ${roleLabel(state.user.role)}`;
+  const workerTab = document.querySelector('.tab[data-panel="workers"]');
+  if (workerTab) setLocalizedText(workerTab, state.user.role === 'worker' ? 'Worker portal' : 'Workers');
+  const propertyTab = document.querySelector('.tab[data-panel="properties"]');
+  if (propertyTab) setLocalizedText(propertyTab, state.user.role === 'property_owner' ? 'Landlord portal' : 'Properties');
+  const workersTab = document.querySelector('.tab[data-panel="workers"]');
+  if (workersTab) setLocalizedText(workersTab, state.user.role === 'worker' ? 'Worker portal' : 'Workers');
   $('#page-subtitle').textContent = t('Signed in as {{role}}. Your access is limited to your assigned role and territory.', { role: roleLabel(state.user.role) });
   void loadMySubscriptions();
   if (['finance', 'finance_manager', 'global_admin', 'super_admin'].includes(state.user.role)) {
@@ -1107,7 +1114,8 @@ async function loadWorkspace() {
         ...(state.user.role === 'corporate_business_manager' ? ['admin'] : []),
         'leads', 'contracts', 'commissions', 'agents',
       ]);
-      if (hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
+      if (['worker','corporate_business_manager'].includes(state.user.role)
+          || hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')) allowed.add('workers');
       if (accountingAllowed) allowed.add('accounting');
       if (hasActivity('staffing.requests.manage')) allowed.add('requests');
       if (canUseListings) allowed.add('properties');
@@ -1118,7 +1126,7 @@ async function loadWorkspace() {
   });
   $('#tenant-data-admin-tab').hidden = state.myDataCapabilities.length === 0;
   for (const [panel, enabled] of [
-    ['workers', hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')],
+    ['workers', state.user.role === 'worker' || hasActivity('workforce.workers.view') || hasActivity('workforce.workers.register')],
     ['requests', hasActivity('staffing.requests.manage')],
     ['properties', canUseListings],
     ['learning', hasActivity('learning.content.view') || hasActivity('learning.content.manage')],
@@ -1193,6 +1201,13 @@ async function loadPanelData(panel) {
       [state.leads, state.workers, state.requests, state.commissions] = await Promise.all([
         safeGet('/leads', []), safeGet('/workers', []), safeGet('/requests', []), safeGet('/commissions', []),
       ]);
+      if (state.user.role === 'property_owner') {
+        [state.properties, state.ownerStatements, state.maintenanceRequests] = await Promise.all([
+          safeGet('/properties', []),
+          safeGet('/owner/statements', { statements: [] }).then((result) => result.statements ?? []),
+          safeGet('/maintenance?offset=0', []),
+        ]);
+      }
       state.serviceStatus = await safeGet('/system/status', null);
       state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
         ? await safeGet('/reports/summary', null)
@@ -1211,10 +1226,38 @@ async function loadPanelData(panel) {
         ? await safeGet('/agents/team', []) : [];
       break;
     case 'workers':
+      if (state.user.role === 'worker') {
+        [state.workerPortalEngagements, state.workerPortalReports, state.workerPortalSettlements, state.workerSupportRequests,
+          state.workerPortalShifts, state.workerPortalLeave, state.workerPortalPayrollExports] = await Promise.all([
+          safeGet('/staffing-engagements/mine', []),
+          safeGet('/staffing-work-periods/mine', []),
+          safeGet('/staffing-settlements/mine', []),
+          safeGet('/worker-support/mine', []),
+          safeGet('/workforce/shifts/mine', []),
+          safeGet('/workforce/leave/mine', []),
+          safeGet('/workforce/payroll-exports/mine', []),
+        ]);
+        await syncWorkerClockQueue();
+        break;
+      }
       [state.workers, state.territories, state.workerDocumentExpiry] = await Promise.all([
         safeGet('/workers', []), safeGet('/territories', []),
         hasActivity('workforce.documents.view') ? safeGet('/documents/expiry?within_days=30', []) : Promise.resolve([]),
       ]);
+      state.workerSupportQueue = ['global_admin','super_admin','corporate_business_manager','master_agent'].includes(state.user.role)
+        ? await safeGet('/worker-support/queue', []) : [];
+      state.workforceEngagements = hasActivity('workforce.shifts.manage')
+        ? await safeGet('/workforce/engagements', []) : [];
+      state.workforceShifts = hasActivity('workforce.shifts.manage')
+        ? await safeGet('/workforce/shifts', []) : [];
+      state.workforceTimeQueue = hasActivity('workforce.time.review')
+        ? await safeGet('/workforce/time-review-queue', []) : [];
+      state.workforceLeaveQueue = hasActivity('workforce.leave.review')
+        ? await safeGet('/workforce/leave/queue', []) : [];
+      state.workforcePolicies = hasActivity('workforce.policy.manage')
+        ? await safeGet('/workforce/policies', []) : [];
+      state.workforcePayrollExports = hasActivity('workforce.payroll.export')
+        ? await safeGet('/workforce/payroll-exports', []) : [];
       break;
     case 'requests':
       [state.requests, state.leads, state.territories] = await Promise.all([
@@ -1328,6 +1371,19 @@ async function loadPanelData(panel) {
       state.serviceStatus = await safeGet('/system/status', null);
       state.serviceMetrics = state.user.role === 'global_admin'
         ? await safeGet('/system/metrics', { routes: [] }) : null;
+      break;
+    case 'support':
+      [state.supportCases,state.supportAgents] = await Promise.all([
+        safeGet('/support/cases/mine',[]),safeGet('/support/agents',[]),
+      ]);
+      if (['global_admin','super_admin','compliance','corporate_business_manager'].includes(state.user.role)) {
+        state.supportQueue = await safeGet('/support/cases/queue',[]);
+      } else state.supportQueue = [];
+      state.supportAccessRequests = ['global_admin','super_admin','compliance'].includes(state.user.role)
+        ? await safeGet('/support/access-requests',[]) : [];
+      break;
+    case 'security':
+      await load('authSessions', '/auth/sessions');
       break;
     default:
       break;
@@ -1485,8 +1541,91 @@ function card(title, details, status) {
 function renderOverview() {
   const wrap = node('div');
   wrap.append(sectionHeading('Your activity', 'Your latest records and work in progress.'));
+  if (state.user.role === 'property_owner') wrap.append(renderOwnerPortfolio());
+  if (['master_agent', 'field_agent'].includes(state.user.role)) wrap.append(renderAgentPortfolio());
   if (['finance_manager','super_admin','global_admin'].includes(state.user.role)) {
     wrap.append(renderStaffingFinanceQueue());
+  }
+
+  function renderOwnerPortfolio() {
+    const metrics = propertyOwnerDashboardMetrics(state.properties, state.ownerStatements, state.maintenanceRequests);
+    const sources = ['/properties', '/owner/statements', '/maintenance?offset=0'];
+    const unavailable = sources.some((path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path));
+    const section = node('section', undefined, 'panel form-card owner-portfolio');
+    section.append(node('p', 'LANDLORD SELF-SERVICE', 'eyebrow'));
+    section.append(node('h2', 'Your property portfolio'));
+    section.append(node('p', 'Review your listings, occupancy, maintenance requests, and recorded lease receipts. Reconciled receipts are not a payout confirmation.', 'muted'));
+    const cards = node('div', undefined, 'enterprise-metrics');
+    for (const [label, value] of [
+      ['Properties', metrics.properties],
+      ['Units · occupied / vacant', `${metrics.units} · ${metrics.occupiedUnits} / ${metrics.vacantUnits}`],
+      ['Active leases', metrics.activeLeases],
+      ['Open maintenance requests', metrics.openMaintenance],
+      ['Reconciled rent receipts · ETB', metrics.rentReconciled.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+      ['Receipts pending reconciliation · ETB', metrics.rentPendingReconciliation.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+    ]) {
+      const metric = node('div', undefined, 'enterprise-metric');
+      metric.append(node('span', label), node('strong', unavailable ? '—' : String(value)));
+      cards.append(metric);
+    }
+    section.append(cards);
+    const actions = node('div', undefined, 'property-actions');
+    actions.append(button('Manage properties', 'open-panel', 'button button-primary', { panel: 'properties' }));
+    actions.append(button('Download rent statement CSV', 'owner-statement-download', 'button button-outline'));
+    section.append(actions);
+    if (unavailable) {
+      const warning = node('p', 'Some portfolio information is unavailable to this account or could not be loaded. Refresh or check access before relying on these totals.', 'alert error');
+      warning.setAttribute('role', 'status');
+      section.append(warning);
+    }
+    return section;
+  }
+
+  function renderAgentPortfolio() {
+    const metrics = agentDashboardMetrics(state.leads, state.workers, state.requests, state.commissions);
+    const sources = ['/leads', '/workers', '/requests', '/commissions'];
+    const unavailable = sources.some((path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path));
+    const section = node('section', undefined, 'panel form-card agent-portfolio');
+    section.append(node('p', 'AGENT WORKSPACE', 'eyebrow'));
+    section.append(node('h2', 'Your activity snapshot'));
+    section.append(node('p', 'A live summary of records available to your account. Commission figures reflect approval status, not confirmed payment.', 'muted'));
+    const cards = node('div', undefined, 'enterprise-metrics');
+    for (const [label, value] of [
+      ['Leads', metrics.leads],
+      ['Leads needing follow-up', metrics.followUpLeads],
+      ['Workers registered', metrics.workers],
+      ['Workers awaiting verification', metrics.workersAwaitingVerification],
+      ['Open staffing requests', metrics.openStaffingRequests],
+      ['Commissions awaiting review', metrics.commissionsAwaitingReview],
+      ['Approved commissions · ETB', metrics.approvedCommissionAmount.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+      ['Held commission amount · ETB', metrics.heldCommissionAmount.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+    ]) {
+      const metric = node('div', undefined, 'enterprise-metric');
+      metric.append(node('span', label), node('strong', unavailable ? '—' : String(value)));
+      cards.append(metric);
+    }
+    section.append(cards);
+    const actions = node('div', undefined, 'property-actions');
+    for (const [label, panel] of [
+      ['Open lead book', 'leads'],
+      ['Register or review workers', 'workers'],
+      ['Manage staffing requests', 'requests'],
+      ['Open property listings', 'properties'],
+      ['Review contracts', 'contracts'],
+      ['Review commissions', 'commissions'],
+    ]) {
+      if (panel === 'requests' && !hasActivity('staffing.requests.manage')) continue;
+      const tab = document.querySelector(`.tab[data-panel="${CSS.escape(panel)}"]`);
+      if (!tab || tab.hidden) continue;
+      actions.append(button(label, 'open-panel', 'button button-outline', { panel }));
+    }
+    section.append(actions);
+    if (unavailable) {
+      const warning = node('p', 'Some activity records are unavailable to this account or could not be loaded. Refresh or check access before relying on these totals.', 'alert error');
+      warning.setAttribute('role', 'status');
+      section.append(warning);
+    }
+    return section;
   }
   const unavailableServices = state.serviceStatus?.services?.filter((service) => service.status === 'unavailable') ?? [];
   if (unavailableServices.length) {
@@ -2111,6 +2250,12 @@ function renderLeads() {
   for (const lead of state.leads) {
     const item = card(lead.name, t('{{phone}} · {{type}}', { phone: lead.phone, type: t(lead.lead_type[0].toUpperCase() + lead.lead_type.slice(1)) }), lead.status);
     if (lead.protected_until) item.append(node('p', `Ownership protected until ${new Date(lead.protected_until).toLocaleString(document.documentElement.lang)}.`));
+    if (lead.status === 'new') {
+      item.append(button('Qualify lead', 'lead-status', 'button button-outline', { id: lead.id, status: 'qualified' }));
+      item.append(button('Mark lost', 'lead-status', 'button button-outline', { id: lead.id, status: 'lost' }));
+    } else if (lead.status === 'qualified') {
+      item.append(button('Mark lost', 'lead-status', 'button button-outline', { id: lead.id, status: 'lost' }));
+    }
     item.append(button('Attribution history', 'lead-attribution-history', 'button button-outline', { id: lead.id }));
     if (isPlatformAdmin() && lead.status !== 'converted') {
       const reassign = node('form', undefined, 'inline-form');
@@ -2199,7 +2344,513 @@ function renderAppDashboard({ title, description, source, metrics, statusTitle, 
   return section;
 }
 
+const WORKER_TYPE_LABELS = {
+  full_time_employee: 'Full-time employee',
+  part_time_employee: 'Part-time employee',
+  hourly_professional: 'Hourly professional',
+  contracted_service_provider: 'Contracted labour / service provider',
+};
+
+function workerClockQueueKey() {
+  return `workforce-clock-queue:${state.user.id}`;
+}
+
+function addisAbabaDateTimeToIso(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) throw new Error('Enter a valid shift date and time.');
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const [year, month, day, hour, minute] = [yearText, monthText, dayText, hourText, minuteText].map(Number);
+  const local = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (local.getUTCFullYear() !== year || local.getUTCMonth() + 1 !== month || local.getUTCDate() !== day
+    || local.getUTCHours() !== hour || local.getUTCMinutes() !== minute) {
+    throw new Error('Enter a valid shift date and time.');
+  }
+  return new Date(local.getTime() - 3 * 60 * 60 * 1000).toISOString();
+}
+
+function readWorkerClockQueue() {
+  try {
+    const queue = JSON.parse(localStorage.getItem(workerClockQueueKey()) ?? '[]');
+    if (!Array.isArray(queue) || queue.some((entry) => !entry || typeof entry !== 'object'
+      || typeof entry.shift_id !== 'string' || !['clock_in','clock_out'].includes(entry.event_type)
+      || typeof entry.client_event_id !== 'string' || typeof entry.occurred_at !== 'string')) {
+      throw new Error('The saved clock-event queue is invalid. Do not clear it until its contents are reviewed.');
+    }
+    return queue;
+  } catch (error) {
+    state.workerClockQueueError = error instanceof Error ? error.message : 'The saved clock-event queue could not be read.';
+    return [];
+  }
+}
+
+async function syncWorkerClockQueue() {
+  state.workerClockQueueError = '';
+  if (!state.user || state.user.role !== 'worker') return;
+  const queue = readWorkerClockQueue();
+  if (state.workerClockQueueError || !queue.length || !navigator.onLine) return;
+  const remaining = [...queue];
+  for (const event of queue) {
+    try {
+      await api(`/workforce/shifts/${encodeURIComponent(event.shift_id)}/clock-events`, {
+        method: 'POST',
+        body: JSON.stringify({
+          event_type: event.event_type,
+          client_event_id: event.client_event_id,
+          occurred_at: event.occurred_at,
+          source: event.source,
+        }),
+      });
+      remaining.shift();
+      localStorage.setItem(workerClockQueueKey(), JSON.stringify(remaining));
+    } catch (error) {
+      state.workerClockQueueError = `Clock-event sync stopped to preserve event order: ${error.message}`;
+      break;
+    }
+  }
+}
+
+function renderWorkerPortal() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Your work, reports and support', 'Manage shifts and time, employer-client engagement terms, activity reports and support.'));
+  const settlementsUnavailable = state.workspaceDataErrors.includes('/staffing-settlements/mine')
+    || state.workspaceDataOmitted.includes('/staffing-settlements/mine');
+
+  const summary = node('section', undefined, 'stat-grid');
+  const approvedPay = state.workerPortalReports
+    .filter((report) => report.status === 'approved')
+    .reduce((total, report) => total + Number(report.worker_amount), 0);
+  const reconciledPayments = state.workerPortalSettlements
+    .filter((settlement) => settlement.status === 'reconciled')
+    .reduce((total, settlement) => total + Number(settlement.amount), 0);
+  const summaryValues = [
+    ['Engagements', state.workerPortalEngagements.length],
+    ['Active assignments', state.workerPortalEngagements.filter((item) => item.status === 'active').length],
+    ['Reports awaiting review', state.workerPortalReports.filter((item) => item.status === 'submitted').length],
+    ['Approved work value · ETB', approvedPay.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })],
+  ];
+  if (!settlementsUnavailable) {
+    summaryValues.push(['Reconciled worker payments · ETB', reconciledPayments.toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 })]);
+  }
+  for (const [label, value] of summaryValues) {
+    const metric = node('article', undefined, 'stat-card');
+    metric.append(node('span', label), node('strong', String(value)));
+    summary.append(metric);
+  }
+  wrap.append(summary);
+
+  const shifts = node('section', undefined, 'panel');
+  shifts.append(sectionHeading('My shifts and attendance', 'Respond to assigned shifts and record your own clock events. Offline events are saved on this device and synced in order when connectivity returns.'));
+  const clockQueue = readWorkerClockQueue();
+  if (clockQueue.length) shifts.append(node('p', `${clockQueue.length} clock event${clockQueue.length === 1 ? '' : 's'} waiting to sync.`, 'muted'));
+  if (state.workerClockQueueError) {
+    const notice = node('p', state.workerClockQueueError, 'alert error');
+    notice.setAttribute('role', 'alert');
+    shifts.append(notice);
+  }
+  const shiftList = node('div', undefined, 'list');
+  if (state.workspaceDataErrors.includes('/workforce/shifts/mine')) {
+    shiftList.append(node('p', 'Your shift schedule could not be loaded. Use Refresh to try again.', 'alert error'));
+  } else if (!state.workerPortalShifts.length) {
+    shiftList.append(empty('No shifts are assigned to your worker account yet.'));
+  }
+  for (const shift of state.workerPortalShifts) {
+    const item = card(
+      `${shift.employer_client ?? 'Employer client'} · ${new Date(shift.starts_at).toLocaleString(document.documentElement.lang)}`,
+      `${new Date(shift.starts_at).toLocaleString(document.documentElement.lang)} to ${new Date(shift.ends_at).toLocaleString(document.documentElement.lang)} · ${WORKER_TYPE_LABELS[shift.worker_type] ?? shift.worker_type} · attendance ${shift.time_status ?? 'not recorded'}${shift.exception_reason ? ` · ${shift.exception_reason}` : ''}`,
+      shift.status,
+    );
+    if (shift.worker_response === 'pending' && shift.status === 'scheduled') {
+      item.append(
+        button('Accept shift', 'workforce-shift-response', 'button button-primary', { id: shift.id, response: 'accepted' }),
+        button('Decline shift', 'workforce-shift-response', 'button button-outline', { id: shift.id, response: 'declined' }),
+      );
+    }
+    if (shift.worker_response === 'accepted' && shift.status === 'scheduled') {
+      const pending = readWorkerClockQueue().filter((event) => event.shift_id === shift.id);
+      const hasClockIn = Boolean(shift.clock_in_at) || pending.some((event) => event.event_type === 'clock_in');
+      const hasClockOut = Boolean(shift.clock_out_at) || pending.some((event) => event.event_type === 'clock_out');
+      if (!hasClockIn) item.append(button('Clock in', 'workforce-clock', 'button button-primary', { id: shift.id, eventType: 'clock_in' }));
+      else if (!hasClockOut) item.append(button('Clock out', 'workforce-clock', 'button button-primary', { id: shift.id, eventType: 'clock_out' }));
+      if (pending.length) item.append(node('p', `${pending.length} clock event${pending.length === 1 ? '' : 's'} waiting to sync for this shift.`, 'muted'));
+    }
+    if (shift.worker_response === 'accepted' && shift.status !== 'cancelled'
+      && shift.time_status !== 'exported' && new Date(shift.ends_at).getTime() <= Date.now()) {
+      const correctionForm = node('form', undefined, 'panel form-card inline-form');
+      correctionForm.dataset.form = 'workforce-correction';
+      correctionForm.dataset.shift = shift.id;
+      correctionForm.append(node('h4', 'Request a time correction'));
+      correctionForm.append(
+        field('Correct clock-in time (optional)', 'proposed_clock_in_at', 'datetime-local').label,
+        field('Correct clock-out time (optional)', 'proposed_clock_out_at', 'datetime-local').label,
+        field('Explain the correction', 'reason', 'textarea', true, { minlength: 10, maxlength: 1000, rows: 2 }).label,
+        button('Send correction for review', 'submit', 'button button-outline'),
+      );
+      item.append(correctionForm);
+    }
+    if (shift.latest_correction_status) {
+      item.append(node('p', `Latest correction: ${shift.latest_correction_status}${shift.latest_correction_reason ? ` · ${shift.latest_correction_reason}` : ''}`, 'muted'));
+    }
+    shiftList.append(item);
+  }
+  shifts.append(shiftList);
+  wrap.append(shifts);
+
+  const leave = node('section', undefined, 'panel');
+  leave.append(sectionHeading('Leave and availability', 'Submit time-away requests for review. Employees request leave; hourly professionals and contracted providers request availability changes.'));
+  const activeEngagements = state.workerPortalEngagements.filter((engagement) => engagement.status === 'active');
+  if (activeEngagements.length) {
+    const leaveForm = node('form', undefined, 'panel form-card inline-form');
+    leaveForm.dataset.form = 'workforce-leave';
+    const engagementField = field('Active engagement', 'engagement_id', 'select', true);
+    for (const engagement of activeEngagements) {
+      const option = node('option', `${engagement.employer_client ?? 'Employer client'} · ${WORKER_TYPE_LABELS[engagement.worker_type] ?? engagement.worker_type}`);
+      option.value = engagement.id;
+      engagementField.input.append(option);
+    }
+    leaveForm.append(
+      engagementField.label,
+      field('Start date', 'starts_on', 'date', true).label,
+      field('End date', 'ends_on', 'date', true).label,
+      field('Reason or availability details', 'reason', 'textarea', true, { minlength: 10, maxlength: 2000, rows: 3 }).label,
+      button('Submit for review', 'submit', 'button button-primary'),
+    );
+    leave.append(leaveForm);
+  } else {
+    leave.append(empty('An active engagement is required to submit a leave or availability request.'));
+  }
+  const leaveList = node('div', undefined, 'list');
+  if (!state.workerPortalLeave.length) leaveList.append(empty('Your leave and availability requests will appear here.'));
+  for (const request of state.workerPortalLeave) {
+    const item = card(`${request.request_type === 'leave' ? 'Leave' : 'Availability'} · ${request.starts_on} to ${request.ends_on}`,
+      `${request.reason}${request.review_reason ? ` · Review: ${request.review_reason}` : ''}`, request.status);
+    if (request.status === 'submitted') item.append(button('Withdraw request', 'workforce-leave-withdraw', 'button button-outline', { id: request.id }));
+    leaveList.append(item);
+  }
+  leave.append(leaveList);
+  wrap.append(leave);
+
+  const payroll = node('section', undefined, 'panel');
+  payroll.append(sectionHeading('Payroll handoff status', 'These statuses show whether AfroLife generated an export or recorded an external handoff. They are not payslips and do not confirm payment.'));
+  const payrollList = node('div', undefined, 'list');
+  if (!state.workerPortalPayrollExports.length) payrollList.append(empty('No payroll handoff records are available for your approved time yet.'));
+  for (const record of state.workerPortalPayrollExports) {
+    payrollList.append(card(
+      `${record.period_start} to ${record.period_end} · ${record.mapping_version}`,
+      `${record.handoff_reason ?? 'No handoff note recorded'}${record.handoff_reference ? ` · reference ${record.handoff_reference}` : ''}${record.handed_off_at ? ` · recorded ${new Date(record.handed_off_at).toLocaleString(document.documentElement.lang)}` : ''}`,
+      record.status,
+    ));
+  }
+  payroll.append(payrollList);
+  wrap.append(payroll);
+
+  const offers = node('section', undefined, 'panel');
+  offers.append(sectionHeading('My employer-client engagements', 'Review approved terms before accepting. Work starts after both the worker and employer client accept.'));
+  const engagementList = node('div', undefined, 'list');
+  if (!state.workerPortalEngagements.length) engagementList.append(empty('No staffing offers or engagements are linked to your worker account yet.'));
+  for (const engagement of state.workerPortalEngagements) {
+    const typeLabel = WORKER_TYPE_LABELS[engagement.worker_type] ?? 'Employment type not recorded';
+    const item = card(
+      `${engagement.employer_client ?? 'Employer client'} · ${typeLabel}`,
+      `ETB ${Number(engagement.worker_rate).toLocaleString(document.documentElement.lang)} per ${engagement.billing_unit} · ${engagement.starts_on}${engagement.ends_on ? ` to ${engagement.ends_on}` : ''} · client ${engagement.client_accepted ? 'accepted' : 'pending'} · worker ${engagement.worker_accepted ? 'accepted' : 'pending'}`,
+      engagement.status,
+    );
+    if (engagement.status === 'terms_approved' && !engagement.worker_accepted) {
+      item.append(button('Review and accept terms', 'staffing-engagement-accept', 'button button-primary', { id: engagement.id }));
+    }
+    if (engagement.status === 'active') {
+      const form = node('form', undefined, 'panel form-card inline-form');
+      form.dataset.form = 'staffing-work-period';
+      form.dataset.engagement = engagement.id;
+      form.append(node('h4', 'Submit a work activity report'));
+      form.append(
+        field('Period start', 'period_start', 'date').label,
+        field('Period end', 'period_end', 'date').label,
+        field(`Quantity (${engagement.billing_unit})`, 'quantity', 'number', true, { min: '0.01', step: '0.01' }).label,
+        field('Describe the work completed', 'description', 'textarea', true, { minlength: 5, maxlength: 1000, rows: 3 }).label,
+        button('Submit report for review', 'submit', 'button button-primary'),
+      );
+      item.append(form);
+    }
+    engagementList.append(item);
+  }
+  offers.append(engagementList);
+  wrap.append(offers);
+
+  const reports = node('section', undefined, 'panel');
+  reports.append(sectionHeading('My activity and earnings reports', 'Submitted work is reviewed independently. Approved work value is not confirmation that a payment has been made.'));
+  const reportList = node('div', undefined, 'list');
+  if (!state.workerPortalReports.length) reportList.append(empty('Work reports you submit for an active engagement will appear here.'));
+  for (const report of state.workerPortalReports) {
+    const item = card(
+      `${report.period_start} to ${report.period_end} · ${report.quantity} units`,
+      `${report.description} · ETB ${Number(report.worker_amount).toLocaleString(document.documentElement.lang)} worker amount${report.review_reason ? ` · ${report.review_reason}` : ''}`,
+      report.status,
+    );
+    reportList.append(item);
+  }
+  reports.append(reportList);
+  wrap.append(reports);
+
+  const payments = node('section', undefined, 'panel');
+  payments.append(sectionHeading('Worker payment records', 'Finance reconciliation records are shown separately from approved work reports. These records are not payslips or payroll exports.'));
+  const paymentList = node('div', undefined, 'list');
+  if (settlementsUnavailable) {
+    const notice = node('p', 'Worker payment records could not be loaded. Select Refresh to try again.', 'alert error');
+    notice.setAttribute('role', 'alert');
+    paymentList.append(notice);
+  } else if (!state.workerPortalSettlements.length) {
+    paymentList.append(empty('No worker payment records are available yet.'));
+  }
+  for (const settlement of state.workerPortalSettlements) {
+    const item = card(
+      t('ETB {{amount}} · {{date}}', {
+        amount: Number(settlement.amount).toLocaleString(document.documentElement.lang, { minimumFractionDigits: 2 }),
+        date: settlement.payment_date,
+      }),
+      [
+        t('{{channel}} · reference {{reference}}', { channel: settlement.channel, reference: settlement.reference }),
+        settlement.reason ? t('Review note: {{reason}}', { reason: settlement.reason }) : null,
+        settlement.reconciled_at ? t('Reconciled {{date}}', {
+          date: new Date(settlement.reconciled_at).toLocaleDateString(document.documentElement.lang),
+        }) : null,
+      ].filter(Boolean).join(' · '),
+      settlement.status,
+    );
+    paymentList.append(item);
+  }
+  payments.append(paymentList);
+  wrap.append(payments);
+
+  const support = node('section', undefined, 'panel');
+  support.append(sectionHeading('AfroLife worker support', 'Ask for help with an assignment, contract terms, work reports or pay, safety, or another work-related concern.'));
+  const supportForm = node('form', undefined, 'panel form-card inline-form');
+  supportForm.dataset.form = 'worker-support';
+  const category = field('Support topic', 'category', 'select');
+  for (const [value, label] of [
+    ['work_assignment', 'Work assignment'],
+    ['contract_terms', 'Contract terms'],
+    ['work_report_or_pay', 'Work report or pay'],
+    ['safety_and_wellbeing', 'Safety and wellbeing'],
+    ['other', 'Other'],
+  ]) {
+    const option = node('option', label);
+    option.value = value;
+    category.input.append(option);
+  }
+  supportForm.append(
+    category.label,
+    field('Subject', 'subject', 'text', true, { minlength: 3, maxlength: 160 }).label,
+    field('How can we help?', 'description', 'textarea', true, { minlength: 10, maxlength: 4000, rows: 4 }).label,
+    button('Send support request', 'submit', 'button button-primary'),
+  );
+  support.append(supportForm);
+  const ticketList = node('div', undefined, 'list');
+  if (!state.workerSupportRequests.length) ticketList.append(empty('Your support requests and replies will appear here.'));
+  for (const request of state.workerSupportRequests) {
+    const item = card(request.subject, `${request.category.replaceAll('_', ' ')} · ${request.description}${request.response ? ` · AfroLife response: ${request.response}` : ''}`, request.status);
+    ticketList.append(item);
+  }
+  support.append(ticketList);
+  wrap.append(support);
+  return wrap;
+}
+
+function renderWorkerSupportQueue() {
+  const section = node('section', undefined, 'panel');
+  section.append(sectionHeading('Worker support queue', 'Respond to worker requests and record the current resolution status.'));
+  const list = node('div', undefined, 'list');
+  if (!state.workerSupportQueue.length) list.append(empty('There are no worker support requests in the queue.'));
+  for (const request of state.workerSupportQueue) {
+    const item = card(
+      request.subject,
+      `${request.legal_name} · ${request.phone} · ${request.category.replaceAll('_', ' ')} · ${request.description}${request.response ? ` · latest response: ${request.response}` : ''}`,
+      request.status,
+    );
+    if (request.status !== 'resolved') {
+      item.append(
+        button('Reply and keep open', 'worker-support-respond', 'button button-outline', { id: request.id, status: 'in_progress' }),
+        button('Reply and resolve', 'worker-support-respond', 'button button-primary', { id: request.id, status: 'resolved' }),
+      );
+    }
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+function renderWorkforceOperations() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Workforce operations', 'Schedule accepted engagements, review attendance and leave, maintain labor-policy evidence, and record payroll handoff status.'));
+  if (hasActivity('workforce.shifts.manage')) {
+    const shifts = node('section', undefined, 'panel');
+    shifts.append(sectionHeading('Shift scheduling', 'Assign shifts only to active worker engagements. Workers must accept a shift before clocking.'));
+    const scheduleForm = node('form', undefined, 'panel form-card inline-form');
+    scheduleForm.dataset.form = 'workforce-shift';
+    const engagement = field('Active engagement', 'engagement_id', 'select', true);
+    for (const record of state.workforceEngagements) {
+      const option = node('option', `${record.worker_name} · ${record.employer_client ?? 'Employer client'} · ${WORKER_TYPE_LABELS[record.worker_type] ?? record.worker_type}`);
+      option.value = record.id;
+      engagement.input.append(option);
+    }
+    scheduleForm.append(engagement.label,
+      field('Shift starts', 'starts_at', 'datetime-local', true).label,
+      field('Shift ends', 'ends_at', 'datetime-local', true).label,
+      button('Schedule shift', 'submit', 'button button-primary'));
+    if (!state.workforceEngagements.length) scheduleForm.append(empty('No active worker engagements are available for scheduling.'));
+    shifts.append(scheduleForm);
+    const list = node('div', undefined, 'list');
+    if (!state.workforceShifts.length) list.append(empty('No workforce shifts are scheduled.'));
+    for (const shift of state.workforceShifts) {
+      const item = card(
+        `${shift.worker_name} · ${shift.employer_client ?? 'Employer client'} · ${new Date(shift.starts_at).toLocaleString(document.documentElement.lang)}`,
+        `${new Date(shift.starts_at).toLocaleString(document.documentElement.lang)} to ${new Date(shift.ends_at).toLocaleString(document.documentElement.lang)} · ${WORKER_TYPE_LABELS[shift.worker_type] ?? shift.worker_type} · worker ${shift.worker_response} · attendance ${shift.time_status ?? 'not recorded'}${shift.exception_reason ? ` · ${shift.exception_reason}` : ''}`,
+        shift.status,
+      );
+      if (shift.status === 'scheduled' && !shift.time_entry_id) item.append(button('Cancel shift', 'workforce-shift-cancel', 'button button-outline', { id: shift.id }));
+      list.append(item);
+    }
+    shifts.append(list);
+    wrap.append(shifts);
+  }
+  if (hasActivity('workforce.time.review')) {
+    const review = node('section', undefined, 'panel');
+    review.append(sectionHeading('Attendance exceptions and approvals', 'Clock events remain unchanged. Corrections are separately reviewed, and approved time remains distinct from payable time.'));
+    const list = node('div', undefined, 'list');
+    if (!state.workforceTimeQueue.length) list.append(empty('There are no attendance exceptions or pending corrections.'));
+    for (const entry of state.workforceTimeQueue) {
+      const item = card(
+        `${entry.worker_name} · ${entry.employer_client ?? 'Employer client'} · ${new Date(entry.starts_at).toLocaleString(document.documentElement.lang)}`,
+        `Clock in ${entry.clock_in_at ? new Date(entry.clock_in_at).toLocaleString(document.documentElement.lang) : 'missing'} · clock out ${entry.clock_out_at ? new Date(entry.clock_out_at).toLocaleString(document.documentElement.lang) : 'missing'}${entry.exception_reason ? ` · ${entry.exception_reason}` : ''}${entry.correction_reason ? ` · Correction: ${entry.correction_reason}` : ''}${entry.proposed_clock_in_at ? ` · Proposed clock-in: ${new Date(entry.proposed_clock_in_at).toLocaleString(document.documentElement.lang)}` : ''}${entry.proposed_clock_out_at ? ` · Proposed clock-out: ${new Date(entry.proposed_clock_out_at).toLocaleString(document.documentElement.lang)}` : ''}`,
+        entry.correction_status === 'pending' ? 'correction pending' : entry.time_status ?? 'needs review',
+      );
+      if (entry.correction_id && entry.correction_status === 'pending') {
+        item.append(
+          button('Approve correction', 'workforce-correction-decision', 'button button-primary', { id: entry.correction_id, decision: 'approve' }),
+          button('Reject correction', 'workforce-correction-decision', 'button button-outline', { id: entry.correction_id, decision: 'reject' }),
+        );
+      }
+      if (entry.shift_status === 'scheduled' && new Date(entry.ends_at).getTime() <= Date.now()) {
+        item.append(button('Approve attendance', 'workforce-time-approve', 'button button-primary', { id: entry.shift_id }));
+      }
+      list.append(item);
+    }
+    review.append(list);
+    wrap.append(review);
+  }
+  if (hasActivity('workforce.leave.review')) {
+    const leave = node('section', undefined, 'panel');
+    leave.append(sectionHeading('Leave and availability review', 'Record a reason for every decision.'));
+    const list = node('div', undefined, 'list');
+    if (!state.workforceLeaveQueue.length) list.append(empty('There are no submitted leave or availability requests.'));
+    for (const request of state.workforceLeaveQueue) {
+      const item = card(
+        `${request.worker_name} · ${request.employer_client ?? 'Employer client'} · ${request.request_type} · ${request.starts_on} to ${request.ends_on}`,
+        request.reason,
+        request.status,
+      );
+      item.append(
+        button('Approve', 'workforce-leave-decision', 'button button-primary', { id: request.id, decision: 'approve' }),
+        button('Reject', 'workforce-leave-decision', 'button button-outline', { id: request.id, decision: 'reject' }),
+      );
+      list.append(item);
+    }
+    leave.append(list);
+    wrap.append(leave);
+  }
+  if (hasActivity('workforce.policy.manage')) {
+    const policies = node('section', undefined, 'panel');
+    policies.append(sectionHeading('Effective-dated workforce policies', 'Record the policy citation and test evidence. Compliance approval is independent from policy creation.'));
+    const policyForm = node('form', undefined, 'panel form-card inline-form');
+    policyForm.dataset.form = 'workforce-policy';
+    policyForm.append(
+      field('Policy version', 'policy_version', 'text', true, { maxlength: 80 }).label,
+      field('Jurisdiction', 'jurisdiction', 'text', true, { maxlength: 80, value: 'Ethiopia' }).label,
+      field('Legal citation', 'citation', 'textarea', true, { minlength: 10, maxlength: 2000, rows: 2 }).label,
+      field('Effective from', 'effective_from', 'date', true).label,
+      field('Effective to (optional)', 'effective_to', 'date').label,
+      field('Daily warning threshold (minutes)', 'warning_daily_minutes', 'number', true, { min: 1, step: 1 }).label,
+      field('Weekly warning threshold (minutes)', 'warning_weekly_minutes', 'number', true, { min: 1, step: 1 }).label,
+      field('Test evidence', 'test_evidence', 'textarea', true, { minlength: 10, maxlength: 4000, rows: 3 }).label,
+      button('Save policy draft', 'submit', 'button button-primary'),
+    );
+    policies.append(policyForm);
+    const list = node('div', undefined, 'list');
+    if (!state.workforcePolicies.length) list.append(empty('No workforce policies are recorded yet.'));
+    for (const policy of state.workforcePolicies) {
+      const item = card(`${policy.policy_version} · ${policy.jurisdiction} · ${policy.effective_from}${policy.effective_to ? ` to ${policy.effective_to}` : ''}`,
+        `${policy.citation} · daily warning ${policy.warning_daily_minutes} minutes · weekly warning ${policy.warning_weekly_minutes} minutes`, policy.status);
+      if (policy.status === 'draft' && state.user.role === 'compliance') {
+        item.append(button('Approve policy', 'workforce-policy-approve', 'button button-primary', { id: policy.id }));
+      }
+      list.append(item);
+    }
+    policies.append(list);
+    wrap.append(policies);
+  }
+  if (hasActivity('workforce.payroll.export')) {
+    const payroll = node('section', undefined, 'panel');
+    payroll.append(sectionHeading('Payable time and payroll export', 'Thresholds are warnings, not automatic legal or payroll decisions. Generated files are encrypted; recording a handoff does not mean payroll was filed or paid.'));
+    if (state.workforcePayableCalculation?.requestedBy === state.user.id
+      && state.workforcePayableCalculation.calculated?.length) {
+      const results = node('section', undefined, 'panel');
+      results.append(sectionHeading(
+        `Payable-time review · ${state.workforcePayableCalculation.period_start} to ${state.workforcePayableCalculation.period_end}`,
+        'Review all threshold warnings before generating an export.',
+      ));
+      const resultList = node('div', undefined, 'list');
+      for (const result of state.workforcePayableCalculation.calculated) {
+        resultList.append(card(
+          `${result.worker_name} · ${WORKER_TYPE_LABELS[result.worker_type] ?? result.worker_type} · ${new Date(result.shift_start).toLocaleString(document.documentElement.lang)}`,
+          `${result.payable_minutes} payable minutes · ${result.policy_warnings.length ? result.policy_warnings.map((warning) => warning.replaceAll('_', ' ')).join(', ') : 'No warning thresholds exceeded'}`,
+          result.policy_warnings.length ? 'warning' : 'calculated',
+        ));
+      }
+      results.append(resultList);
+      payroll.append(results);
+    }
+    const calculateForm = node('form', undefined, 'panel form-card inline-form');
+    calculateForm.dataset.form = 'workforce-payable-calc';
+    calculateForm.append(
+      field('Period start', 'period_start', 'date', true).label,
+      field('Period end', 'period_end', 'date', true).label,
+      button('Calculate payable time', 'submit', 'button button-outline'),
+    );
+    const exportForm = node('form', undefined, 'panel form-card inline-form');
+    exportForm.dataset.form = 'workforce-payroll-export';
+    exportForm.append(
+      field('Period start', 'period_start', 'date', true).label,
+      field('Period end', 'period_end', 'date', true).label,
+      field('Payroll mapping version', 'mapping_version', 'text', true, { maxlength: 80 }).label,
+      button('Generate encrypted export', 'submit', 'button button-primary'),
+    );
+    payroll.append(calculateForm, exportForm);
+    const list = node('div', undefined, 'list');
+    if (!state.workforcePayrollExports.length) list.append(empty('No payroll exports have been generated.'));
+    for (const record of state.workforcePayrollExports) {
+      const item = card(
+        `${record.period_start} to ${record.period_end} · ${record.row_count} rows · ${record.total_payable_minutes} payable minutes`,
+        `Control hash ${record.control_hash} · key ${record.encryption_key_id}${record.handoff_reason ? ` · ${record.handoff_reason}` : ''}${record.handoff_reference ? ` · reference ${record.handoff_reference}` : ''}`,
+        record.status,
+      );
+      item.append(button('Download encrypted payload', 'workforce-payroll-download', 'button button-outline', { id: record.id }));
+      if (record.status !== 'handed_off') item.append(button('Record handoff status', 'workforce-payroll-handoff', 'button button-primary', { id: record.id }));
+      list.append(item);
+    }
+    payroll.append(list);
+    wrap.append(payroll);
+  }
+  return wrap;
+}
+
 function renderWorkers() {
+  if (state.user.role === 'worker') return renderWorkerPortal();
+  if (!hasActivity('workforce.workers.view') && !hasActivity('workforce.workers.register')
+      && ['global_admin','super_admin','corporate_business_manager','master_agent'].includes(state.user.role)) {
+    const supportWorkspace = node('div');
+    supportWorkspace.append(sectionHeading('Worker support service', 'Review worker questions and follow up on work, contract, reporting and safety concerns.'));
+    supportWorkspace.append(renderWorkerSupportQueue());
+    return supportWorkspace;
+  }
   const wrap = node('div');
   wrap.append(sectionHeading('Worker directory', 'Register potential workers. Compliance must verify required documents before matching.'));
   const metrics = workforceDashboardMetrics(state.workers);
@@ -2256,16 +2907,26 @@ function renderWorkers() {
       sector: worker.sector,
       rate: Number(worker.rate_expected).toLocaleString(document.documentElement.lang),
       territory: state.territories.find((area) => area.id === worker.territory_id)?.name ?? worker.territory_id,
-    }), worker.verification);
+    }), worker.employment_status === 'terminated' ? 'terminated' : worker.verification);
     if (hasActivity('workforce.documents.upload')) item.append(button('Upload documents', 'worker-upload', 'button button-outline', { id: worker.id }));
     if (hasActivity('workforce.documents.view')) {
       item.append(button('Documents', 'worker-documents', 'button button-outline', { id: worker.id }));
     }
     if (worker.verification !== 'verified' && hasActivity('workforce.workers.verify')) item.append(button('Verify worker', 'worker-verify', 'button button-primary', { id: worker.id }));
+    if (worker.employment_status !== 'terminated' && hasActivity('workforce.workers.offboard')) {
+      item.append(button('Offboard worker', 'workforce-worker-offboard', 'button button-outline', { id: worker.id }));
+    }
     list.append(item);
   }
   columns.append(form, list);
   wrap.append(columns);
+  if (['global_admin','super_admin','corporate_business_manager','master_agent'].includes(state.user.role)) {
+    wrap.append(renderWorkerSupportQueue());
+  }
+  if (['workforce.shifts.manage','workforce.time.review','workforce.leave.review','workforce.payroll.export','workforce.policy.manage']
+    .some((activity) => hasActivity(activity))) {
+    wrap.append(renderWorkforceOperations());
+  }
   return wrap;
 }
 
@@ -2440,7 +3101,10 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
     }
     const actions = node('div', undefined, 'property-actions');
     actions.append(button('Photos & video', 'property-photos', 'button button-outline', { id: property.id }));
-    if (canManage) actions.append(button('Add media', 'property-upload', 'button button-outline', { id: property.id }));
+    if (canManage) actions.append(
+      button('Add unit', 'property-units', 'button button-outline', { id: property.id }),
+      button('Add media', 'property-upload', 'button button-outline', { id: property.id }),
+    );
     if (reviewStatus === 'pending_review'
       && ['super_admin', 'corporate_business_manager'].includes(state.user.role)
       && property.created_by !== state.user.id) {
@@ -2496,15 +3160,20 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
 function renderProperties() {
   const wrap = node('div');
   const buyer = state.user.role === 'customer';
+  const owner = state.user.role === 'property_owner';
   const canManage = hasActivity('property.listings.manage');
   wrap.append(sectionHeading(
-    buyer ? 'Available property listings' : 'Property listings',
-    buyer ? 'Browse available properties and view their pictures.' : 'Create and manage property records, units, rent details, and private listing pictures.',
+    buyer ? 'Available property listings' : owner ? 'Landlord property portfolio' : 'Property listings',
+    buyer ? 'Browse available properties and view their pictures.' : owner
+      ? 'Manage your properties and units, track listing review, and follow maintenance and rent statements.'
+      : 'Create and manage property records, units, rent details, and private listing pictures.',
   ));
   const metrics = propertyDashboardMetrics(state.properties);
   wrap.append(renderAppDashboard({
-    title: 'Property Management dashboard',
-    description: 'A summary of property listings available to your account. Counts use the currently loaded listing data only.',
+    title: owner ? 'Landlord dashboard' : 'Property Management dashboard',
+    description: owner
+      ? 'Your property listings and units. Counts use records currently available to your account.'
+      : 'A summary of property listings available to your account. Counts use the currently loaded listing data only.',
     source: '/properties',
     metrics,
     statusTitle: 'Listing status',
@@ -2575,7 +3244,7 @@ function renderProperties() {
   wrap.append(columns);
   if (state.user.role === 'property_owner') {
     const statements = node('section', undefined, 'panel form-card');
-    statements.append(node('h2','Owner rent & deposit statements'));
+    statements.append(node('h2','Landlord rent & deposit statements'));
     statements.append(node('p','These read-only records show lease charges and reconciled rent/deposit receipts. They do not initiate or confirm a payout to you.'));
     statements.append(button('Download CSV statement', 'owner-statement-download', 'button button-outline'));
     if (!state.ownerStatements.length) statements.append(empty('No lease statements are available for your listings yet.'));
@@ -4107,7 +4776,7 @@ function renderPasswordChange() {
 
 function renderSecurity() {
   const wrap = node('div');
-  wrap.append(sectionHeading('Account security', 'Protect your account with an authenticator app.'));
+  wrap.append(sectionHeading('Account security', 'Manage two-step verification and signed-in devices.'));
   const panel = node('section', undefined, 'panel form-card');
   panel.style.maxWidth = '620px';
   panel.append(node('h3', state.user.mfa_enabled ? 'Two-step verification is enabled' : 'Two-step verification'));
@@ -4133,6 +4802,147 @@ function renderSecurity() {
     panel.append(form);
   }
   wrap.append(panel);
+  const sessions = node('section', undefined, 'panel');
+  sessions.append(node('h3', 'Signed-in sessions'));
+  sessions.append(node('p', 'Review recent sessions for your account and end any session you do not recognize.', 'muted'));
+  if (!state.authSessions.length) {
+    sessions.append(empty('No recent sessions were found.'));
+  } else {
+    const list = node('div', undefined, 'record-list');
+    for (const session of state.authSessions) {
+      const item = node('article', undefined, 'record-card');
+      const heading = session.current ? 'This session' : session.user_agent || 'Browser details unavailable';
+      item.append(node('h4', heading));
+      item.append(node('p', `Started ${new Date(session.created_at).toLocaleString()} · Last active ${new Date(session.last_activity_at).toLocaleString()}`, 'muted'));
+      item.append(node('p', session.active ? 'Active' : 'Ended', 'muted'));
+      if (session.active) {
+        item.append(button(session.current ? 'Sign out this session' : 'End session', 'revoke-session', 'button button-outline', { id: session.id }));
+      }
+      list.append(item);
+    }
+    sessions.append(list);
+  }
+  wrap.append(sessions);
+  return wrap;
+}
+
+function renderSupport() {
+  const wrap = node('div');
+  wrap.append(sectionHeading('Support & complaints', 'Raise and track a case. Sensitive case details are shown to support staff only after independent, time-limited approval.'));
+  const intake = node('form', undefined, 'panel form-card');
+  intake.dataset.form = 'support-case-create';
+  intake.append(node('h3','Open a support case'));
+  const category = field('Topic','category','select');
+  for (const [value,label] of [
+    ['general','General support'],['service','Service issue'],['agent_complaint','Complaint about an Agent'],
+    ['financial','Financial issue'],['legal','Legal issue'],['privacy','Privacy concern'],
+    ['safety','Safety concern'],['fraud','Suspected fraud'],
+  ]) category.input.append(new Option(label,value));
+  const agent = field('Agent concerned','subject_user_id','select',false);
+  agent.input.append(new Option('Select an Agent',''));
+  for (const record of state.supportAgents) agent.input.append(new Option(`${record.legal_name} (${record.id})`,record.id));
+  agent.label.hidden = category.input.value !== 'agent_complaint';
+  category.input.addEventListener('change',()=>{ agent.label.hidden=category.input.value!=='agent_complaint'; });
+  const subject = field('Subject','subject','text',true,{maxLength:160});
+  const description = field('Describe what happened','description','textarea',true,{maxLength:4000,rows:5});
+  intake.append(category.label,agent.label,subject.label,description.label,
+    node('p','Safety, fraud, privacy and legal cases are treated as urgent. Agent complaints are not assigned to the Agent named.', 'muted'),
+    button('Submit case','submit','button button-primary'));
+  wrap.append(intake);
+
+  const mine = node('section',undefined,'panel');
+  mine.append(node('h3','My cases'));
+  if (!state.supportCases.length) mine.append(empty('You have no support cases yet.'));
+  for (const item of state.supportCases) {
+    const card = node('article',undefined,'record-card');
+    card.append(node('h4',item.subject),node('p',`${item.category.replaceAll('_',' ')} · ${item.status} · ${item.priority}`, 'muted'));
+    card.append(node('p',item.description));
+    if (item.outcome) card.append(node('p',`Outcome: ${item.outcome}`),node('p',`Appeal route: ${item.appeal_route}`,'muted'));
+    if (item.status==='resolved') card.append(button('Appeal resolution','support-appeal','button button-outline',{id:item.id}));
+    card.append(button('View case timeline','support-open-case','button button-outline',{id:item.id}));
+    mine.append(card);
+  }
+  wrap.append(mine);
+
+  if (state.supportQueue.length) {
+    const queue = node('section',undefined,'panel');
+    queue.append(node('h3','Support queue'));
+    queue.append(node('p','Case descriptions and sensitive details remain hidden until a different authorized reviewer approves a 15-minute access window.','muted'));
+    for (const item of state.supportQueue) {
+      const card = node('article',undefined,'record-card');
+      card.append(node('h4',item.subject),node('p',`${item.category.replaceAll('_',' ')} · ${item.status} · ${item.priority} · ${item.legal_name}`,'muted'));
+      card.append(node('p',item.category==='agent_complaint'?'Independent queue · no Agent assignment':'Unassigned support case','muted'));
+      card.append(
+        button('Request sensitive access','support-access-request','button button-outline',{id:item.id}),
+        button('Open approved case','support-open-case','button button-primary',{id:item.id}),
+      );
+      queue.append(card);
+    }
+    wrap.append(queue);
+  }
+
+  if (state.supportAccessRequests.length) {
+    const approvals = node('section',undefined,'panel');
+    approvals.append(node('h3','Sensitive-access approvals'));
+    for (const request of state.supportAccessRequests) {
+      const card=node('article',undefined,'record-card');
+      card.append(node('h4',`Case ${request.case_id}`),node('p',`${request.requester_name}: ${request.request_reason}`));
+      card.append(button('Approve for 15 minutes','support-access-decision','button button-primary',{
+        id:request.id,decision:'approve',
+      }),button('Deny','support-access-decision','button button-outline',{id:request.id,decision:'deny'}));
+      approvals.append(card);
+    }
+    wrap.append(approvals);
+  }
+
+  if (state.supportCaseDetail) {
+    const detail=node('section',undefined,'panel');
+    const supportStaff=['global_admin','super_admin','compliance','corporate_business_manager'].includes(state.user.role);
+    const isCaseOwner=state.supportCaseDetail.user_id===state.user.id;
+    const accessExpires=Date.parse(state.supportCaseDetail.sensitive_access_expires_at??'');
+    const sensitiveAccessActive=!supportStaff||isCaseOwner||(Number.isFinite(accessExpires)&&accessExpires>Date.now());
+    detail.append(node('h3',state.supportCaseDetail.subject));
+    if (sensitiveAccessActive) detail.append(node('p',state.supportCaseDetail.description));
+    else {
+      detail.append(node('p','Sensitive access has expired. Request a new independent approval to view case details.','muted'));
+      detail.append(button('Request sensitive access','support-access-request','button button-outline',{id:state.supportCaseDetail.id}));
+    }
+    if (supportStaff&&sensitiveAccessActive) {
+      if (!isCaseOwner) detail.append(node('p',`Approved access expires ${new Date(accessExpires).toLocaleTimeString()}.`,'muted'));
+      const advance=node('div',undefined,'inline-form');
+      advance.append(button('Mark in progress','support-case-status','button button-outline',{
+        id:state.supportCaseDetail.id,status:'in_progress',
+      }),button('Request customer information','support-case-status','button button-outline',{
+        id:state.supportCaseDetail.id,status:'pending_customer',
+      }),button('Escalate case','support-case-status','button button-outline',{
+        id:state.supportCaseDetail.id,status:'escalated',
+      }));
+      detail.append(advance);
+      if (!['resolved','appealed'].includes(state.supportCaseDetail.status)) {
+        const resolution=node('form',undefined,'form-grid');
+        resolution.dataset.form='support-case-resolve';
+        resolution.dataset.id=state.supportCaseDetail.id;
+        resolution.append(node('h4','Resolution record'));
+        resolution.append(field('Outcome','outcome','textarea',true,{maxLength:2000,rows:3}).label);
+        resolution.append(field('Rationale','rationale','textarea',true,{maxLength:2000,rows:3}).label);
+        resolution.append(field('Corrective action','corrective_action','textarea',true,{maxLength:2000,rows:3}).label);
+        resolution.append(field('Refund reference (or N/A)','refund_reference','text',true,{maxLength:200}).label);
+        resolution.append(field('Formal financial/legal workflow reference (if applicable)','formal_workflow_reference','text',false,{maxLength:200}).label);
+        resolution.append(field('Appeal route','appeal_route','textarea',true,{maxLength:1000,rows:2}).label);
+        resolution.append(button('Resolve case','submit','button button-primary'));
+        detail.append(resolution);
+      }
+    }
+    if (sensitiveAccessActive) {
+      const timeline=node('ol',undefined,'record-list');
+      timeline.setAttribute('aria-label','Support case activity timeline');
+      for (const item of state.supportCaseEvents) {
+        timeline.append(node('li',`${new Date(item.created_at).toLocaleString()} · ${item.actor_name} · ${item.event_type.replaceAll('_',' ')}${item.new_status?` · ${item.new_status}`:''}${item.reason?` · ${item.reason}`:''}`));
+      }
+      detail.append(node('h4','Case timeline'),timeline);
+    }
+    wrap.append(detail);
+  }
   return wrap;
 }
 
@@ -4227,8 +5037,9 @@ function renderPanel() {
     insurance: 'Insurance information',
     marketplace: 'Marketplace',
     leads: 'Leads',
-    workers: 'Workers',
+    workers: state.user.role === 'worker' ? 'Worker portal' : 'Workers',
     requests: 'Requests & matching',
+    support: 'Support & complaints',
     properties: 'Properties',
     contracts: 'Contracts',
     commissions: 'Commissions',
@@ -4304,6 +5115,7 @@ function renderPanel() {
     leads: renderLeads,
     workers: renderWorkers,
     requests: renderRequests,
+    support: renderSupport,
     learning: renderLearning,
     properties: renderProperties,
     marketplace: renderMarketplace,
@@ -4325,7 +5137,7 @@ function navigateToPanel(panel, { replace = false } = {}) {
     showAlert('This workspace is unavailable for your account or deployment.', true);
     return;
   }
-  if (panel === 'status') loadedPanels.delete(panel);
+  if (panel === 'status' || panel === 'security' || panel === 'support') loadedPanels.delete(panel);
   state.panel = panel;
   const url = panelUrl(window.location.href, panel);
   if (replace) history.replaceState(null, '', url);
@@ -4338,18 +5150,167 @@ async function submitForm(form) {
   const values = formData(form);
   if (form.dataset.form === 'staffing-engagement') {
     await api('/staffing-engagements', { method: 'POST', body: JSON.stringify({
-      match_id: form.dataset.match, billing_unit: values.billing_unit,
+      match_id: form.dataset.match, worker_type: values.worker_type, billing_unit: values.billing_unit,
       client_rate: number(values.client_rate), worker_rate: number(values.worker_rate),
       starts_on: values.starts_on, ends_on: values.ends_on || undefined,
     }) });
     await refresh(); showAlert('Engagement terms submitted for independent Finance review.'); return;
+  }
+  if (form.dataset.form === 'property-unit') {
+    const payload = {
+      unit_no: values.unit_no.trim(),
+      ptype: values.ptype.trim(),
+      ...(values.floor ? { floor: number(values.floor) } : {}),
+      ...(values.rent !== '' ? { rent: number(values.rent) } : {}),
+    };
+    await api(`/properties/${encodeURIComponent(form.dataset.property)}/units`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    await refresh();
+    showAlert('Unit added to the property.');
+    return;
   }
   if (form.dataset.form === 'staffing-work-period') {
     await api(`/staffing-engagements/${encodeURIComponent(form.dataset.engagement)}/work-periods`, { method: 'POST', body: JSON.stringify({
       period_start: values.period_start, period_end: values.period_end,
       quantity: number(values.quantity), description: values.description.trim(),
     }) });
-    form.reset(); await refresh(); showAlert('Work evidence submitted for independent review.'); return;
+    form.reset(); await refresh();
+    showAlert(state.user.role === 'worker' ? 'Your work report was submitted for independent review.' : 'Work evidence submitted for independent review.');
+    return;
+  }
+  if (form.dataset.form === 'worker-support') {
+    await api('/worker-support', { method: 'POST', body: JSON.stringify({
+      category: values.category, subject: values.subject.trim(), description: values.description.trim(),
+    }) });
+    form.reset();
+    await refresh();
+    showAlert('Your support request was sent to AfroLife.');
+    return;
+  }
+  if (form.dataset.form === 'support-case-create') {
+    const payload = {
+      category: values.category,
+      subject: values.subject.trim(),
+      description: values.description.trim(),
+      ...(values.subject_user_id ? { subject_user_id: values.subject_user_id } : {}),
+    };
+    await api('/support/cases',{method:'POST',body:JSON.stringify(payload)});
+    form.reset();
+    await refresh();
+    showAlert('Your support case was submitted. Safety, fraud, privacy and legal cases are escalated as urgent.');
+    return;
+  }
+  if (form.dataset.form === 'support-case-resolve') {
+    const payload = {
+      outcome:values.outcome.trim(),
+      rationale:values.rationale.trim(),
+      corrective_action:values.corrective_action.trim(),
+      refund_reference:values.refund_reference.trim(),
+      appeal_route:values.appeal_route.trim(),
+      ...(values.formal_workflow_reference.trim()
+        ? { formal_workflow_reference:values.formal_workflow_reference.trim() } : {}),
+    };
+    await api(`/support/cases/${encodeURIComponent(form.dataset.id)}/resolve`,{
+      method:'POST',body:JSON.stringify(payload),
+    });
+    state.supportCaseDetail=null;
+    await refresh();
+    showAlert('Resolution recorded and the user was notified.');
+    return;
+  }
+  if (form.dataset.form === 'workforce-correction') {
+    const payload = {
+      reason: values.reason.trim(),
+      ...(values.proposed_clock_in_at ? { proposed_clock_in_at: new Date(values.proposed_clock_in_at).toISOString() } : {}),
+      ...(values.proposed_clock_out_at ? { proposed_clock_out_at: new Date(values.proposed_clock_out_at).toISOString() } : {}),
+    };
+    if (!payload.proposed_clock_in_at && !payload.proposed_clock_out_at) {
+      throw new Error('Enter at least one corrected clock time.');
+    }
+    await api(`/workforce/shifts/${encodeURIComponent(form.dataset.shift)}/corrections`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    form.reset();
+    await refresh();
+    showAlert('Your time correction was submitted for independent review.');
+    return;
+  }
+  if (form.dataset.form === 'workforce-leave') {
+    await api('/workforce/leave', {
+      method: 'POST',
+      body: JSON.stringify({
+        engagement_id: values.engagement_id,
+        starts_on: values.starts_on,
+        ends_on: values.ends_on,
+        reason: values.reason.trim(),
+      }),
+    });
+    form.reset();
+    await refresh();
+    showAlert('Your leave or availability request was submitted for review.');
+    return;
+  }
+  if (form.dataset.form === 'workforce-shift') {
+    await api('/workforce/shifts', {
+      method: 'POST',
+      body: JSON.stringify({
+        engagement_id: values.engagement_id,
+        starts_at: addisAbabaDateTimeToIso(values.starts_at),
+        ends_at: addisAbabaDateTimeToIso(values.ends_at),
+      }),
+    });
+    form.reset();
+    await refresh();
+    showAlert('Worker shift scheduled.');
+    return;
+  }
+  if (form.dataset.form === 'workforce-policy') {
+    await api('/workforce/policies', {
+      method: 'POST',
+      body: JSON.stringify({
+        policy_version: values.policy_version.trim(),
+        jurisdiction: values.jurisdiction.trim(),
+        citation: values.citation.trim(),
+        effective_from: values.effective_from,
+        ...(values.effective_to ? { effective_to: values.effective_to } : {}),
+        warning_daily_minutes: number(values.warning_daily_minutes),
+        warning_weekly_minutes: number(values.warning_weekly_minutes),
+        test_evidence: values.test_evidence.trim(),
+      }),
+    });
+    form.reset();
+    await refresh();
+    showAlert('Workforce policy draft saved for independent approval.');
+    return;
+  }
+  if (form.dataset.form === 'workforce-payable-calc') {
+    const result = await api('/workforce/payable-time/calculate', {
+      method: 'POST',
+      body: JSON.stringify({ period_start: values.period_start, period_end: values.period_end }),
+    });
+    state.workforcePayableCalculation = { ...result, requestedBy: state.user.id };
+    form.reset();
+    await refresh();
+    const warningCount = result.calculated.filter((entry) => entry.policy_warnings.length).length;
+    showAlert(`Calculated payable time for ${result.calculated.length} attendance record${result.calculated.length === 1 ? '' : 's'}; ${warningCount} record${warningCount === 1 ? '' : 's'} need warning review.`);
+    return;
+  }
+  if (form.dataset.form === 'workforce-payroll-export') {
+    await api('/workforce/payroll-exports', {
+      method: 'POST',
+      body: JSON.stringify({
+        period_start: values.period_start,
+        period_end: values.period_end,
+        mapping_version: values.mapping_version.trim(),
+      }),
+    });
+    form.reset();
+    await refresh();
+    showAlert('Encrypted payroll export generated. It has not been filed or paid.');
+    return;
   }
   if (form.dataset.form === 'maintenance') {
     const payload = {
@@ -4958,9 +5919,21 @@ async function showMatches(requestId, container) {
           const form = node('form', undefined, 'inline-form staffing-engagement-form');
           form.dataset.form = 'staffing-engagement'; form.dataset.match = match.id;
           form.append(node('h4', 'Prepare engagement terms'));
+          const workerType = field('Worker arrangement', 'worker_type', 'select');
+          const workerTypePrompt = node('option', 'Choose a worker arrangement');
+          workerTypePrompt.value = '';
+          workerTypePrompt.disabled = true;
+          workerTypePrompt.selected = true;
+          workerType.input.required = true;
+          workerType.input.append(workerTypePrompt);
+          for (const [value, label] of Object.entries(WORKER_TYPE_LABELS)) {
+            const option = node('option', label);
+            option.value = value;
+            workerType.input.append(option);
+          }
           const unit = field('Billing unit', 'billing_unit', 'select');
           for (const [value,label] of [['hour','Hour'],['day','Day'],['week','Week'],['month','Month'],['fixed','Fixed amount']]) { const option=node('option',label);option.value=value;unit.input.append(option); }
-          form.append(unit.label, field('Client rate (ETB per unit)', 'client_rate', 'number', true, { min: '0.01', step: '0.01' }).label,
+          form.append(workerType.label, unit.label, field('Client rate (ETB per unit)', 'client_rate', 'number', true, { min: '0.01', step: '0.01' }).label,
             field('Worker rate (ETB per unit)', 'worker_rate', 'number', true, { min: '0.01', step: '0.01' }).label,
             field('Start date', 'starts_on', 'date').label, field('End date (optional)', 'ends_on', 'date', false).label,
             node('p', 'Finance independently reviews these terms. They do not create payroll or ledger entries.'),
@@ -5068,6 +6041,33 @@ async function showPropertyPhotos(propertyId, container) {
   }
 }
 
+function showPropertyUnitForm(propertyId, container) {
+  const previous = container.querySelector('.property-unit-form');
+  if (previous) {
+    previous.remove();
+    return;
+  }
+  const property = state.properties.find((entry) => entry.id === propertyId);
+  if (!property) {
+    showAlert('Property details are unavailable. Refresh and try again.', true);
+    return;
+  }
+  const form = node('form', undefined, 'property-unit-form inline-form');
+  form.dataset.form = 'property-unit';
+  form.dataset.property = propertyId;
+  form.append(node('h3', 'Add a unit'));
+  form.append(field('Unit number', 'unit_no', 'text', true, { maxlength: 80 }).label);
+  const unitType = field('Unit type', 'ptype', 'text', true, { maxlength: 80 });
+  unitType.input.value = property.ptype || 'apartment';
+  form.append(unitType.label);
+  form.append(field('Floor (optional)', 'floor', 'number', false, { step: 1 }).label);
+  if (property.listing_mode !== 'sale') {
+    form.append(field('Rent (ETB, optional)', 'rent', 'number', false, { min: 0, step: '0.01' }).label);
+  }
+  form.append(button('Save unit', 'submit', 'button button-primary'));
+  container.append(form);
+}
+
 function showPropertyUpload(propertyId, container) {
   const previous = container.querySelector('.property-photo-upload');
   if (previous) {
@@ -5170,6 +6170,14 @@ document.addEventListener('submit', (event) => {
     });
 });
 
+window.addEventListener('online', () => {
+  if (state.user?.role !== 'worker') return;
+  void (async () => {
+    await syncWorkerClockQueue();
+    await refresh();
+  })().catch((error) => showAlert(error.message, true));
+});
+
 document.addEventListener('click', async (event) => {
   if (event.target === $('#workspace-more-dialog')) {
     $('#workspace-more-dialog').close();
@@ -5196,6 +6204,210 @@ document.addEventListener('click', async (event) => {
   const action = event.target.closest('button[data-action]');
   if (!action) return;
   const { action: name, id } = action.dataset;
+  if (name === 'support-open-case') {
+    try {
+      state.supportCaseDetail = await api(`/support/cases/${encodeURIComponent(id)}`);
+      state.supportCaseEvents = await api(`/support/cases/${encodeURIComponent(id)}/events`);
+      window.clearTimeout(supportAccessExpiryTimer);
+      if (state.supportCaseDetail.user_id!==state.user.id
+        && state.supportCaseDetail.sensitive_access_expires_at) {
+        const expiresAt=Date.parse(state.supportCaseDetail.sensitive_access_expires_at);
+        supportAccessExpiryTimer=window.setTimeout(()=>{
+          state.supportCaseDetail=null;
+          state.supportCaseEvents=[];
+          if (state.panel==='support') renderPanel();
+        },Math.max(0,expiresAt-Date.now()));
+      }
+      renderPanel();
+    } catch (error) { showAlert(error.message,true); }
+    return;
+  }
+  if (name === 'support-access-request') {
+    const reason=window.prompt(t('Explain why you need temporary access to this case (at least 10 characters).'));
+    if (!reason||reason.trim().length<10) return;
+    try {
+      await api(`/support/cases/${encodeURIComponent(id)}/access-requests`,{
+        method:'POST',body:JSON.stringify({reason:reason.trim()}),
+      });
+      await refresh();
+      showAlert('Sensitive access request submitted for independent approval.');
+    } catch (error) { showAlert(error.message,true); }
+    return;
+  }
+  if (name === 'support-access-decision') {
+    const reason=window.prompt(t('Record the approval or denial reason (at least 10 characters).'));
+    if (!reason||reason.trim().length<10) return;
+    try {
+      await api(`/support/access-requests/${encodeURIComponent(id)}/decision`,{
+        method:'POST',body:JSON.stringify({decision:action.dataset.decision,reason:reason.trim()}),
+      });
+      await refresh();
+      showAlert(action.dataset.decision==='approve'
+        ? 'Sensitive access approved for 15 minutes.' : 'Sensitive access denied.');
+    } catch (error) { showAlert(error.message,true); }
+    return;
+  }
+  if (name === 'support-case-status') {
+    const reason=window.prompt(t('Record why this support case status is changing (at least 10 characters).'));
+    if (!reason||reason.trim().length<10) return;
+    try {
+      await api(`/support/cases/${encodeURIComponent(id)}/status`,{
+        method:'PATCH',body:JSON.stringify({status:action.dataset.status,reason:reason.trim()}),
+      });
+      state.supportCaseDetail=null;
+      await refresh();
+      showAlert('Support case status updated and the user was notified.');
+    } catch (error) { showAlert(error.message,true); }
+    return;
+  }
+  if (name === 'support-appeal') {
+    const reason=window.prompt(t('Explain why you are appealing this resolution (at least 10 characters).'));
+    if (!reason||reason.trim().length<10) return;
+    try {
+      await api(`/support/cases/${encodeURIComponent(id)}/appeal`,{
+        method:'POST',body:JSON.stringify({reason:reason.trim()}),
+      });
+      await refresh();
+      showAlert('Your appeal has been recorded.');
+    } catch (error) { showAlert(error.message,true); }
+    return;
+  }
+  if (name === 'workforce-clock') {
+    try {
+      const queue = readWorkerClockQueue();
+      if (state.workerClockQueueError) throw new Error(state.workerClockQueueError);
+      const eventType = action.dataset.eventType;
+      const priorForShift = queue.filter((entry) => entry.shift_id === id);
+      if (priorForShift.some((entry) => entry.event_type === eventType)) {
+        throw new Error(`A ${eventType.replace('_',' ')} event for this shift is already queued.`);
+      }
+      const shift = state.workerPortalShifts.find((entry) => entry.id === id);
+      const hasClockIn = Boolean(shift?.clock_in_at)
+        || priorForShift.some((entry) => entry.event_type === 'clock_in');
+      if (eventType === 'clock_out' && !hasClockIn) throw new Error('Clock in before recording a clock-out event.');
+      queue.push({
+        shift_id: id,
+        event_type: eventType,
+        client_event_id: crypto.randomUUID(),
+        occurred_at: new Date().toISOString(),
+        source: navigator.onLine ? 'online' : 'offline',
+      });
+      localStorage.setItem(workerClockQueueKey(), JSON.stringify(queue));
+      if (navigator.onLine) {
+        await syncWorkerClockQueue();
+        await refresh();
+      } else {
+        renderPanel();
+      }
+      const remaining = readWorkerClockQueue().length;
+      showAlert(remaining
+        ? `Clock event saved on this device and awaiting sync. ${remaining} event${remaining === 1 ? '' : 's'} remain in the queue.`
+        : 'Clock event recorded.');
+    } catch (error) {
+      showAlert(error.message, true);
+    }
+    return;
+  }
+  if (name === 'workforce-shift-response') {
+    const reason = window.prompt(t('Enter a short reason for your response (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      await api(`/workforce/shifts/${encodeURIComponent(id)}/response`, {
+        method: 'POST',
+        body: JSON.stringify({ response: action.dataset.response, reason: reason.trim() }),
+      });
+      await refresh();
+      showAlert(action.dataset.response === 'accepted' ? 'Shift accepted.' : 'Shift declined.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-leave-withdraw') {
+    try {
+      await api(`/workforce/leave/${encodeURIComponent(id)}/withdraw`, { method: 'POST', body: '{}' });
+      await refresh();
+      showAlert('Leave or availability request withdrawn.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-shift-cancel') {
+    const reason = window.prompt(t('Enter why this shift is being cancelled (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      await api(`/workforce/shifts/${encodeURIComponent(id)}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: reason.trim() }),
+      });
+      await refresh();
+      showAlert('Shift cancelled.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-correction-decision' || name === 'workforce-time-approve'
+    || name === 'workforce-leave-decision' || name === 'workforce-policy-approve') {
+    const approving = action.dataset.decision === 'approve' || name === 'workforce-time-approve' || name === 'workforce-policy-approve';
+    const reason = window.prompt(t(approving
+      ? 'Enter the approval evidence or reason (at least 10 characters).'
+      : 'Explain why this request is being rejected (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    const endpoint = name === 'workforce-correction-decision'
+      ? `/workforce/corrections/${encodeURIComponent(id)}/decision`
+      : name === 'workforce-time-approve'
+        ? `/workforce/shifts/${encodeURIComponent(id)}/approve-time`
+        : name === 'workforce-leave-decision'
+          ? `/workforce/leave/${encodeURIComponent(id)}/decision`
+          : `/workforce/policies/${encodeURIComponent(id)}/approve`;
+    const body = name === 'workforce-policy-approve'
+      ? { evidence: reason.trim() }
+      : name === 'workforce-correction-decision' || name === 'workforce-leave-decision'
+        ? { decision: action.dataset.decision, reason: reason.trim() }
+        : { reason: reason.trim() };
+    try {
+      await api(endpoint, { method: 'POST', body: JSON.stringify(body) });
+      await refresh();
+      showAlert(approving ? 'Workforce review approved.' : 'Workforce request rejected.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-payroll-download') {
+    try {
+      await downloadAuthenticatedFile(
+        `/workforce/payroll-exports/${encodeURIComponent(id)}/file`,
+        `workforce-payroll-${id}.enc.json`,
+      );
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-payroll-handoff') {
+    const result = window.prompt(t('Enter handed_off or handoff_failed. This records handoff status only.'), 'handed_off');
+    if (!['handed_off','handoff_failed'].includes(result)) return;
+    const reason = window.prompt(t('Enter the external status or failure details (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    const reference = result === 'handed_off'
+      ? window.prompt(t('Enter the external payroll provider handoff reference (at least 3 characters).'))
+      : undefined;
+    if (result === 'handed_off' && (!reference || reference.trim().length < 3)) return;
+    try {
+      await api(`/workforce/payroll-exports/${encodeURIComponent(id)}/handoff`, {
+        method: 'POST',
+        body: JSON.stringify({ result, reason: reason.trim(), ...(reference ? { reference: reference.trim() } : {}) }),
+      });
+      await refresh();
+      showAlert('Payroll export handoff status recorded. This does not confirm filing or payment.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-worker-offboard') {
+    if (!window.confirm(t('Offboard this worker, close active engagements, cancel eligible future shifts and revoke worker sessions?'))) return;
+    const reason = window.prompt(t('Enter the offboarding reason (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      await api(`/workforce/workers/${encodeURIComponent(id)}/offboard`, {
+        method: 'POST', body: JSON.stringify({ reason: reason.trim() }),
+      });
+      await refresh();
+      showAlert('Worker offboarded and active sessions revoked.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
   if (name === 'load-more-maintenance') {
     if (state.maintenanceLoadingMore) return;
     state.maintenanceLoadingMore = true;
@@ -5369,6 +6581,24 @@ document.addEventListener('click', async (event) => {
       }
     } catch (error) {
       history.append(empty(error.message));
+    }
+    return;
+  }
+  if (name === 'lead-status') {
+    const status = action.dataset.status;
+    const reason = window.prompt(t(status === 'lost'
+      ? 'Explain why this lead is being marked lost (at least 10 characters).'
+      : 'Record why this lead is qualified (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    try {
+      await api(`/leads/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason: reason.trim() }),
+      });
+      await refresh();
+      showAlert(status === 'lost' ? 'Lead marked as lost.' : 'Lead qualified.');
+    } catch (error) {
+      showAlert(error.message, true);
     }
     return;
   }
@@ -5572,9 +6802,30 @@ document.addEventListener('click', async (event) => {
       .catch((error) => showAlert(error.message, true));
     return;
   }
+  if (name === 'revoke-session') {
+    const session = state.authSessions.find((entry) => entry.id === id);
+    if (!session) return;
+    if (!window.confirm(t(session.current ? 'Sign out from this session?' : 'End this session?'))) return;
+    try {
+      await api(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (session.current) {
+        signOut({ revoke: false, message: 'This session has been signed out.' });
+        return;
+      }
+      state.authSessions = state.authSessions.map((entry) => entry.id === id
+        ? { ...entry, active: false, revoked_at: new Date().toISOString() }
+        : entry);
+      renderPanel();
+      showAlert('Session ended.');
+    } catch (error) {
+      showAlert(error.message, true);
+    }
+    return;
+  }
   if (name === 'worker-upload') { showDocumentUpload(id, container); return; }
   if (name === 'worker-documents') { void showWorkerDocuments(id, container); return; }
   if (name === 'property-photos') { void showPropertyPhotos(id, container); return; }
+  if (name === 'property-units') { showPropertyUnitForm(id, container); return; }
   if (name === 'property-upload') { showPropertyUpload(id, container); return; }
   if(name==='marketplace-media'){
     try{const response=await fetch(`${apiRoot()}/marketplace/media/${id}/file`,{headers:{authorization:`Bearer ${sessionStorage.getItem(TOKEN_KEY)}`}});if(!response.ok)throw new Error(`Media unavailable (${response.status})`);const blob=await response.blob();const url=URL.createObjectURL(blob);propertyPhotoUrls.add(url);const viewer=node('div',undefined,'marketplace-viewer');let media;if(action.dataset.mime?.startsWith('video/')){media=node('video');media.controls=true;media.autoplay=false;media.playsInline=true;}else{media=node('img');media.alt=t('Marketplace listing photo');}media.src=url;viewer.append(media);container.append(viewer);}catch(error){showAlert(error.message,true);}return;
@@ -5646,6 +6897,19 @@ document.addEventListener('click', async (event) => {
     try {
       await api(`/staffing-engagements/${encodeURIComponent(id)}/accept`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
       await refresh(); showAlert('Your acceptance was recorded. The engagement is active when both parties accept.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'worker-support-respond') {
+    const response = window.prompt(t('Enter the response for the worker (at least 5 characters).'));
+    if (!response || response.trim().length < 5) return;
+    try {
+      await api(`/worker-support/${encodeURIComponent(id)}/respond`, {
+        method: 'POST',
+        body: JSON.stringify({ status: action.dataset.status, response: response.trim() }),
+      });
+      await refresh();
+      showAlert(action.dataset.status === 'resolved' ? 'Worker support request resolved.' : 'Response sent to the worker.');
     } catch (error) { showAlert(error.message, true); }
     return;
   }

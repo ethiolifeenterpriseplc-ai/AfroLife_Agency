@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import type { Request, Response } from 'express';
 import { adminRouter } from '../src/admin.js';
+import { hasRoleActivityAccess } from '../src/role-activities.js';
 import {
   allowedMiniApps,
   hasMiniAppAccess,
@@ -31,6 +32,9 @@ test('custom mini-app grants narrow but never elevate role access', () => {
   assert.equal(hasMiniAppAccess(user('global_admin'), 'global-bi'), true);
   assert.equal(hasMiniAppAccess(user('worker', 'custom', ['global-bi']), 'global-bi'), false);
   assert.equal(hasMiniAppAccess(user('super_admin'), 'global-bi'), false);
+  assert.equal(hasMiniAppAccess(user('worker'), 'workers'), true);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', []), 'workers'), false);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', ['workers']), 'workers'), true);
 });
 
 test('lease approvers and executors can reach the property and rent workflow', () => {
@@ -50,6 +54,21 @@ test('allowed mini-apps intersect role ceiling, deployment modules and user gran
     allowedMiniApps(user('customer', 'custom', ['accounting']), ['accounting']),
     ['accounting'],
   );
+});
+
+test('worker self-service portal access follows worker identity and custom grants', () => {
+  assert.equal(hasMiniAppAccess(user('worker'), 'workers'), true);
+  assert.equal(hasMiniAppAccess(user('corporate_business_manager'), 'workers'), true);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', []), 'workers'), false);
+  assert.equal(hasMiniAppAccess(user('worker', 'custom', ['workers']), 'workers'), true);
+});
+
+test('workforce activity roles include the manager portal and protect worker-only actions', () => {
+  assert.equal(hasRoleActivityAccess('corporate_business_manager', 'workforce.workers.view'), true);
+  assert.equal(hasRoleActivityAccess('corporate_business_manager', 'workforce.shifts.manage'), true);
+  assert.equal(hasRoleActivityAccess('finance_manager', 'workforce.payroll.export'), true);
+  assert.equal(hasRoleActivityAccess('worker', 'workforce.payroll.export'), false);
+  assert.equal(hasRoleActivityAccess('worker', 'workforce.workers.offboard'), false);
 });
 
 test('API middleware denies direct access when a custom assignment excludes the app', () => {
@@ -78,4 +97,18 @@ test('mini-app assignment storage is RLS-protected and its audit is append-only'
   assert.match(migration, /user_app_access_grants_platform_admin_write/);
   assert.match(migration, /prevent_user_app_access_audit_mutation/);
   assert.match(migration, /GRANT SELECT, INSERT ON TABLE user_app_access_audit/);
+});
+
+test('worker self-service tables and participant access are protected by RLS', async () => {
+  const migration = await readFile(new URL('../migrations/094_worker_self_service_portal.sql', import.meta.url), 'utf8');
+  const staffing = await readFile(new URL('../src/staffing-accounting.ts', import.meta.url), 'utf8');
+  assert.match(migration, /workforce_worker_self_read/);
+  assert.match(migration, /staffing_engagement_worker_client_read/);
+  assert.match(migration, /staffing_work_period_worker_submit/);
+  assert.match(migration, /staffing_settlement_worker_read/);
+  assert.match(migration, /worker_support_requests_owner_read/);
+  assert.match(migration, /worker_support_requests_support_update/);
+  assert.match(staffing, /staffing-settlements\/mine/);
+  assert.match(staffing, /w\.phone=u\.phone AND s\.kind='worker_payment'/);
+  assert.match(migration, /FORCE ROW LEVEL SECURITY/);
 });

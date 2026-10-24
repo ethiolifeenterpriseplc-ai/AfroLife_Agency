@@ -9,8 +9,10 @@ import { audit, loadRules } from '../../src/domain.js';
 import { matchingTuningFromRules, scoreMatch, weightsFromRules } from '../../src/matching.js';
 import { Phone } from '../../src/validators.js';
 import { h, AGENT, num, requireListingPlan } from '../../src/supply-common.js';
+import { workforceOperations } from '../../src/workforce-operations.js';
 
 export const router = Router();
+router.use(workforceOperations);
 // ================= Worker management =================
 const WorkerIn = z.object({
   name: z.string().trim().min(2).max(200), phone: Phone, national_id: z.string().trim().min(5).max(100).optional(),
@@ -47,7 +49,7 @@ router.get('/workers', requireActivity('workforce.workers.view'), h(async (req, 
               OR NOT EXISTS (SELECT 1 FROM documents d WHERE d.worker_id=w.id AND d.doc_type='police_clearance'
                 AND d.status='verified' AND (d.expires_on IS NULL OR d.expires_on > current_date))
             ) THEN 'expired' ELSE w.verification END AS verification,
-            w.territory_id, w.source_agent_id, w.created_at
+            w.employment_status, w.terminated_at, w.territory_id, w.source_agent_id, w.created_at
      FROM workers w ORDER BY w.created_at DESC LIMIT 200`,
   )).rows));
 }));

@@ -79,6 +79,97 @@ const fb = await mkUser('field_agent', 7);
 await db.query("INSERT INTO agents (id, agent_type, parent_id, territory_id) VALUES ($1,'master',NULL,$2)", [master.id, tid]);
 for (const f of [fa, fb]) await db.query("INSERT INTO agents (id, agent_type, parent_id, territory_id) VALUES ($1,'field',$2,$3)", [f.id, master.id, tid]);
 
+test('users can list and revoke only their own active sessions', async () => {
+  const otherSessionId = randomUUID();
+  await db.query(
+    `INSERT INTO auth_sessions (id,user_id,expires_at,user_agent)
+     VALUES ($1,$2,now()+interval '8 hours',$3)`,
+    [otherSessionId, admin.id, 'Integration test browser'],
+  );
+  const sessions = await call(admin, 'GET', '/auth/sessions');
+  assert.equal(sessions.status, 200);
+  const adminSessionId = (jwt.decode(admin.token) as { sid: string }).sid;
+  assert.ok(sessions.body.some((item: any) => item.id === adminSessionId && item.current));
+  assert.ok(sessions.body.some((item: any) => item.id === otherSessionId && item.user_agent === 'Integration test browser' && item.active));
+
+  const foreignSessionId = randomUUID();
+  await db.query(
+    `INSERT INTO auth_sessions (id,user_id,expires_at)
+     VALUES ($1,$2,now()+interval '8 hours')`,
+    [foreignSessionId, fb.id],
+  );
+  assert.equal((await call(admin, 'DELETE', `/auth/sessions/${foreignSessionId}`)).status, 404);
+  assert.equal((await call(admin, 'DELETE', `/auth/sessions/${otherSessionId}`)).status, 204);
+  const revokedUse = await fetch(API + '/auth/me', {
+    headers: { authorization: `Bearer ${jwt.sign({ sub: admin.id, role: admin.role, sid: otherSessionId }, SECRET, { expiresIn: '8h' })}` },
+  });
+  assert.equal(revokedUse.status, 401);
+});
+
+test('support complaints require independent sensitive access and structured resolution and appeal', async () => {
+  const created = await call(learningCustomer,'POST','/support/cases',{
+    category:'agent_complaint',
+    subject_user_id:fa.id,
+    subject:'Complaint about an Agent',
+    description:'The Agent did not explain the service terms before requesting a decision.',
+  });
+  assert.equal(created.status,201,JSON.stringify(created.body));
+  assert.equal(created.body.priority,'normal');
+
+  const safety = await call(learningCustomer,'POST','/support/cases',{
+    category:'safety',subject:'Urgent safety concern',
+    description:'I need a safe and prompt review of a safety concern.',
+  });
+  assert.equal(safety.status,201,JSON.stringify(safety.body));
+  assert.equal(safety.body.priority,'urgent');
+  const safetyAccess = await call(compliance,'POST',`/support/cases/${safety.body.id}/access-requests`,{
+    reason:'Need temporary access to assess the reported safety concern.',
+  });
+  assert.equal(safetyAccess.status,201);
+  assert.equal((await call(compliance,'POST',`/support/access-requests/${safetyAccess.body.id}/decision`,{
+    decision:'approve',reason:'Self-approval must be blocked by the independent-review policy.',
+  })).status,403);
+  assert.equal((await call(complianceAlt,'POST',`/support/access-requests/${safetyAccess.body.id}/decision`,{
+    decision:'approve',reason:'Independent Compliance reviewer approved a limited review window.',
+  })).status,200);
+
+  const queue = await call(learningManager,'GET','/support/cases/queue');
+  assert.equal(queue.status,200);
+  const queueCase = queue.body.find((item:any)=>item.id===created.body.id);
+  assert.ok(queueCase);
+  assert.equal('description' in queueCase,false);
+  assert.equal((await call(learningManager,'GET',`/support/cases/${created.body.id}`)).status,404);
+
+  const access = await call(learningManager,'POST',`/support/cases/${created.body.id}/access-requests`,{
+    reason:'Need case evidence to investigate and respond fairly.',
+  });
+  assert.equal(access.status,201,JSON.stringify(access.body));
+  assert.equal((await call(compliance,'POST',`/support/access-requests/${access.body.id}/decision`,{
+    decision:'approve',reason:'Independent review authorizes a short investigation window.',
+  })).status,200);
+
+  const details = await call(learningManager,'GET',`/support/cases/${created.body.id}`);
+  assert.equal(details.status,200);
+  assert.match(details.body.description,/service terms/);
+  const resolution = await call(learningManager,'POST',`/support/cases/${created.body.id}/resolve`,{
+    outcome:'The complaint has been reviewed and addressed.',
+    rationale:'The case evidence supports the reported communication gap.',
+    corrective_action:'The Agent received policy coaching and the customer was contacted.',
+    refund_reference:'N/A',
+    appeal_route:'Contact the Compliance team within 30 days.',
+  });
+  assert.equal(resolution.status,200,JSON.stringify(resolution.body));
+  assert.equal((await call(learningCustomer,'POST',`/support/cases/${created.body.id}/appeal`,{
+    reason:'I do not agree that the corrective action resolved my concern.',
+  })).status,200);
+  assert.equal((await call(learningCustomer,'GET','/support/cases/mine')).body
+    .find((item:any)=>item.id===created.body.id).status,'appealed');
+  const timeline=await call(learningCustomer,'GET',`/support/cases/${created.body.id}/events`);
+  assert.equal(timeline.status,200);
+  assert.ok(timeline.body.some((item:any)=>item.event_type==='resolved'));
+  assert.ok(timeline.body.some((item:any)=>item.event_type==='appealed'));
+});
+
 test('Insurance Agent referrals require opt-in and remain within the assigned Agent hierarchy', async () => {
   const withoutAgentShare = await call(learningCustomer, 'POST', '/insurance/requests', {
     product_interest: 'life',
@@ -690,6 +781,33 @@ test('Global Admin can formally reassign an unconverted lead with an immutable a
   assert.equal((await call(fb, 'POST', `/leads/${activeLead.body.id}/contracts`, { track: 'A', base_value: 100000 })).status, 201);
   assert.equal((await call(globalAdmin, 'POST', `/admin/leads/${activeLead.body.id}/reassign`, {
     target_agent_id: fa.id, reason: 'Attempt to move a converted lead for test',
+  })).status, 409);
+});
+
+test('Agents can qualify or lose owned leads with reasons but cannot reopen terminal leads', async () => {
+  const created = await call(fa, 'POST', '/leads', {
+    lead_type: 'business', name: 'Status workflow test', phone: uniquePhone(),
+  });
+  assert.equal(created.status, 201);
+  const id = created.body.id;
+  assert.equal((await call(fb, 'PATCH', `/leads/${id}/status`, {
+    status: 'qualified', reason: 'The other agent does not own this lead',
+  })).status, 404);
+  assert.equal((await call(fa, 'PATCH', `/leads/${id}/status`, {
+    status: 'qualified', reason: 'short',
+  })).status, 400);
+  const qualified = await call(fa, 'PATCH', `/leads/${id}/status`, {
+    status: 'qualified', reason: 'Confirmed the prospect is ready for follow-up',
+  });
+  assert.equal(qualified.status, 200);
+  assert.equal(qualified.body.status, 'qualified');
+  const lost = await call(fa, 'PATCH', `/leads/${id}/status`, {
+    status: 'lost', reason: 'Prospect declined after a follow-up discussion',
+  });
+  assert.equal(lost.status, 200);
+  assert.equal(lost.body.status, 'lost');
+  assert.equal((await call(fa, 'PATCH', `/leads/${id}/status`, {
+    status: 'qualified', reason: 'Attempt to reopen a closed lead',
   })).status, 409);
 });
 

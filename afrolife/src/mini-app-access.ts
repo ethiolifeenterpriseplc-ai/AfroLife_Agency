@@ -42,7 +42,8 @@ function hasAnyActivity(user: AuthUser, activities: string[]): boolean {
 export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
   switch (module) {
     case 'workers':
-      return hasAnyActivity(user, ['workforce.workers.view', 'workforce.workers.register']);
+      return user.role === 'worker' || user.role === 'corporate_business_manager'
+        || hasAnyActivity(user, ['workforce.workers.view', 'workforce.workers.register']);
     case 'requests':
       return hasAnyActivity(user, ['staffing.requests.manage']);
     case 'properties':

@@ -561,7 +561,9 @@ For manual integration runs, start the API with the restricted `DATABASE_URL` ro
 
 ## MVP workflows
 
+- Use the authenticated Support & complaints workspace to submit and track cases, including urgent safety/fraud/privacy/legal escalation, independent review of sensitive case access, structured resolutions, and user appeals. Case conversations are not exposed to support staff before a separate authorized reviewer grants a 15-minute access window; financial/legal resolution requires a formal workflow reference. Notifications use the existing in-app/webhook path; SMS delivery remains unimplemented.
 - Sign in with phone/password and complete first-login password changes or optional MFA setup.
+- Review recent signed-in sessions in Account security and revoke sessions that are no longer recognized. The session list records browser user-agent strings (limited to 512 characters) but does not collect client IP addresses.
 - Register attributable leads and prospective workers.
 - Create property listings, upload private property photos, and review applicant KYC documents.
 - Record skills, languages, experience, expected rate, availability, and territory.

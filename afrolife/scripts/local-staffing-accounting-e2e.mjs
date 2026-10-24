@@ -51,14 +51,23 @@ try{
   const matches=await call('GET',`/requests/${request.id}/candidates`,agent);assert.ok(matches.some(x=>x.worker_id===worker.id),'Verified mock worker should be eligible for the matching request');
   const match=await call('POST',`/requests/${request.id}/matches`,agent,{worker_id:worker.id},201);
   await call('POST',`/matches/${match.id}/respond`,agent,{decision:'accepted'});
-  const engagement=await call('POST','/staffing-engagements',agent,{match_id:match.id,billing_unit:'hour',client_rate:120,worker_rate:80,starts_on:new Date().toISOString().slice(0,10)},201);
+  const engagement=await call('POST','/staffing-engagements',agent,{match_id:match.id,worker_type:'hourly_professional',billing_unit:'hour',client_rate:120,worker_rate:80,starts_on:new Date().toISOString().slice(0,10)},201);
   await call('POST',`/staffing-engagements/${engagement.id}/terms-decision`,financeManager,{decision:'approve',reason:'Independent review of synthetic client rate, worker rate and engagement dates'});
   const clientAccepted=await call('POST',`/staffing-engagements/${engagement.id}/accept`,customer,{reason:'I accept the synthetic client engagement terms and hourly bill rate'});
   assert.equal(clientAccepted.status,'terms_approved','Client acceptance alone must not activate the engagement');
   const active=await call('POST',`/staffing-engagements/${engagement.id}/accept`,workerIdentity,{reason:'I accept the synthetic worker engagement terms and hourly pay rate'});
   assert.equal(active.status,'active','Terms require independent finance approval plus both party acceptances');
-  const period=await call('POST',`/staffing-engagements/${engagement.id}/work-periods`,agent,{period_start:new Date().toISOString().slice(0,10),period_end:new Date().toISOString().slice(0,10),quantity:2,description:'Synthetic two-hour bookkeeping work period'},201);
+  const workerEngagements=await call('GET','/staffing-engagements/mine',workerIdentity);
+  assert.ok(workerEngagements.some(x=>x.id===engagement.id&&x.worker_type==='hourly_professional'&&x.employer_client==='LOCAL QA Staffing Client'),'Worker self-service must show their engagement type and employer client');
+  const period=await call('POST',`/staffing-engagements/${engagement.id}/work-periods`,workerIdentity,{period_start:new Date().toISOString().slice(0,10),period_end:new Date().toISOString().slice(0,10),quantity:2,description:'Synthetic two-hour bookkeeping work period'},201);
+  const workerReports=await call('GET','/staffing-work-periods/mine',workerIdentity);
+  assert.ok(workerReports.some(x=>x.id===period.id),'Workers can view only their own work reports');
   await call('POST',`/staffing-work-periods/${period.id}/decision`,financeManager,{decision:'approve',reason:'Approved synthetic work evidence after independent review'});
+  const ticket=await call('POST','/worker-support',workerIdentity,{category:'work_report_or_pay',subject:'Synthetic QA support request',description:'Please clarify the review status of my synthetic work report.'},201);
+  const queuedTickets=await call('GET','/worker-support/queue',agent);
+  assert.ok(queuedTickets.some(x=>x.id===ticket.id),'Authorized support staff can see the worker support queue');
+  await call('POST',`/worker-support/${ticket.id}/respond`,agent,{status:'in_progress',response:'Your report is being reviewed by the finance team.'});
+  assert.equal((await call('GET','/worker-support/mine',workerIdentity)).find(x=>x.id===ticket.id)?.status,'in_progress');
   const receipt1=await call('POST',`/staffing-engagements/${engagement.id}/settlements`,finance,{kind:'client_receipt',amount:100,channel:'bank_transfer',reference:`QA-CLIENT-${suffix}-1`,payment_date:new Date().toISOString().slice(0,10)},201);
   await call('POST',`/staffing-settlements/${receipt1.id}/reconcile`,finance,{reason:'Settlement maker must not reconcile their own client transfer'},403);
   await call('POST',`/staffing-settlements/${receipt1.id}/reconcile`,reviewer,{reason:'Independent confirmation of synthetic first client receipt'},200);
@@ -74,6 +83,9 @@ try{
     'Compliance verified synthetic worker identity evidence uploaded by the master agent',
     'Accepted match converted to engagement with explicit client bill and worker pay terms',
     'Finance terms approval and individual customer and worker acceptances required before active work',
+    'Hourly professional engagement and employer-client terms are visible in worker self-service',
+    'Worker submitted and viewed their own activity report before independent approval',
+    'Worker support requests are visible to the authorized service queue and replies return to the worker',
     'Independent work approval accrued client receivable and worker payable with balanced journals',
     'Partial client receipts and worker payout required independent reconciliation; overpayment was rejected',
     'Four Accounting outbox events were recorded atomically with approved work and settlements',

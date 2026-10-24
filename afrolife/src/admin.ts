@@ -61,6 +61,7 @@ const DUMMY_HASH = bcrypt.hashSync('no-such-user-placeholder', 12);
 async function issue(
   u: { id: string; role: string; must_change_password: boolean; mfa_enabled: boolean },
   replaceSessionId?: string,
+  userAgent?: string,
 ) {
   const rst = u.must_change_password ? 'password' : process.env.REQUIRE_MFA_FOR_STAFF === '1' && MFA_STAFF.includes(u.role) && !u.mfa_enabled ? 'mfa' : null;
   const sessionId = randomUUID();
@@ -69,8 +70,9 @@ async function issue(
        OR revoked_at < now() - interval '30 days'`,
   );
   await pool.query(
-    `INSERT INTO auth_sessions (id,user_id,expires_at) VALUES ($1,$2,now()+interval '8 hours')`,
-    [sessionId, u.id],
+    `INSERT INTO auth_sessions (id,user_id,expires_at,user_agent)
+     VALUES ($1,$2,now()+interval '8 hours',$3)`,
+    [sessionId, u.id, userAgent?.slice(0, 512) ?? null],
   );
   if (replaceSessionId) {
     await pool.query(
@@ -118,7 +120,7 @@ loginRouter.post('/auth/login', h(async (req, res) => {
     if (!consumed.rowCount) { await recordFailure(u.id); throw new HttpError(401, 'Invalid code'); }
   }
   await pool.query('UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = $1', [u.id]);
-  res.json(await issue(u));
+  res.json(await issue(u, undefined, req.get('user-agent')));
 }));
 
 loginRouter.get('/auth/signup/options', h(async (_req, res) => {
@@ -1445,6 +1447,36 @@ adminRouter.get('/auth/me', h(async (req, res) => {
 
 adminRouter.get('/auth/session', (_req, res) => res.sendStatus(204));
 
+adminRouter.get('/auth/sessions', h(async (req, res) => {
+  const sessions = await withUser(req.user!, async (client) => (await client.query(
+    `SELECT id,created_at,last_activity_at,expires_at,revoked_at,user_agent
+     FROM auth_sessions
+     WHERE user_id=$1 AND (expires_at>now() OR revoked_at>now()-interval '30 days')
+     ORDER BY created_at DESC LIMIT 100`,
+    [req.user!.id],
+  )).rows);
+  res.json(sessions.map((session) => ({
+    ...session,
+    current: session.id === req.user!.sessionId,
+    active: !session.revoked_at && new Date(session.expires_at) > new Date(),
+  })));
+}));
+
+adminRouter.delete('/auth/sessions/:sessionId', h(async (req, res) => {
+  const sessionId = z.string().uuid().parse(req.params.sessionId);
+  await withUser(req.user!, async (client) => {
+    const revoked = await client.query(
+      `UPDATE auth_sessions SET revoked_at=now()
+       WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>now()
+       RETURNING id`,
+      [sessionId, req.user!.id],
+    );
+    if (!revoked.rowCount) throw new HttpError(404, 'Active session not found');
+    await audit(client, req.user!.id, 'session_revoked', 'auth_session', sessionId);
+  });
+  res.sendStatus(204);
+}));
+
 adminRouter.post('/auth/logout', h(async (req, res) => {
   if (!req.user!.sessionId) throw new HttpError(401, 'Session is invalid; sign in again');
   await pool.query(
@@ -1465,7 +1497,7 @@ adminRouter.post('/auth/change-password', h(async (req, res) => {
     await c.query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [u.id, await bcrypt.hash(b.next, 12)]);
     await audit(c, u.id, 'password_changed', 'user', u.id);
   });
-  res.json(await issue({ ...u, must_change_password: false }, req.user!.sessionId));
+  res.json(await issue({ ...u, must_change_password: false }, req.user!.sessionId, req.get('user-agent')));
 }));
 
 adminRouter.post('/auth/mfa/setup', h(async (req, res) => {
@@ -1490,7 +1522,7 @@ adminRouter.post('/auth/mfa/enable', h(async (req, res) => {
     if (!enabled.rowCount) throw new HttpError(409, 'Two-factor setup changed. Start setup again.');
     await audit(c, u.id, 'mfa_enabled', 'user', u.id);
   });
-  res.json(await issue({ ...u, mfa_enabled: true }, req.user!.sessionId));
+  res.json(await issue({ ...u, mfa_enabled: true }, req.user!.sessionId, req.get('user-agent')));
 }));
 
 adminRouter.post('/auth/mfa/disable', h(async (req, res) => {

@@ -11,7 +11,7 @@
 | FR-IAM-001 invitation and account lifecycle | Partial | Activation/deactivation and role history/audit exist; prove invite, suspension/reactivation and all user-class transitions, including reason and session effects. |
 | FR-IAM-002 MFA | Partial | MFA and role checks exist; establish enforced privileged policy, safe recovery and configurable external-user risk policy. |
 | FR-IAM-003 account recovery | Open | No complete expiring, single-use, non-enumerating recovery workflow evidenced. |
-| FR-IAM-004 session management | Partial | Expiry and auth state exist; session/device listing and revocation propagation after role/status change need acceptance evidence. |
+| FR-IAM-004 session management | Partial | Migration 096 records a bounded browser user-agent; the Security panel lists a user's current and recent sessions and allows revocation of active sessions with audit evidence. API integration coverage is added but still needs execution against the migrated disposable database; revocation propagation after role/status changes still needs acceptance evidence. |
 | FR-IAM-005 effective-dated access history | Partial | Migration 059 records role/activation history and privileged history APIs; initial snapshot is migration-time only and does not reconstruct earlier history or all resource assignments. |
 | FR-IAM-006 service accounts | Open | Lifecycle, rotation, expiry and interactive-auth prohibition are not evidenced. |
 | FR-DATA-001 server-controlled scope | Partial | Existing RLS and server checks cover current agency records; audit every tenant-owned record and reject caller scope overrides across all services. |
@@ -25,6 +25,7 @@
 | Maintenance and vendors (2.6) | Partial | Basic maintenance tracking exists. Vendor-only access, SLAs, approvals, parts/labour/photos, rework evidence and invoice matching need implementation and tests. |
 | Workforce/time/payroll/leave (2.7) | Partial / gated | Workforce/staffing modules exist. Effective-dated rules, correction history, leave policy, payroll export reconciliation and HR/legal approval remain. Biometric/location collection stays subject to privacy review. |
 | Notifications (2.8) | Partial | In-app/webhook notice event path exists for lease notice records. A template/recipient/channel/retry/delivery-state inventory and deduplication proof for every material notification remain. |
+| Support and complaints (V11 WF-I) | Partial | Migration 097 adds authenticated case intake, urgent safety/fraud/privacy/legal classification, a central Agent-complaint queue, independent 15-minute sensitive-content access approvals, append-only events, structured resolution and appeal. SMS delivery, PostgreSQL/API integration execution, support ownership, and formal financial/legal workflow integration remain open. |
 | AI governance (2.9) | Partial / gated | MFI sandbox is synthetic and advisory; production model/provider use, organisation/use-case kill switches, logging/evaluation and approved data classes remain gated. |
 | Search, exports, reports (2.10) | Partial | Endpoint-level scope, export audit/expiry, report freshness/basis metadata, and reconciliation of unresolved differences are not comprehensively evidenced. |
 
