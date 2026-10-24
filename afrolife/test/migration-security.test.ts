@@ -37,6 +37,7 @@ const sessionDeviceManagement = readFileSync(new URL('../migrations/096_session_
 const supportCases = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
 const supportCaseAccessHardening = readFileSync(new URL('../migrations/098_support_case_access_hardening.sql', import.meta.url), 'utf8');
 const supportCaseAppealReview = readFileSync(new URL('../migrations/099_support_case_appeal_review.sql', import.meta.url), 'utf8');
+const maintenanceCompletionReview = readFileSync(new URL('../migrations/100_maintenance_completion_review.sql', import.meta.url), 'utf8');
 const coreMigrator = readFileSync(new URL('../src/migrate.ts', import.meta.url), 'utf8');
 const accountingMigrator = readFileSync(new URL('../services/accounting/migrate.ts', import.meta.url), 'utf8');
 
@@ -442,4 +443,15 @@ test('support case appeals have a private queue and independent append-only revi
   assert.match(supportCaseAppealReview,/NOT EXISTS \([\s\S]*support_case_appeal_reviews/);
   assert.match(supportCaseAppealReview,/appeal_reviewed/);
   assert.match(operations,/support\/cases\/:id\/appeal-review/);
+});
+
+test('maintenance completion requires an independent authorized review', () => {
+  assert.match(maintenanceCompletionReview,/completion_submitted_by uuid REFERENCES users\(id\)/);
+  assert.match(maintenanceCompletionReview,/reviewed_by <> completion_submitted_by/);
+  assert.match(maintenanceCompletionReview,/app_role\(\) NOT IN \('corporate_business_manager','super_admin','global_admin'\)/);
+  assert.match(maintenanceCompletionReview,/CREATE TRIGGER maintenance_workflow_transition_guard/);
+  assert.match(maintenanceCompletionReview,/Maintenance work submission is incomplete/);
+  assert.match(maintenanceCompletionReview,/Maintenance cancellation requires a reason/);
+  assert.match(operations,/canTransitionMaintenance\(m\.status, b\.status\)/);
+  assert.match(operations,/requiresMaintenanceReview\(b\.status\)/);
 });

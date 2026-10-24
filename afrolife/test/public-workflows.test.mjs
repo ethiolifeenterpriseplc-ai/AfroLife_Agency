@@ -172,6 +172,17 @@ test('worker portal exposes workforce self-service and ordered offline clock syn
   assert.match(server, /api\.use\('\/workforce', workerManagementGateway\)/);
 });
 
+test('maintenance workflow surfaces independent completion review', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const api = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
+  assert.match(app, /Submit for review/);
+  assert.match(app, /mayReviewMaintenance/);
+  assert.match(app, /Complete work|Return for rework/);
+  assert.match(api, /ops\.post\('\/maintenance\/:id\/update'/);
+  assert.match(api, /Only a maintenance reviewer can approve completion/);
+  assert.match(api, /Completion review must be performed by someone other than the person who submitted the work/);
+});
+
 test('account security exposes session listing and session revocation', () => {
   const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');

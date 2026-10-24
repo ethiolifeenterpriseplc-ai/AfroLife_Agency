@@ -6,6 +6,11 @@ import { HttpError, invalidateUser, requireActivity, requireRole, withUser } fro
 import { audit } from './domain.js';
 import { toCsv } from './csv.js';
 import { hasRoleActivityAccess } from './role-activities.js';
+import {
+  exceedsWorkforcePayrollBatchLimit,
+  WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS,
+  WORKFORCE_PAYROLL_EXPORT_MAX_ROWS,
+} from './workforce-payroll-batch.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { fn(req, res).catch(next); };
@@ -696,9 +701,12 @@ workforceOperations.post('/workforce/payable-time/calculate', requireActivity('w
        JOIN staffing_engagements e ON e.id=s.engagement_id JOIN workers w ON w.id=e.worker_id
        WHERE t.status='approved'
          AND (s.starts_at AT TIME ZONE 'Africa/Addis_Ababa')::date BETWEEN $1::date AND $2::date
-       ORDER BY s.starts_at LIMIT 500`,
+       ORDER BY s.starts_at LIMIT ${WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS + 1}`,
       [body.period_start, body.period_end],
     )).rows;
+    if (exceedsWorkforcePayrollBatchLimit(entries.length, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS)) {
+      throw new HttpError(409, `This period has more than ${WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS} approved attendance rows; split the period before calculating payable time`);
+    }
     if (!entries.length) throw new HttpError(409, 'No newly approved attendance is available for this period');
     const calculated = [];
     for (const entry of entries) {
@@ -770,9 +778,12 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
        WHERE t.status='payable'
          AND (s.starts_at AT TIME ZONE 'Africa/Addis_Ababa')::date BETWEEN $1::date AND $2::date
          AND p.status='approved'
-       ORDER BY s.starts_at LIMIT 2000`,
+       ORDER BY s.starts_at LIMIT ${WORKFORCE_PAYROLL_EXPORT_MAX_ROWS + 1}`,
       [body.period_start, body.period_end],
     )).rows;
+    if (exceedsWorkforcePayrollBatchLimit(rows.length, WORKFORCE_PAYROLL_EXPORT_MAX_ROWS)) {
+      throw new HttpError(409, `This period has more than ${WORKFORCE_PAYROLL_EXPORT_MAX_ROWS} payable attendance rows; split the period before exporting payroll`);
+    }
     if (!rows.length) throw new HttpError(409, 'No payable, approved time rows are available for this period');
     if (new Set(rows.map((row) => row.policy_version_id)).size !== 1) {
       throw new HttpError(409, 'This export period spans multiple workforce policy versions; create separate exports per policy version');
