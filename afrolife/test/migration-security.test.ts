@@ -35,6 +35,7 @@ const workforceWorkflows = readFileSync(new URL('../migrations/095_workforce_wor
 const sessionDeviceManagement = readFileSync(new URL('../migrations/096_session_device_management.sql', import.meta.url), 'utf8');
 const supportCases = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
 const supportAppealReview = readFileSync(new URL('../migrations/098_support_case_appeal_review.sql', import.meta.url), 'utf8');
+const maintenanceCompletionReview = readFileSync(new URL('../migrations/099_maintenance_completion_review.sql', import.meta.url), 'utf8');
 
 test('central Insurance ledger grants match service operations and identity sequences', () => {
   for (const revoke of [
@@ -371,4 +372,14 @@ test('appeal review evidence is private, independently approved, and append-only
   assert.match(supportAppealReview,/reviewer_id=app_user_id\(\)/);
   assert.match(supportAppealReview,/GRANT SELECT,INSERT ON TABLE support_case_appeal_reviews TO "\{\{role\}\}"/);
   assert.doesNotMatch(supportAppealReview,/GRANT .*UPDATE|GRANT .*DELETE/);
+});
+
+test('maintenance completion requires an independent reviewer and retains workflow states', () => {
+  assert.match(maintenanceCompletionReview, /'open','triaged','assigned','in_progress','awaiting_review','completed','rework_required','done','cancelled'/);
+  assert.match(maintenanceCompletionReview, /completion_submitted_by IS NOT NULL AND completion_submitted_at IS NOT NULL/);
+  assert.match(maintenanceCompletionReview, /reviewed_by <> completion_submitted_by/);
+  assert.match(maintenanceCompletionReview, /length\(trim\(review_note\)\) >= 5/);
+  assert.match(maintenanceCompletionReview, /VALUES \('corporate_business_manager', 'property\.maintenance\.manage', true\)/);
+  assert.match(maintenanceCompletionReview, /CREATE TRIGGER maintenance_workflow_transition_guard/);
+  assert.match(maintenanceCompletionReview, /app_role\(\) NOT IN \('corporate_business_manager','super_admin','global_admin'\)/);
 });

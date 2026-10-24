@@ -38,7 +38,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAppealQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAppealQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [], overviewDataErrors: [], overviewDataOmitted: [], overviewLoadedAt: null };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
@@ -982,7 +982,7 @@ function signOut({ revoke = true, message = '' } = {}) {
     serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null,
     insuranceSandboxStatus: null, insuranceSandboxCases: [],
     serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '',
-    workspaceDataErrors: [], workspaceDataOmitted: [],
+    workspaceDataErrors: [], workspaceDataOmitted: [], overviewDataErrors: [], overviewDataOmitted: [], overviewLoadedAt: null,
   });
   state.platformTenantContextId = null;
   state.features = { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] };
@@ -1137,6 +1137,7 @@ async function loadWorkspace() {
     state.panel = 'overview';
     history.replaceState(null, '', panelUrl(window.location.href, state.panel));
   }
+  configureWorkspaceNavigation();
   updateWorkspaceNavigationGroups();
   renderMobileWorkspaceNav();
   if (state.user.must_change_password) {
@@ -1184,6 +1185,20 @@ async function loadPanelData(panel) {
       [state.leads, state.workers, state.requests, state.commissions] = await Promise.all([
         safeGet('/leads', []), safeGet('/workers', []), safeGet('/requests', []), safeGet('/commissions', []),
       ]);
+      state.staffingEngagements = ['customer','worker'].includes(state.user.role)
+        ? await safeGet('/staffing-engagements/mine', []) : [];
+      if (state.user.role === 'worker') {
+        [state.workerPortalReports, state.workerPortalSettlements, state.workerPortalShifts, state.workerPortalLeave,
+          state.workerPortalPayrollExports] = await Promise.all([
+          safeGet('/staffing-work-periods/mine', []),
+          safeGet('/staffing-settlements/mine', []),
+          safeGet('/workforce/shifts/mine', []),
+          safeGet('/workforce/leave/mine', []),
+          safeGet('/workforce/payroll-exports/mine', []),
+        ]);
+        state.workerPortalEngagements = state.staffingEngagements;
+        await syncWorkerClockQueue();
+      }
       if (state.user.role === 'property_owner') {
         [state.properties, state.ownerStatements, state.maintenanceRequests] = await Promise.all([
           safeGet('/properties', []),
@@ -1191,12 +1206,9 @@ async function loadPanelData(panel) {
           safeGet('/maintenance?offset=0', []),
         ]);
       }
-      state.serviceStatus = await safeGet('/system/status', null);
       state.summary = STAFF.has(state.user.role) && state.user.role !== 'compliance'
         ? await safeGet('/reports/summary', null)
         : state.user.enterprise_features_enabled ? await safeGet('/reports/me', null) : null;
-      state.staffingEngagements = ['customer','worker'].includes(state.user.role)
-        ? await safeGet('/staffing-engagements/mine', []) : [];
       if (['finance_manager','super_admin','global_admin'].includes(state.user.role)) {
         [state.staffingFinanceEngagements, state.pendingStaffingWork] = await Promise.all([
           safeGet('/staffing-engagements', []), safeGet('/staffing-work-periods/pending', []),
@@ -1364,6 +1376,11 @@ async function loadPanelData(panel) {
     default:
       break;
   }
+  if (panel === 'overview') {
+    state.overviewDataErrors = [...state.workspaceDataErrors];
+    state.overviewDataOmitted = [...state.workspaceDataOmitted];
+    state.overviewLoadedAt = Date.now();
+  }
   loadedPanels.add(panel);
 }
 
@@ -1377,7 +1394,7 @@ async function refresh(force = true) {
     if (!loadedPanels.has(panel)) await loadPanelData(panel);
     if (panel !== state.panel) return;
     if (state.panel === 'password') state.panel = 'overview';
-    if (state.workspaceDataErrors.length) {
+    if (state.workspaceDataErrors.length && panel !== 'overview') {
       showAlert('Some workspace information could not be loaded. Select Refresh to retry: {{items}}', true, {
         items: state.workspaceDataErrors.join(', '),
       });
@@ -1479,29 +1496,92 @@ function renderWorkspaceSearchResults() {
 function renderStats() {
   const grid = $('#stat-grid');
   grid.replaceChildren();
-  const visible = (panel) => !document.querySelector('.tab[data-panel="' + panel + '"]')?.hidden;
-  const unavailable = (path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path);
-  const stats = [
-    { group: 'Core activity', panel: 'leads', label: 'Lead records available', value: state.leads.length, path: '/leads' },
-    { group: 'Core activity', panel: 'workers', label: 'Worker records available', value: state.workers.length, path: '/workers' },
-    { group: 'Core activity', panel: 'requests', label: 'Open requests in your view', value: state.requests.filter((item) => item.status === 'open').length, path: '/requests' },
-    { group: 'Business activity', panel: 'commissions', label: 'Commission events in your view', value: state.commissions.length, path: '/commissions' },
-  ];
-  const availableStats = stats.filter((metric) => visible(metric.panel) && !unavailable(metric.path));
-  if (!availableStats.length) return;
-  grid.append(node('p', 'Counts reflect records currently available to your account.', 'stat-grid-caption'));
-  for (const groupName of [...new Set(availableStats.map((metric) => metric.group))]) {
-    const group = node('section', undefined, 'dashboard-metric-group');
-    group.append(node('h2', groupName));
-    const cards = node('div', undefined, 'dashboard-metric-cards');
-    for (const metric of availableStats.filter((item) => item.group === groupName)) {
-      const card = node('article', undefined, 'stat-card');
-      card.append(node('span', metric.label), node('strong', metric.value.toLocaleString(document.documentElement.lang)));
-      cards.append(card);
+  const role = state.user.role;
+  if (role === 'property_owner' || ['master_agent', 'field_agent'].includes(role)
+      || (state.user.enterprise_features_enabled && state.summary)) return;
+
+  const unavailable = (path) => state.overviewDataErrors.includes(path) || state.overviewDataOmitted.includes(path);
+  const total = (rows) => Array.isArray(rows)
+    ? rows.reduce((sum, row) => sum + Number(row?.n ?? 0), 0)
+    : null;
+  const currency = (value) => Number(value).toLocaleString(document.documentElement.lang, {
+    style: 'currency', currency: 'ETB', maximumFractionDigits: 2,
+  });
+  let values = [];
+  let caption = 'Figures are based on records currently available to your account.';
+
+  if (role === 'worker') {
+    const approvedWork = state.workerPortalReports
+      .filter((report) => report.status === 'approved')
+      .reduce((sum, report) => sum + Number(report.worker_amount ?? 0), 0);
+    values = [
+      ['Active assignments', state.workerPortalEngagements.filter((item) => item.status === 'active').length, '/staffing-engagements/mine'],
+      ['Assigned shifts', state.workerPortalShifts.length, '/workforce/shifts/mine'],
+      ['Reports awaiting review', state.workerPortalReports.filter((item) => item.status === 'submitted').length, '/staffing-work-periods/mine'],
+      ['Approved work value · ETB', currency(approvedWork), '/staffing-work-periods/mine'],
+      ['Leave / availability requests in review', state.workerPortalLeave.filter((item) => item.status === 'submitted').length, '/workforce/leave/mine'],
+      ['Payroll handoffs', state.workerPortalPayrollExports.length, '/workforce/payroll-exports/mine'],
+    ];
+    if (!unavailable('/staffing-settlements/mine')) {
+      const reconciledPayments = state.workerPortalSettlements
+        .filter((item) => item.status === 'reconciled')
+        .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      values.push(['Reconciled payments · ETB', currency(reconciledPayments), '/staffing-settlements/mine']);
     }
-    group.append(cards);
-    grid.append(group);
+    caption = 'Your work, review, and payment records only. Approved work value is not the same as a reconciled payment.';
+  } else if (STAFF.has(role) && role !== 'compliance' && state.summary) {
+    const workerCount = total(state.summary.workers);
+    const contractCount = Array.isArray(state.summary.contracts)
+      ? state.summary.contracts.filter((item) => item.state === 'active').reduce((sum, item) => sum + Number(item.n ?? 0), 0)
+      : null;
+    values = [
+      ['Lead records', total(state.summary.leads), '/reports/summary'],
+      ['Worker records', workerCount, '/reports/summary'],
+      ['Active contracts', contractCount, '/reports/summary'],
+      ['Open disputes', state.summary.open_disputes ?? null, '/reports/summary'],
+      ['Open maintenance', state.summary.open_maintenance ?? null, '/reports/summary'],
+      ['Pending invoices · ETB', state.summary.pending_invoices
+        ? `${Number(state.summary.pending_invoices.n ?? 0).toLocaleString(document.documentElement.lang)} · ${currency(state.summary.pending_invoices.amount ?? 0)}`
+        : null, '/reports/summary'],
+      ['Net revenue · ETB', Number.isFinite(Number(state.summary.money?.net_revenue))
+        ? currency(state.summary.money.net_revenue) : null, '/reports/summary'],
+    ];
+    caption = 'Operational report for your current tenant and role scope. Finance values are ledger-derived.';
+  } else {
+    values = [
+      ['Open requests in your view', state.requests.filter((item) => item.status === 'open').length, '/requests'],
+      ['Worker records in your view', state.workers.length, '/workers'],
+      ['Lead records in your view', state.leads.length, '/leads'],
+      ['Commission events in your view', state.commissions.length, '/commissions'],
+    ];
+    caption = 'Counts reflect only the records returned for your account and current role permissions.';
   }
+
+  const metrics = values.filter(([, , path]) => !unavailable(path));
+  const section = node('section', undefined, 'overview-report');
+  section.setAttribute('aria-labelledby', 'overview-report-title');
+  section.append(node('div', undefined, 'overview-report-heading'));
+  section.firstChild.append(
+    node('div', undefined, 'overview-report-accent'),
+    node('div', undefined, 'overview-report-copy'),
+  );
+  section.firstChild.lastChild.append(
+    node('p', role === 'worker' ? 'YOUR WORK REPORT' : 'PERFORMANCE SNAPSHOT', 'eyebrow'),
+    node('h2', role === 'worker' ? 'Work and payment summary' : 'Performance overview'),
+    node('p', caption, 'muted'),
+  );
+  section.firstChild.lastChild.querySelector('h2').id = 'overview-report-title';
+  const cards = node('div', undefined, 'dashboard-metric-cards');
+  for (const [label, value] of metrics) {
+    const metric = node('article', undefined, 'stat-card');
+    metric.append(node('span', label), node('strong', value === null ? '—' : String(value)));
+    cards.append(metric);
+  }
+  if (metrics.length) section.append(cards);
+  else section.append(empty(loadedPanels.has('overview')
+    ? 'A report summary is not available for this role yet.'
+    : 'Loading your authorized report summary…'));
+  grid.append(section);
 }
 function card(title, details, status) {
   const wrapper = node('article', undefined, 'list-card');
@@ -1514,9 +1594,76 @@ function card(title, details, status) {
   return wrapper;
 }
 
+function renderOverviewActions() {
+  const role = state.user.role;
+  const actionsByRole = {
+    worker: [['Open worker portal', 'workers']],
+    customer: [['Browse marketplace', 'marketplace'], ['Review requests', 'requests'], ['View properties', 'properties']],
+    finance: [['Open accounting', 'accounting'], ['Review commissions', 'commissions'], ['Rent operations', 'rent']],
+    finance_manager: [['Open accounting', 'accounting'], ['Review commissions', 'commissions'], ['Rent operations', 'rent']],
+    compliance: [['Review support cases', 'support'], ['Open privacy requests', 'privacy']],
+    corporate_business_manager: [['Manage workers', 'workers'], ['Review requests', 'requests'], ['Organization controls', 'admin']],
+    master_agent: [['Open lead book', 'leads'], ['Manage workers', 'workers'], ['Review requests', 'requests']],
+    field_agent: [['Open lead book', 'leads'], ['Manage workers', 'workers'], ['Review requests', 'requests']],
+    super_admin: [['Platform administration', 'admin'], ['Open accounting', 'accounting']],
+    global_admin: [['Platform administration', 'admin'], ['Open accounting', 'accounting']],
+  };
+  if (['property_owner'].includes(role) || ['master_agent', 'field_agent'].includes(role)) return null;
+  const actions = (actionsByRole[role] ?? [['Browse marketplace', 'marketplace'], ['View properties', 'properties']])
+    .filter(([, panel]) => {
+      const tab = document.querySelector(`.tab[data-panel="${CSS.escape(panel)}"]`);
+      return tab && !tab.hidden;
+    });
+  if (!actions.length) return null;
+
+  const section = node('section', undefined, 'overview-actions');
+  section.setAttribute('aria-labelledby', 'overview-actions-title');
+  const copy = node('div', undefined, 'overview-actions-copy');
+  copy.append(node('p', 'NEXT STEPS', 'eyebrow'), node('h2', 'Pick up where your role needs you'));
+  copy.querySelector('h2').id = 'overview-actions-title';
+  const buttons = node('div', undefined, 'overview-action-list');
+  for (const [label, panel] of actions) {
+    buttons.append(button(label, 'open-panel', 'button button-outline', { panel }));
+  }
+  section.append(copy, buttons);
+  return section;
+}
+
+function renderOverviewDataContext() {
+  const context = node('section', undefined, 'overview-data-context');
+  context.setAttribute('aria-label', 'Overview data coverage');
+  const loadedAt = state.overviewLoadedAt
+    ? new Date(state.overviewLoadedAt).toLocaleString(document.documentElement.lang)
+    : null;
+  context.append(node('p', loadedAt
+    ? `Overview data load completed ${loadedAt}.`
+    : 'Overview data is loading.', 'overview-data-freshness'));
+  context.append(node('p', 'Figures cover all records returned to this overview for your account and role. No reporting period is selected.', 'overview-data-scope'));
+  if (state.overviewDataOmitted.length) {
+    context.append(node('p', 'Some records are not included because they are outside this role’s permitted view; those omitted records are not counted as zero.', 'overview-data-caveat'));
+  }
+  if (state.overviewDataErrors.length) {
+    context.append(node('p', 'One or more available data sources could not be loaded. Figures from those sources are omitted; refresh to retry.', 'overview-data-caveat'));
+  }
+  return context;
+}
+
 function renderOverview() {
   const wrap = node('div');
-  wrap.append(sectionHeading('Your activity', 'Your latest records and work in progress.'));
+  const roleHeading = state.user.role === 'worker'
+    ? ['Your work overview', 'Track assigned shifts, submitted reports, and verified payment handoffs.']
+    : state.user.role === 'property_owner'
+      ? ['Property performance', 'Review portfolio activity, maintenance, occupancy, and rent records.']
+      : ['Your workspace overview', 'A role-scoped performance snapshot and direct paths to your active work.'];
+  wrap.append(sectionHeading(...roleHeading));
+  wrap.append(renderOverviewDataContext());
+  const report = $('#stat-grid');
+  const hasDedicatedSummary = state.user.role === 'property_owner'
+    || ['master_agent', 'field_agent'].includes(state.user.role)
+    || (state.user.enterprise_features_enabled && state.summary);
+  report.hidden = state.panel !== 'overview' || Boolean(hasDedicatedSummary);
+  const actions = renderOverviewActions();
+  if (actions) wrap.append(actions);
   if (state.user.role === 'property_owner') wrap.append(renderOwnerPortfolio());
   if (['master_agent', 'field_agent'].includes(state.user.role)) wrap.append(renderAgentPortfolio());
   if (['finance_manager','super_admin','global_admin'].includes(state.user.role)) {
@@ -1526,7 +1673,7 @@ function renderOverview() {
   function renderOwnerPortfolio() {
     const metrics = propertyOwnerDashboardMetrics(state.properties, state.ownerStatements, state.maintenanceRequests);
     const sources = ['/properties', '/owner/statements', '/maintenance?offset=0'];
-    const unavailable = sources.some((path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path));
+    const unavailable = sources.some((path) => state.overviewDataErrors.includes(path) || state.overviewDataOmitted.includes(path));
     const section = node('section', undefined, 'panel form-card owner-portfolio');
     section.append(node('p', 'LANDLORD SELF-SERVICE', 'eyebrow'));
     section.append(node('h2', 'Your property portfolio'));
@@ -1560,7 +1707,7 @@ function renderOverview() {
   function renderAgentPortfolio() {
     const metrics = agentDashboardMetrics(state.leads, state.workers, state.requests, state.commissions);
     const sources = ['/leads', '/workers', '/requests', '/commissions'];
-    const unavailable = sources.some((path) => state.workspaceDataErrors.includes(path) || state.workspaceDataOmitted.includes(path));
+    const unavailable = sources.some((path) => state.overviewDataErrors.includes(path) || state.overviewDataOmitted.includes(path));
     const section = node('section', undefined, 'panel form-card agent-portfolio');
     section.append(node('p', 'AGENT WORKSPACE', 'eyebrow'));
     section.append(node('h2', 'Your activity snapshot'));
@@ -1603,16 +1750,6 @@ function renderOverview() {
     }
     return section;
   }
-  const unavailableServices = state.serviceStatus?.services?.filter((service) => service.status === 'unavailable') ?? [];
-  if (unavailableServices.length) {
-    const notice = node('section', undefined, 'alert error');
-    notice.setAttribute('role', 'status');
-    notice.append(node('strong', 'Some services are temporarily unavailable: '));
-    notice.append(node('span', unavailableServices.map((service) => service.name).join(', ')));
-    notice.append(button('View service status', 'open-panel', 'button button-outline', { panel: 'status' }));
-    wrap.append(notice);
-  }
-  wrap.append(renderServiceLauncher());
   if (['customer','worker'].includes(state.user.role) && state.staffingEngagements.length) {
     const selfService = node('section', undefined, 'panel');
     selfService.append(sectionHeading('Staffing offers', 'Review approved engagement terms and record your own acceptance. An engagement becomes active only after both parties accept.'));
@@ -1655,15 +1792,6 @@ function renderOverview() {
     portfolio.append(snapshot);
     wrap.append(portfolio);
   }
-  const recent = node('div', undefined, 'list');
-  const items = [
-    ...state.leads.slice(0, 3).map((item) => card(item.name, t('{{phone}} · Lead · {{date}}', { phone: item.phone, date: new Date(item.created_at).toLocaleDateString(document.documentElement.lang) }), item.status)),
-    ...state.workers.slice(0, 3).map((item) => card(item.name, t('{{sector}} · {{years}} years experience', { sector: item.sector, years: item.experience_years }), item.verification)),
-    ...state.requests.slice(0, 3).map((item) => card(item.sector, t('Rate ETB {{rate}} · Request', { rate: Number(item.rate_offered).toLocaleString(document.documentElement.lang) }), item.status)),
-  ];
-  if (!items.length) recent.append(empty('No activity yet. Start by registering a lead or worker.'));
-  else recent.append(...items);
-  wrap.append(recent);
   return wrap;
 }
 
@@ -1748,18 +1876,6 @@ function renderServiceStatus() {
   }
   return wrap;
 }
-
-const serviceDescriptions = {
-  leads: 'Register and follow up on customer and business opportunities.',
-  contracts: 'Prepare, review, and track service agreements.',
-  commissions: 'Review earned commissions and payment status.',
-  agents: 'Oversee agent teams and service specialization.',
-  rent: 'Manage leases, rent receipts, and deposit workflows.',
-  edir: 'Open the central community membership and financial pilot.',
-  mfi: 'Open institution-scoped SACCO and MFI pilot operations.',
-  accounting: 'Entity-scoped general ledger, journal approval, and parent consolidation.',
-  insurance: 'Request insurance information and review your request activity.',
-};
 
 const integratedMiniAppLogos = Object.freeze({
   leads: '/mini-apps/leads/logo.svg',
@@ -2084,43 +2200,6 @@ async function submitSubscriptionRequest() {
   }
 }
 
-function renderServiceLauncher(panelNames) {
-  const allowed = new Set(panelNames ?? [...document.querySelectorAll('.tab:not([hidden])')]
-    .map((tab) => tab.dataset.panel)
-    .filter((panel) => panel && !['overview', 'privacy', 'security', 'admin'].includes(panel)));
-  const tabs = [...document.querySelectorAll('.tab:not([hidden])')]
-    .filter((tab) => allowed.has(tab.dataset.panel));
-  if (!tabs.length) return node('div');
-  const section = node('section', undefined, 'service-launcher');
-  section.setAttribute('aria-labelledby', 'service-launcher-title');
-  section.append(node('div', undefined, 'service-launcher-heading'));
-  section.firstChild.append(node('h2', 'Your service mini-apps'), node('p', 'Open an available service directly. Access is based on your role and enabled features.'));
-  section.firstChild.firstChild.id = 'service-launcher-title';
-  const grid = node('div', undefined, 'service-launcher-grid');
-  for (const tab of tabs) {
-    const panel = tab.dataset.panel;
-    const miniApp = miniAppByPanel[panel];
-    const logoSource = miniAppLogo(panel);
-    const card = node('article', undefined, 'service-launcher-card');
-    if (logoSource) {
-      const logo = node('img', undefined, 'service-launcher-logo');
-      logo.src = logoSource;
-      logo.alt = '';
-      logo.setAttribute('aria-hidden', 'true');
-      card.append(logo);
-    }
-    card.append(
-      node('h3', t(miniApp?.name ?? tab.textContent.trim())),
-      node('p', t(miniApp?.description ?? serviceDescriptions[panel] ?? 'Open this role-based service workspace.')),
-    );
-    const open = button('Open mini app', 'open-panel', 'button button-outline', { panel });
-    card.append(open);
-    grid.append(card);
-  }
-  section.append(grid);
-  return section;
-}
-
 const workspaceNavIcons = {
   overview: '⌂',
   leads: '＋',
@@ -2166,6 +2245,86 @@ function updateWorkspaceNavigationGroups() {
   document.querySelectorAll('.workspace-nav-group').forEach((group) => {
     group.hidden = !group.querySelector('.tab:not([hidden])');
   });
+}
+
+function configureWorkspaceNavigation() {
+  const profiles = {
+    worker: {
+      titles: ['My work', 'Work tools', 'Account & help'],
+      core: ['overview', 'workers', 'support', 'learning', 'requests'],
+      business: ['subscriptions', 'marketplace', 'insurance', 'edir', 'mfi', 'accounting'],
+    },
+    customer: {
+      titles: ['My requests', 'Explore services', 'Account & help'],
+      core: ['overview', 'requests', 'support', 'workers'],
+      business: ['marketplace', 'properties', 'rent', 'subscriptions', 'edir', 'insurance'],
+    },
+    property_owner: {
+      titles: ['Property operations', 'Property services', 'Account & help'],
+      core: ['overview', 'properties', 'rent', 'requests', 'support'],
+      business: ['subscriptions', 'marketplace', 'accounting', 'insurance', 'edir'],
+    },
+    master_agent: {
+      titles: ['Pipeline', 'Business tools', 'Account & help'],
+      core: ['overview', 'leads', 'requests', 'workers', 'support'],
+      business: ['contracts', 'commissions', 'agents', 'properties', 'marketplace', 'subscriptions'],
+    },
+    field_agent: {
+      titles: ['Pipeline', 'Business tools', 'Account & help'],
+      core: ['overview', 'leads', 'requests', 'workers', 'support'],
+      business: ['contracts', 'commissions', 'properties', 'marketplace', 'subscriptions'],
+    },
+    corporate_business_manager: {
+      titles: ['Business operations', 'Organization tools', 'Account & controls'],
+      core: ['overview', 'workers', 'requests', 'leads', 'support'],
+      business: ['properties', 'marketplace', 'contracts', 'commissions', 'agents', 'accounting', 'subscriptions'],
+    },
+    finance: {
+      titles: ['Finance desk', 'Operations', 'Account & controls'],
+      core: ['overview', 'accounting', 'commissions', 'rent', 'support'],
+      business: ['requests', 'workers', 'properties', 'subscriptions'],
+    },
+    finance_manager: {
+      titles: ['Finance desk', 'Operations', 'Account & controls'],
+      core: ['overview', 'accounting', 'commissions', 'rent', 'support'],
+      business: ['requests', 'workers', 'properties', 'subscriptions'],
+    },
+    compliance: {
+      titles: ['Review desk', 'Service tools', 'Account & controls'],
+      core: ['overview', 'support', 'workers', 'requests'],
+      business: ['properties', 'marketplace', 'subscriptions', 'insurance'],
+    },
+    super_admin: {
+      titles: ['Platform overview', 'Business tools', 'Administration'],
+      core: ['overview', 'workers', 'leads', 'requests', 'support'],
+      business: ['accounting', 'global-bi', 'properties', 'rent', 'commissions', 'contracts', 'subscriptions'],
+    },
+    global_admin: {
+      titles: ['Agency overview', 'Business tools', 'Administration'],
+      core: ['overview', 'workers', 'leads', 'requests', 'support'],
+      business: ['accounting', 'global-bi', 'properties', 'rent', 'commissions', 'contracts', 'subscriptions'],
+    },
+  };
+  const profile = profiles[state.user?.role] ?? {
+    titles: ['Workspace', 'Operations', 'Account & controls'],
+    core: ['overview'],
+    business: [],
+  };
+  const groups = [...document.querySelectorAll('.workspace-nav-group')];
+  const [coreGroup, businessGroup, configurationGroup] = groups;
+  [coreGroup, businessGroup, configurationGroup].forEach((group, index) => {
+    const heading = group?.querySelector('h2');
+    if (heading) setLocalizedText(heading, profile.titles[index]);
+  });
+  const orderGroup = (group, order) => {
+    if (!group) return;
+    const priority = new Map(order.map((panel, index) => [panel, index]));
+    const tabs = [...group.querySelectorAll(':scope > .tab')];
+    tabs.sort((left, right) => (priority.get(left.dataset.panel) ?? 100) - (priority.get(right.dataset.panel) ?? 100));
+    tabs.forEach((tab) => group.append(tab));
+  };
+  orderGroup(coreGroup, profile.core);
+  orderGroup(businessGroup, profile.business);
 }
 
 function renderMobileWorkspaceNav() {
@@ -3263,7 +3422,7 @@ function renderMaintenanceOperations() {
   const search = field('Search requests', 'maintenance_search', 'search', false, { placeholder: 'Property, unit, or issue' });
   search.input.setAttribute('aria-label', 'Search maintenance requests by property, unit, or issue');
   const statusFilter = field('Status', 'maintenance_status', 'select', false);
-  for (const [value, label] of [['','All statuses'],['open','Open'],['assigned','Assigned'],['in_progress','In progress'],['done','Completed'],['cancelled','Cancelled']]) {
+  for (const [value, label] of [['','All statuses'],['open','Open'],['triaged','Triaged'],['assigned','Assigned'],['in_progress','In progress'],['awaiting_review','Awaiting review'],['rework_required','Rework required'],['completed','Completed'],['done','Completed (legacy)'],['cancelled','Cancelled']]) {
     const option = node('option', label); option.value = value; statusFilter.input.append(option);
   }
   const priorityFilter = field('Priority', 'maintenance_priority', 'select', false);
@@ -3290,7 +3449,8 @@ function renderMaintenanceOperations() {
         && (!priorityFilter.input.value || request.priority === priorityFilter.input.value)
         && (!propertyFilter.input.value || request.property_id === propertyFilter.input.value);
     }).sort((a, b) => {
-      const activeDifference = Number(['open','assigned','in_progress'].includes(b.status)) - Number(['open','assigned','in_progress'].includes(a.status));
+      const activeStatuses = ['open','triaged','assigned','in_progress','awaiting_review','rework_required'];
+      const activeDifference = Number(activeStatuses.includes(b.status)) - Number(activeStatuses.includes(a.status));
       const priorityRank = { urgent: 0, normal: 1, low: 2 };
       return activeDifference || (priorityRank[a.priority] ?? 3) - (priorityRank[b.priority] ?? 3)
         || Number(b.age_hours ?? 0) - Number(a.age_hours ?? 0);
@@ -3309,14 +3469,21 @@ function renderMaintenanceOperations() {
         item.append(node('p', `Last update: ${String(request.latest_event_type ?? 'updated').replaceAll('_', ' ')} · ${updatedAt}${shortNote ? ` · ${shortNote}` : ''}`, 'maintenance-latest-update'));
       }
       if (request.assigned_to) item.append(node('p', `Assigned to: ${request.assigned_to}`));
-      if (request.resolution_note) item.append(node('p', `Completion: ${request.resolution_note}`));
+      if (request.resolution_note) item.append(node('p', `Triage / work notes: ${request.resolution_note}`));
+      if (request.review_note) item.append(node('p', `Review decision: ${request.review_note}`));
       if (request.cost != null) item.append(node('p', `Cost estimate: ETB ${Number(request.cost).toLocaleString(document.documentElement.lang)} (not an approved invoice)`));
       const actions = node('div', undefined, 'property-actions');
       actions.append(button('History', 'maintenance-events', 'button button-outline', { id: request.id }));
-      if (mayUpdate && request.status === 'open') actions.append(button('Assign', 'maintenance-update', 'button button-outline', { id: request.id, status: 'assigned' }));
+      if (mayUpdate && request.status === 'open') actions.append(button('Triage', 'maintenance-update', 'button button-outline', { id: request.id, status: 'triaged' }));
+      if (mayUpdate && request.status === 'triaged') actions.append(button('Assign', 'maintenance-update', 'button button-outline', { id: request.id, status: 'assigned' }));
       if (mayUpdate && request.status === 'assigned') actions.append(button('Start work', 'maintenance-update', 'button button-outline', { id: request.id, status: 'in_progress' }));
-      if (mayUpdate && request.status === 'in_progress') actions.append(button('Complete', 'maintenance-update', 'button button-primary', { id: request.id, status: 'done' }));
-      if (mayUpdate && ['open','assigned','in_progress'].includes(request.status)) actions.append(button('Cancel', 'maintenance-update', 'button button-outline', { id: request.id, status: 'cancelled' }));
+      if (mayUpdate && request.status === 'in_progress') actions.append(button('Submit for review', 'maintenance-update', 'button button-primary', { id: request.id, status: 'awaiting_review' }));
+      if (mayReviewMaintenance && request.status === 'awaiting_review') {
+        actions.append(button('Approve completion', 'maintenance-update', 'button button-primary', { id: request.id, status: 'completed' }));
+        actions.append(button('Return for rework', 'maintenance-update', 'button button-outline', { id: request.id, status: 'rework_required' }));
+      }
+      if (mayUpdate && request.status === 'rework_required') actions.append(button('Resume rework', 'maintenance-update', 'button button-outline', { id: request.id, status: 'in_progress' }));
+      if (mayUpdate && ['open','triaged','assigned','in_progress','rework_required'].includes(request.status)) actions.append(button('Cancel', 'maintenance-update', 'button button-outline', { id: request.id, status: 'cancelled' }));
       item.append(actions); list.append(item);
     }
     if (state.maintenanceHasMore) {
@@ -3326,6 +3493,7 @@ function renderMaintenanceOperations() {
     }
   };
   const mayUpdate = ['master_agent','field_agent','super_admin','global_admin'].includes(state.user.role);
+  const mayReviewMaintenance = ['corporate_business_manager','super_admin','global_admin'].includes(state.user.role);
   search.input.addEventListener('input', renderRequests);
   for (const input of [statusFilter.input, priorityFilter.input, propertyFilter.input]) input.addEventListener('change', renderRequests);
   renderRequests();
@@ -3739,7 +3907,6 @@ function renderCommissions() {
 function renderAgents() {
   const wrap = node('div');
   wrap.append(sectionHeading('Agent management', "Review agent activity and set optional profile focus across the Super Agent and Master Agent network. Profile focus does not limit an agent's services."));
-  wrap.append(renderServiceLauncher(['leads', 'workers', 'requests', 'properties', 'marketplace', 'contracts', 'commissions', 'rent', 'agents', 'edir', 'mfi', 'insurance']));
   for (const tenant of state.agentBusinessTenants ?? []) {
     wrap.append(card(`${tenant.display_name} · ${tenant.tenant_key}`, `${tenant.tenant_type.replaceAll('_', ' ')} · ${tenant.member_role.replaceAll('_', ' ')} · ${tenant.member_status} · ${tenant.status} · configuration v${tenant.config_version}`, tenant.status));
   }
@@ -6673,12 +6840,16 @@ document.addEventListener('click', async (event) => {
     return;
   }
   if (name === 'maintenance-update') {
-    let assigned_to; let resolution_note; let cost;
+    let assigned_to; let resolution_note; let review_note; let cost;
+    if (action.dataset.status === 'triaged') {
+      resolution_note = window.prompt(t('Add triage notes (at least 5 characters).'));
+      if (!resolution_note || resolution_note.trim().length < 5) return;
+    }
     if (action.dataset.status === 'assigned') {
       assigned_to = window.prompt(t('Enter the person or vendor assigned to this request.'));
       if (!assigned_to?.trim()) return;
     }
-    if (action.dataset.status === 'done') {
+    if (action.dataset.status === 'awaiting_review') {
       resolution_note = window.prompt(t('Describe the completed work (at least 5 characters).'));
       if (!resolution_note || resolution_note.trim().length < 5) return;
       const estimate = window.prompt(t('Optional cost estimate in ETB. Leave blank if unknown.'));
@@ -6687,10 +6858,20 @@ document.addEventListener('click', async (event) => {
         if (!Number.isFinite(cost) || cost < 0) { showAlert('Enter a valid non-negative estimate.', true); return; }
       }
     }
+    if (['completed','rework_required','cancelled'].includes(action.dataset.status)) {
+      const prompt = action.dataset.status === 'completed'
+        ? 'Record the independent completion decision and rationale (at least 5 characters).'
+        : action.dataset.status === 'rework_required'
+          ? 'Explain the work required before approval (at least 5 characters).'
+          : 'Explain why this request is being cancelled (at least 5 characters).';
+      review_note = window.prompt(t(prompt));
+      if (!review_note || review_note.trim().length < 5) return;
+    }
     try {
       await api(`/maintenance/${encodeURIComponent(id)}/update`, { method: 'POST', body: JSON.stringify({
         status: action.dataset.status, ...(assigned_to ? { assigned_to: assigned_to.trim() } : {}),
         ...(resolution_note ? { resolution_note: resolution_note.trim() } : {}),
+        ...(review_note ? { review_note: review_note.trim() } : {}),
         ...(cost !== undefined ? { cost } : {}),
       }) });
       await refresh(); showAlert('Maintenance request updated.');

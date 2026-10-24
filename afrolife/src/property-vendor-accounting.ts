@@ -44,7 +44,7 @@ propertyVendorAccounting.post('/maintenance/:id/vendor-bills',requireRole(...fin
   const row=await withUser(req.user!,async c=>{
     const maintenance=(await c.query('SELECT id,status FROM maintenance_requests WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
     if(!maintenance)throw new HttpError(404,'Maintenance request not found');
-    if(!['in_progress','done'].includes(maintenance.status))throw new HttpError(409,'Maintenance must be in progress or complete before recording a vendor bill');
+    if(!['in_progress','awaiting_review','completed','done'].includes(maintenance.status))throw new HttpError(409,'Maintenance must be in progress or submitted for review before recording a vendor bill');
     const bill=(await c.query(`INSERT INTO property_vendor_bills(maintenance_request_id,vendor_id,invoice_reference,amount,invoice_date,due_date,recorded_by)
       SELECT $1,vendor.id,$3,$4,$5,$6,$7 FROM property_vendors vendor WHERE vendor.id=$2 AND vendor.active RETURNING *`,
       [maintenance.id,b.vendor_id,b.invoice_reference,amount,b.invoice_date,b.due_date,req.user!.id])).rows[0];

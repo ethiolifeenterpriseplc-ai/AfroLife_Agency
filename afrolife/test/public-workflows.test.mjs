@@ -208,10 +208,85 @@ test('V11 support journey exposes case intake while protecting sensitive details
   assert.match(appealMigration,/support_case_appeal_reviews_immutable/);
 });
 
+test('V11 maintenance workflow exposes triage, evidence submission, and independent review actions', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const ops = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
+  assert.match(app, /status: 'triaged'/);
+  assert.match(app, /status: 'awaiting_review'/);
+  assert.match(app, /status: 'completed'/);
+  assert.match(app, /status: 'rework_required'/);
+  assert.match(app, /mayReviewMaintenance && request\.status === 'awaiting_review'/);
+  assert.match(ops, /Completion review must be performed by someone other than the person who submitted the work/);
+  assert.match(ops, /Only a maintenance reviewer can approve completion/);
+  assert.match(ops, /canTransitionMaintenance\(m\.status, b\.status\)/);
+});
+
 test('checkboxes and radios override full-width text-field sizing', () => {
   const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.match(styles, /input\[type="checkbox"\][\s\S]*?width:\s*18px;[\s\S]*?height:\s*18px;[\s\S]*?min-height:\s*18px;[\s\S]*?padding:\s*0;/);
   assert.match(styles, /input\[type="radio"\]\s*\{\s*border-radius:\s*50%;\s*\}/);
+});
+
+test('workspace overview prioritizes role-scoped reporting and avoids repeating every service menu entry', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(app, /function renderOverviewActions\(\)/);
+  assert.match(app, /return tab && !tab\.hidden/);
+  assert.match(app, /function configureWorkspaceNavigation\(\)/);
+  assert.match(app, /Your work, review, and payment records only/);
+  assert.match(app, /Operational report for your current tenant and role scope/);
+  assert.match(app, /\$\('#stat-grid'\)\.hidden = state\.panel !== 'overview'/);
+  assert.match(app, /report\.hidden = state\.panel !== 'overview' \|\| Boolean\(hasDedicatedSummary\)/);
+  assert.doesNotMatch(app, /function renderServiceLauncher\(/);
+  assert.match(styles, /\.overview-report/);
+  assert.match(styles, /\.overview-actions/);
+  assert.match(styles, /background-attachment:\s*fixed/);
+});
+
+test('overview reports actual data-load freshness and scoped reporting caveats', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const contextStart = app.indexOf('function renderOverviewDataContext() {');
+  const contextEnd = app.indexOf('\nfunction renderOverview() {', contextStart);
+  const context = app.slice(contextStart, contextEnd);
+  const overviewLoadStart = app.indexOf("case 'overview':");
+  const overviewLoadEnd = app.indexOf("case 'leads':", overviewLoadStart);
+  const overviewLoad = app.slice(overviewLoadStart, overviewLoadEnd);
+  assert.match(app, /state\.overviewLoadedAt = Date\.now\(\)/);
+  assert.match(app, /state\.overviewDataErrors = \[\.\.\.state\.workspaceDataErrors\]/);
+  assert.match(app, /state\.overviewDataOmitted = \[\.\.\.state\.workspaceDataOmitted\]/);
+  assert.match(context, /Overview data load completed \$\{loadedAt\}/);
+  assert.match(context, /all records returned to this overview for your account and role\. No reporting period is selected/);
+  assert.match(context, /outside this role’s permitted view; those omitted records are not counted as zero/);
+  assert.match(context, /available data sources could not be loaded\. Figures from those sources are omitted/);
+  assert.match(overviewLoad, /safeGet\('\/reports\/summary'/);
+  assert.match(app, /values\.filter\(\(\[, , path\]\) => !unavailable\(path\)\)/);
+  assert.match(styles, /\.overview-data-context p\s*\{[^}]*font-size:\s*12px/);
+  assert.match(styles, /\.overview-report \.stat-card span\s*\{\s*font-size:\s*12px/);
+  assert.match(styles, /\.overview-action-list \.button\s*\{[^}]*font-size:\s*12px/);
+  assert.match(styles, /--overview-navy:\s*#17324d/i);
+  assert.match(styles, /--overview-teal:\s*#0f766e/i);
+  assert.match(styles, /--overview-gold:\s*#d9a441/i);
+  assert.match(styles, /--overview-sand:\s*#f4efe6/i);
+});
+
+test('overview does not render service health while the dedicated status panel remains available', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const loadStart = app.indexOf("case 'overview':");
+  const loadEnd = app.indexOf("case 'leads':", loadStart);
+  const overviewLoad = app.slice(loadStart, loadEnd);
+  const renderStart = app.indexOf('function renderOverview() {');
+  const renderEnd = app.indexOf('\nfunction renderStaffingFinanceQueue()', renderStart);
+  const overviewRender = app.slice(renderStart, renderEnd);
+  const actionsStart = app.indexOf('function renderOverviewActions() {');
+  const actionsEnd = app.indexOf('\nfunction renderOverviewDataContext()', actionsStart);
+  const overviewActions = app.slice(actionsStart, actionsEnd);
+  assert.doesNotMatch(overviewLoad, /system\/status|state\.serviceStatus/);
+  assert.doesNotMatch(overviewRender, /serviceStatus|unavailableServices|temporarily unavailable/);
+  assert.doesNotMatch(overviewActions, /Service status/);
+  assert.match(app, /case 'status':\s*state\.serviceStatus = await safeGet\('\/system\/status'/);
+  assert.match(app, /\$\('#status-tab'\)\.hidden = false/);
+  assert.match(app, /function renderServiceStatus\(\)[\s\S]*?service\.name/);
 });
 
 test('dynamically created labels retain their source text when the locale changes', async () => {

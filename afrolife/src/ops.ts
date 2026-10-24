@@ -17,6 +17,7 @@ import { enqueueAccountingEvent } from './accounting-outbox.js';
 import { propertyVendorAccounting } from './property-vendor-accounting.js';
 import { staffingAccounting } from './staffing-accounting.js';
 import { workforceOperations } from './workforce-operations.js';
+import { canTransitionMaintenance, requiresMaintenanceReview } from './maintenance-workflow.js';
 
 export const ops = Router();
 ops.use(propertyVendorAccounting);
@@ -1353,15 +1354,15 @@ ops.get('/maintenance', requireActivity('property.maintenance.manage'), h(async 
        SELECT e.event_type,e.note,e.created_at FROM maintenance_request_events e
        WHERE e.maintenance_request_id=m.id ORDER BY e.created_at DESC,e.id DESC LIMIT 1
      ) latest ON true
-     ORDER BY (m.status IN ('done','cancelled')), m.priority = 'urgent' DESC, m.created_at DESC, m.id DESC LIMIT 201 OFFSET $1`, [offset])).rows));
+     ORDER BY (m.status IN ('completed','done','cancelled')), m.priority = 'urgent' DESC, m.created_at DESC, m.id DESC LIMIT 201 OFFSET $1`, [offset])).rows));
 }));
 
 ops.get('/maintenance/metrics', requireActivity('property.maintenance.manage'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query(
-    `SELECT count(*) FILTER (WHERE status IN ('open','assigned','in_progress'))::int AS open_count,
+    `SELECT count(*) FILTER (WHERE status IN ('open','triaged','assigned','in_progress','awaiting_review','rework_required'))::int AS open_count,
        count(*) FILTER (WHERE status='open' AND priority='urgent')::int AS urgent_open_count,
-       count(*) FILTER (WHERE status='done' AND completed_at >= now()-interval '30 days')::int AS completed_last_30_days,
-       round(avg(extract(epoch FROM (completed_at-created_at))/3600) FILTER (WHERE completed_at >= now()-interval '30 days'),1) AS avg_resolution_hours_30d
+       count(*) FILTER (WHERE status IN ('completed','done') AND completed_at >= now()-interval '30 days')::int AS completed_last_30_days,
+       round(avg(extract(epoch FROM (completed_at-created_at))/3600) FILTER (WHERE status IN ('completed','done') AND completed_at >= now()-interval '30 days'),1) AS avg_resolution_hours_30d
      FROM maintenance_requests`)).rows[0]));
 }));
 
@@ -1372,21 +1373,53 @@ ops.get('/maintenance/:id/events', requireActivity('property.maintenance.manage'
      WHERE e.maintenance_request_id=$1 ORDER BY e.created_at,e.id`, [req.params.id])).rows));
 }));
 
-const NEXT_MAINT: Record<string, string[]> = { open: ['assigned', 'cancelled'], assigned: ['in_progress', 'cancelled'], in_progress: ['done', 'cancelled'] };
-ops.post('/maintenance/:id/update', requireActivity('property.maintenance.manage'), requireRole(...AGENT, 'super_admin', 'global_admin'), h(async (req, res) => {
-  const b = z.object({ status: z.enum(['assigned', 'in_progress', 'done', 'cancelled']), assigned_to: z.string().trim().min(2).max(200).optional(), cost: z.number().nonnegative().optional(), resolution_note: z.string().trim().min(5).max(1000).optional() }).parse(req.body);
+ops.post('/maintenance/:id/update', requireActivity('property.maintenance.manage'), requireRole(...AGENT, 'corporate_business_manager', 'super_admin', 'global_admin'), h(async (req, res) => {
+  const b = z.object({
+    status: z.enum(['triaged', 'assigned', 'in_progress', 'awaiting_review', 'completed', 'rework_required', 'cancelled']),
+    assigned_to: z.string().trim().min(2).max(200).optional(),
+    cost: z.number().nonnegative().finite().optional(),
+    resolution_note: z.string().trim().min(5).max(1000).optional(),
+    review_note: z.string().trim().min(5).max(1000).optional(),
+  }).strict().superRefine((body, context) => {
+    if (body.status === 'triaged' && !body.resolution_note) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['resolution_note'], message: 'Add triage notes before routing this request' });
+    }
+    if (body.status === 'assigned' && !body.assigned_to) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['assigned_to'], message: 'Choose the assigned person or vendor' });
+    }
+    if (body.status === 'awaiting_review' && !body.resolution_note) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['resolution_note'], message: 'Describe completed work before requesting review' });
+    }
+    if (requiresMaintenanceReview(body.status) && !body.review_note) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['review_note'], message: 'Provide the independent review decision and rationale' });
+    }
+    if (body.status === 'cancelled' && !body.review_note) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['review_note'], message: 'Provide a cancellation reason' });
+    }
+  }).parse(req.body);
+  const reviewRoles = ['corporate_business_manager', 'super_admin', 'global_admin'];
+  if (requiresMaintenanceReview(b.status) && !reviewRoles.includes(req.user!.role)) {
+    throw new HttpError(403, 'Only a maintenance reviewer can approve completion or return work for rework');
+  }
   res.json(await withUser(req.user!, async (c) => {
     const m = (await c.query('SELECT * FROM maintenance_requests WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!m) throw new HttpError(404, 'Request not found');
-    if (!NEXT_MAINT[m.status]?.includes(b.status)) throw new HttpError(409, `A ${m.status.replace('_', ' ')} request cannot move to ${b.status.replace('_', ' ')}`);
-    if (b.status === 'assigned' && !(b.assigned_to ?? m.assigned_to)) throw new HttpError(422, 'Say who it is assigned to');
-    if (b.status === 'done' && !b.resolution_note) throw new HttpError(422, 'Describe the completed work before closing the request');
+    if (!canTransitionMaintenance(m.status, b.status)) throw new HttpError(409, `A ${m.status.replace('_', ' ')} request cannot move to ${b.status.replace('_', ' ')}`);
+    if (requiresMaintenanceReview(b.status) && (!m.completion_submitted_by || m.completion_submitted_by === req.user!.id)) {
+      throw new HttpError(409, 'Completion review must be performed by someone other than the person who submitted the work');
+    }
     const r = await c.query(`UPDATE maintenance_requests SET status=$2, assigned_to=COALESCE($3,assigned_to),
       cost=COALESCE($4,cost), resolution_note=COALESCE($5,resolution_note),
-      completed_at=CASE WHEN $2='done' THEN now() ELSE completed_at END, updated_at=now()
-      WHERE id=$1 RETURNING *`, [m.id, b.status, b.assigned_to ?? null, b.cost ?? null, b.resolution_note ?? null]);
-    const eventType = b.status === 'done' ? 'completed' : b.status;
-    await c.query('INSERT INTO maintenance_request_events (maintenance_request_id,actor_id,event_type,from_status,to_status,note) VALUES ($1,$2,$3,$4,$5,$6)', [m.id, req.user!.id, eventType, m.status, b.status, b.resolution_note ?? (b.status === 'assigned' ? b.assigned_to : null)]);
+      review_note=CASE WHEN $2='awaiting_review' THEN NULL ELSE COALESCE($6,review_note) END,
+      completion_submitted_by=CASE WHEN $2='awaiting_review' THEN $7 ELSE completion_submitted_by END,
+      completion_submitted_at=CASE WHEN $2='awaiting_review' THEN now() ELSE completion_submitted_at END,
+      reviewed_by=CASE WHEN $2='awaiting_review' THEN NULL WHEN $2 IN ('completed','rework_required') THEN $7 ELSE reviewed_by END,
+      reviewed_at=CASE WHEN $2='awaiting_review' THEN NULL WHEN $2 IN ('completed','rework_required') THEN now() ELSE reviewed_at END,
+      completed_at=CASE WHEN $2='completed' THEN now() ELSE completed_at END, updated_at=now()
+      WHERE id=$1 RETURNING *`, [m.id, b.status, b.assigned_to ?? null, b.cost ?? null,
+      b.resolution_note ?? null, b.review_note ?? null, req.user!.id]);
+    const eventNote = b.review_note ?? b.resolution_note ?? b.assigned_to ?? null;
+    await c.query('INSERT INTO maintenance_request_events (maintenance_request_id,actor_id,event_type,from_status,to_status,note) VALUES ($1,$2,$3,$4,$5,$6)', [m.id, req.user!.id, b.status, m.status, b.status, eventNote]);
     await audit(c, req.user!.id, 'maintenance_' + b.status, 'maintenance', m.id, { status: m.status }, { status: b.status, cost: b.cost ?? null });
     return r.rows[0];
   }));
