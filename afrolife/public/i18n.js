@@ -1257,6 +1257,1406 @@ const publicSurfaceTranslations = {
   'Insurance information': {
     am: 'የኢንሹራንስ መረጃ', om: 'Odeeffannoo inshuraansii', ti: 'ሓበሬታ ውሕስነት', so: 'Macluumaadka caymiska', ar: 'معلومات التأمين', sw: 'Taarifa za bima',
   },
+  'Document requirements are not available yet. Try again before submitting.': {
+    am: 'የሰነድ መስፈርቶች ገና አልተገኙም። ከማስገባትዎ በፊት እንደገና ይሞክሩ።', om: 'Ulaagaaleen sanadaa ammaaf hin argamne. Erguu dura irra deebiʼaa yaalaa.', ti: 'መስፈርታት ሰነድ ገና ኣይተረኽቡን። ቅድሚ ምቕራብ እንደገና ፈትኑ።', so: 'Shuruudaha dukumentiyada weli lama heli karo. Mar kale isku day ka hor intaadan gudbin.', ar: 'متطلبات المستندات غير متاحة بعد. حاول مرة أخرى قبل الإرسال.', sw: 'Mahitaji ya hati bado hayapatikani. Jaribu tena kabla ya kuwasilisha.',
+  },
+  'No identity documents are required for this account type.': {
+    am: 'ለዚህ የመለያ ዓይነት የመታወቂያ ሰነዶች አያስፈልጉም።', om: 'Gosa herregaa kanaaf sanadoonni eenyummaa hin barbaachisan.', ti: 'ንዚ ዓይነት ሕሳብ ሰነዳት መንነት ኣየድልዩን።', so: 'Noocan akoonka ah looma baahna dukumentiyo aqoonsi.', ar: 'لا تُطلب مستندات هوية لهذا النوع من الحسابات.', sw: 'Aina hii ya akaunti haihitaji hati za utambulisho.',
+  },
+  'Your registration is pending review. Check document decisions below and replace any document returned by Compliance.': {
+    am: 'ምዝገባዎ ግምገማ ላይ ነው። ከታች ያሉትን የሰነድ ውሳኔዎች ይመልከቱና በተገዢነት ቡድን የተመለሰ ሰነድ ይተኩ።', om: 'Galmeen keessan gamaaggama eeggachaa jira. Murtii sanadaa armaan gadii ilaalaa; sanada kutaa to’annoo seeraatiin deebifame kamiyyuu bakka buusaa.', ti: 'ምዝገባኹም ገና ኣብ ግምገማ ኣሎ። ኣብ ታሕቲ ዘሎ ውሳነታት ሰነድ ርኣዩ፣ ብክፍሊ ተገዢነት ዝተመልሰ ሰነድ ድማ ተክኡ።', so: 'Diiwaangelintaadu waxay sugaysaa dib-u-eegis. Hoos ka eeg go’aamada dukumentiyada, kuna beddel dukumenti kasta oo ay kooxda u hoggaansanaantu soo celisay.', ar: 'طلب تسجيلك قيد المراجعة. راجع قرارات المستندات أدناه واستبدل أي مستند أعاده فريق الامتثال.', sw: 'Usajili wako unasubiri kukaguliwa. Angalia maamuzi ya hati hapa chini na ubadilishe hati yoyote iliyorejeshwa na timu ya uzingatiaji.',
+  },
+  'All required documents are received. Compliance will review them before account activation.': {
+    am: 'ሁሉም የሚፈለጉ ሰነዶች ደርሰዋል። መለያው ከመንቃቱ በፊት የተገዢነት ቡድን ይገመግማቸዋል።', om: 'Sanadoonni barbaachisan hundi nu gaʼaniiru. Herregni hojii irra ooluu dura kutaan to’annoo seeraa ni gamaaggama.', ti: 'ኩሎም ዝድለዩ ሰነዳት በጺሖም። ሕሳብ ቅድሚ ምንቃሑ ክፍሊ ተገዢነት ክግምግሞም እዩ።', so: 'Dhammaan dukumentiyada loo baahan yahay waa la helay. Kooxda u hoggaansanaantu way dib u eegi doontaa ka hor inta aan akoonka la hawlgelin.', ar: 'تم استلام جميع المستندات المطلوبة. سيراجعها فريق الامتثال قبل تفعيل الحساب.', sw: 'Hati zote zinazohitajika zimepokelewa. Timu ya uzingatiaji itazikagua kabla ya akaunti kuamilishwa.',
+  },
+  'Choose a returned or missing document and select a replacement file.': {
+    am: 'የተመለሰ ወይም የጎደለ ሰነድ ይምረጡና የሚተካውን ፋይል ይምረጡ።', om: 'Sanada deebifame yookaan hirʼate filadhaa; achiis faayila bakka buʼu filadhaa.', ti: 'ዝተመልሰ ወይ ዝጎደለ ሰነድ ምረጹ፣ ተኪኡ ዝኸውን ፋይል ድማ ምረጹ።', so: 'Dooro dukumenti la soo celiyey ama maqan, dabadeed dooro fayl lagu beddelayo.', ar: 'اختر مستندًا مُعادًا أو مفقودًا، ثم اختر ملفًا بديلًا.', sw: 'Chagua hati iliyorejeshwa au inayokosekana, kisha uchague faili ya kuibadilisha.',
+  },
+  'This file exceeds the 10 MB upload limit.': {
+    am: 'ይህ ፋይል ከ10 MB የመጫኛ ገደብ ይበልጣል።', om: 'Faayilli kun daangaa olkaaʼinsaa 10 MB caala.', ti: 'እዚ ፋይል ካብ ደረት ምጽዓን 10 MB ይበልጽ።', so: 'Faylkani wuxuu ka weyn yahay xadka 10 MB ee la gelin karo.', ar: 'يتجاوز حجم هذا الملف الحد الأقصى للرفع وهو 10 ميغابايت.', sw: 'Faili hii imezidi kikomo cha upakiaji cha MB 10.',
+  },
+  'Choose a PDF, JPEG or PNG document.': {
+    am: 'PDF፣ JPEG ወይም PNG ሰነድ ይምረጡ።', om: 'Sanada PDF, JPEG yookaan PNG filadhaa.', ti: 'ሰነድ PDF፣ JPEG ወይ PNG ምረጹ።', so: 'Dooro dukumenti PDF, JPEG ama PNG ah.', ar: 'اختر مستندًا بصيغة PDF أو JPEG أو PNG.', sw: 'Chagua hati ya PDF, JPEG au PNG.',
+  },
+  'Some areas could not be searched. Results may be partial.': {
+    am: 'አንዳንድ አካባቢዎችን መፈለግ አልተቻለም። ውጤቶቹ ያልተሟሉ ሊሆኑ ይችላሉ።', om: 'Naannoowwan tokko tokko barbaaduun hin dandaʼamne. Buʼaawwan guutuu taʼuu dhiisuu dandaʼu.', ti: 'ኣብ ገለ ከባቢታት ምድላይ ኣይተኻእለን። ውጽኢታት ዘይተማልኡ ክኾኑ ይኽእሉ።', so: 'Meelaha qaarkood lama raadin karin. Natiijooyinku waxay noqon karaan kuwo aan dhammaystirnayn.', ar: 'تعذر البحث في بعض المناطق. قد تكون النتائج غير مكتملة.', sw: 'Baadhi ya maeneo hayakuweza kutafutwa. Matokeo yanaweza kuwa pungufu.',
+  },
+  'No matching records were found in the areas available to your role.': {
+    am: 'ለእርስዎ ሚና በተፈቀዱ አካባቢዎች ውስጥ የሚዛመድ መዝገብ አልተገኘም።', om: 'Naannoowwan gahee keessaniif hayyamaman keessatti galmeen walsimu hin argamne.', ti: 'ኣብቶም ንሚናኹም ዝተፈቕዱ ከባቢታት ዝሰማማዕ መዝገብ ኣይተረኽበን።', so: 'Meelaha doorkaaga loo oggol yahay lagama helin diiwaanno is waafaqaya.', ar: 'لم يتم العثور على سجلات مطابقة في المناطق المتاحة لدورك.', sw: 'Hakuna rekodi zinazolingana zilizopatikana katika maeneo yanayoruhusiwa kwa jukumu lako.',
+  },
+  'Counts reflect records currently available to your account.': {
+    am: 'ቁጥሮቹ በአሁኑ ጊዜ ለመለያዎ የሚታዩ መዝገቦችን ያንጸባርቃሉ።', om: 'Lakkoofsi galmeewwan yeroo ammaa herrega keessaniif argaman agarsiisa.', ti: 'እቶም ቁጽርታት ኣብዚ እዋን ንሕሳብኩም ዝርከቡ መዝገባት የንጸባርቑ።', so: 'Tirooyinku waxay muujinayaan diiwaannada hadda akoonkaaga u bannaan.', ar: 'تعكس الأعداد السجلات المتاحة حاليًا لحسابك.', sw: 'Idadi zinaonyesha rekodi zinazopatikana kwa akaunti yako kwa sasa.',
+  },
+  'Explore Edir membership and available benefits': {
+    am: 'የእድር አባልነትንና ያሉ ጥቅሞችን ይመልከቱ', om: 'Miseensummaa Edir fi faayidaalee jiran qoradhaa', ti: 'ኣባልነት Edirን ዘለዉ ረብሓታትን ተዳህስሱ', so: 'Baadh xubinnimada Edir iyo faa’iidooyinka la heli karo', ar: 'استكشف عضوية إدير والمزايا المتاحة', sw: 'Chunguza uanachama wa Edir na manufaa yanayopatikana',
+  },
+  'Open to verified AfroLife users across worker, employer, landlord, tenant, seller, and buyer services. Review active community, savings, share, and contribution options before requesting membership. Lending, insurance, and benefit payouts are not live in this pilot.': {
+    am: 'በሠራተኛ፣ በአሠሪ፣ በአከራይ፣ በተከራይ፣ በሻጭና በገዢ አገልግሎቶች ያሉ የተረጋገጡ የAfroLife ተጠቃሚዎች ማመልከት ይችላሉ። አባልነት ከመጠየቅዎ በፊት የሚሠሩ የማኅበረሰብ፣ የቁጠባ፣ የአክሲዮንና የመዋጮ አማራጮችን ይመልከቱ። በዚህ የሙከራ ፕሮግራም ብድር፣ ኢንሹራንስና የጥቅም ክፍያዎች አይሠሩም።',
+    om: 'Tajaajila hojjetaa, hojjechiisaa, abbaa mana kiraa, kireeffataa, gurguraa fi bitataa keessatti fayyadamtoonni AfroLife mirkanaaʼan iyyachuu dandaʼu. Miseensummaa gaafachuu dura filannoowwan hawaasaa, qusannoo, qooda fi gumaachaa hojii irra jiran ilaalaa. Pilootii kana keessatti liqiin, inshuraansiin fi kaffaltiin faayidaa hin hojjetan.',
+    ti: 'ኣብ ኣገልግሎት ሰራሕተኛ፣ ኣስራሒ፣ ኣካራዪ፣ ተኻራዪ፣ ሻየጣይን ገዛእን ዘለዉ ዝተረጋገጹ ተጠቀምቲ AfroLife ክሓቱ ይኽእሉ። ኣባልነት ቅድሚ ምሕታትኩም ንጡፋት ኣማራጺታት ማሕበረሰብ፣ ዕቋር፣ ኣክስዮንን ኣበርክቶን ርኣዩ። ኣብዚ ፓይሎት ልቓሕ፣ ውሕስነትን ክፍሊት ጥቕምን ገና ኣይሰርሑን።',
+    so: 'Isticmaalayaasha AfroLife ee la xaqiijiyey ee ka tirsan adeegyada shaqaalaha, loo-shaqeeyayaasha, mulkiilayaasha, kiraystayaasha, iibiyeyaasha iyo iibsadayaasha way codsan karaan. Ka hor codsiga xubinnimada, eeg adeegyada bulshada, kaydka, saamiyada iyo tabarucaadka ee shaqaynaya. Amaahda, caymiska iyo bixinta faa’iidooyinku kama shaqeeyaan tijaabadan.',
+    ar: 'الخدمة متاحة لمستخدمي AfroLife المعتمدين ضمن خدمات العمال وأصحاب العمل ومُلّاك العقارات والمستأجرين والبائعين والمشترين. راجع خيارات المجتمع والادخار والأسهم والمساهمات النشطة قبل طلب العضوية. الإقراض والتأمين وصرف المزايا غير متاح في هذه المرحلة التجريبية.',
+    sw: 'Watumiaji wa AfroLife waliothibitishwa katika huduma za wafanyakazi, waajiri, wamiliki wa nyumba, wapangaji, wauzaji na wanunuzi wanaweza kujiunga. Kagua chaguo za jamii, akiba, hisa na michango zinazotumika kabla ya kuomba uanachama. Mikopo, bima na malipo ya manufaa havipatikani katika majaribio haya.',
+  },
+  'Your service mini-apps': {
+    am: 'የአገልግሎት ሚኒ-መተግበሪያዎችዎ', om: 'Mini-appoota tajaajilaa keessan', ti: 'ሚኒ-ኣፕሊኬሽናት ኣገልግሎትኩም', so: 'Barnaamijyada yaryar ee adeegyadaada', ar: 'تطبيقات الخدمات المصغّرة الخاصة بك', sw: 'Programu ndogo za huduma zako',
+  },
+  'Open an available service directly. Access is based on your role and enabled features.': {
+    am: 'ያለውን አገልግሎት በቀጥታ ይክፈቱ። መዳረሻዎ በሚናዎና በነቁ ባህሪያት ይወሰናል።', om: 'Tajaajila jiru kallattiin banaa. Seensaan gahee keessanii fi amaloota hojii irra jiraniin murtaaʼa.', ti: 'ኣብ ዘሎ ኣገልግሎት ብቐጥታ ክፈቱ። መእተዊ ብሚናኹምን ንጡፋት ባህርያትን ይውሰን።', so: 'Si toos ah u fur adeegga la heli karo. Gelitaanku wuxuu ku xiran yahay doorkaaga iyo astaamaha la hawlgeliyey.', ar: 'افتح الخدمة المتاحة مباشرةً. يعتمد الوصول على دورك والميزات المفعّلة.', sw: 'Fungua huduma inayopatikana moja kwa moja. Ufikiaji hutegemea jukumu lako na vipengele vilivyowezeshwa.',
+  },
+  'Choose an agent': {
+    am: 'ወኪል ይምረጡ', om: 'Bakka buʼaa filadhaa', ti: 'ወኪል ምረጹ', so: 'Dooro wakiil', ar: 'اختر وكيلًا', sw: 'Chagua wakala',
+  },
+  'Audience roles': {
+    am: 'የታላሚ ሚናዎች', om: 'Gaheewwan dhaggeeffattootaa', ti: 'ሚናታት ተዓዘብቲ', so: 'Doorarka dadka loogu talagalay', ar: 'أدوار الجمهور المستهدف', sw: 'Majukumu ya hadhira',
+  },
+  'AfroLife managed listing': {
+    am: 'በAfroLife የሚተዳደር ዝርዝር', om: 'Tarree AfroLife bulchuu', ti: 'ዝርዝር ብAfroLife ዝመሓደር', so: 'Liis uu maamulo AfroLife', ar: 'قائمة تديرها AfroLife', sw: 'Tangazo linalosimamiwa na AfroLife',
+  },
+  'On Android, take or choose photos and videos. Media stays private and is shown only to authorized users.': {
+    am: 'በAndroid ላይ ፎቶና ቪዲዮ ያንሱ ወይም ይምረጡ። ሚዲያው በግል ይቀመጣል፣ ለተፈቀዱ ተጠቃሚዎች ብቻ ይታያል።', om: 'Android irratti suuraa fi viidiyoo kaʼaa yookaan filadhaa. Meediyaan iccitiidhaan kuufama; fayyadamtoota hayyamamaniif qofa mulʼata.', ti: 'ኣብ Android ስእልን ቪድዮን ኣንስኡ ወይ ምረጹ። ሚድያ ብምስጢር ይቕመጥ፣ ንዝተፈቕደሎም ተጠቀምቲ ጥራይ ይርአ።', so: 'Android-ka ku qaad ama ka dooro sawirro iyo muuqaallo. Faylasha warbaahintu waa qarsoodi, waxaana arki kara oo keliya isticmaalayaasha loo oggolaaday.', ar: 'على Android، التقط الصور ومقاطع الفيديو أو اخترها. تبقى الوسائط خاصة ولا تظهر إلا للمستخدمين المصرّح لهم.', sw: 'Kwenye Android, piga au chagua picha na video. Midia huhifadhiwa kwa faragha na huonyeshwa kwa watumiaji walioidhinishwa pekee.',
+  },
+  'Owner rent & deposit statements': {
+    am: 'የባለቤት የኪራይና የተቀማጭ መግለጫዎች', om: 'Ibsa kiraa fi wabii abbaa qabeenyaa', ti: 'መግለጺታት ክራይን ተቐማጢን ዋና ንብረት', so: 'Warbixinnada kirada iyo deebaajiga milkiilaha', ar: 'كشوفات الإيجار والودائع للمالك', sw: 'Taarifa za kodi na amana za mwenye nyumba',
+  },
+  'These read-only records show lease charges and reconciled rent/deposit receipts. They do not initiate or confirm a payout to you.': {
+    am: 'እነዚህ ሊቀየሩ የማይችሉ መዝገቦች የኪራይ ክፍያዎችንና የተስተካከሉ የኪራይ/ተቀማጭ ደረሰኞችን ያሳያሉ። ለእርስዎ ክፍያ አያስጀምሩም ወይም አያረጋግጡም።', om: 'Galmeewwan dubbisuu qofaaf taʼan kun kaffaltii kireeffannaa fi nagahee kiraa/wabii wal-simsiifame agarsiisu. Isiniif kaffaltii hin jalqaban yookaan hin mirkaneessan.', ti: 'እዞም ክንበቡ ጥራይ ዝኽእሉ መዝገባት ክፍሊታት ውዕሊ ክራይን ዝተሰማምዑ ደረሰኛታት ክራይ/ተቐማጢን የርእዩ። ንዓኹም ክፍሊት ኣይጅምሩን ወይ ኣየረጋግጹን።', so: 'Diiwaannadan akhris-keliya ah waxay muujinayaan kharashka heshiiska kirada iyo rasiidhada kirada/deebaajiga ee la waafajiyey. Ma bilaabaan mana xaqiijiyaan lacag adiga laguu soo dirayo.', ar: 'تعرض هذه السجلات المخصّصة للقراءة فقط رسوم عقد الإيجار وإيصالات الإيجار/الوديعة التي تمت تسويتها. وهي لا تبدأ صرف مبلغ لك ولا تؤكده.', sw: 'Rekodi hizi za kusoma pekee zinaonyesha ada za upangaji na risiti za kodi/amana zilizolinganishwa. Hazianzi wala kuthibitisha malipo kwako.',
+  },
+  'Open a maintenance request': {
+    am: 'የጥገና ጥያቄ ይክፈቱ', om: 'Gaaffii suphaa banuu', ti: 'ሕቶ ጽገና ክፈቱ', so: 'Fur codsi dayactir', ar: 'افتح طلب صيانة', sw: 'Fungua ombi la matengenezo',
+  },
+  'Choose a property': {
+    am: 'ንብረት ይምረጡ', om: 'Qabeenya filadhaa', ti: 'ንብረት ምረጹ', so: 'Dooro hanti', ar: 'اختر عقارًا', sw: 'Chagua nyumba',
+  },
+  'Common area / property': {
+    am: 'የጋራ ቦታ / ንብረት', om: 'Iddoo waliinii / qabeenya', ti: 'ናይ ሓባር ቦታ / ንብረት', so: 'Meel guud / hanti', ar: 'منطقة مشتركة / عقار', sw: 'Eneo la pamoja / nyumba',
+  },
+  'All properties': {
+    am: 'ሁሉም ንብረቶች', om: 'Qabeenya hunda', ti: 'ኩሎም ንብረታት', so: 'Dhammaan hantida', ar: 'جميع العقارات', sw: 'Nyumba zote',
+  },
+  'Test checkout only. No real payment is taken.': {
+    am: 'ይህ የሙከራ ክፍያ ብቻ ነው። እውነተኛ ክፍያ አይፈጸምም።', om: 'Kun kaffaltii yaalii qofa. Kaffaltiin dhugaa hin raawwatamu.', ti: 'እዚ ናይ ፈተነ ክፍሊት ጥራይ እዩ። ናይ ሓቂ ክፍሊት ኣይውሰድን።', so: 'Kani waa tijaabo lacag-bixin oo keliya. Lacag dhab ah lagama qaadayo.', ar: 'هذه عملية دفع تجريبية فقط. لن يتم تحصيل أي مبلغ حقيقي.', sw: 'Huu ni ukaguzi wa malipo ya majaribio pekee. Hakuna malipo halisi yatakayochukuliwa.',
+  },
+  'Marketplace report dashboard': {
+    am: 'የገበያ ቦታ ሪፖርት ዳሽቦርድ', om: 'Daashboordii gabaasa gabaa', ti: 'ዳሽቦርድ ሪፖርት ዕዳጋ', so: 'Guddiga warbixinta suuqa', ar: 'لوحة تقارير السوق', sw: 'Dashibodi ya ripoti za soko',
+  },
+  'Marketplace listing prices are not payments. Local mock mode supports a sandbox order and simulated payment for published fixed-price sales; it never charges a buyer or posts to Accounting. Real checkout, buyer memberships, wallets, loans, and purchase history remain unavailable.': {
+    am: 'የገበያ ዝርዝር ዋጋዎች ክፍያዎች አይደሉም። የአካባቢ ማስመሰያ ሁነታ ለታተሙ ቋሚ ዋጋ ሽያጮች የሙከራ ትዕዛዝና የተመሰለ ክፍያ ይደግፋል፤ ገዢን አያስከፍልም ወይም ወደ ሂሳብ አያስገባም። እውነተኛ ክፍያ፣ የገዢ አባልነት፣ የገንዘብ ቦርሳ፣ ብድርና የግዢ ታሪክ አሁንም አይገኙም።',
+    om: 'Gatiin tarree gabaa kaffaltii miti. Haalli fakkeessaa naannoo ajaja yaalii fi kaffaltii fakkeeffame gurgurtaa gatii murtaaʼaa maxxanfameef ni deeggara; bitataa irraa kaffaltii hin fudhatu, gara herrega maallaqaattis hin galmeessu. Kaffaltiin dhugaa, miseensummaan bitataa, boorsaan maallaqaa, liqii fi seenaa bittaa ammaaf hin jirani.',
+    ti: 'ዋጋታት ዝርዝር ዕዳጋ ክፍሊት ኣይኮኑን። ናይ ከባቢ ሞክ ሞድ ንዝተሓትሙ ብቋሚ ዋጋ ዝሽየጡ ንብረታት ናይ ፈተነ ትእዛዝን ዝተመስለ ክፍሊትን ይድግፍ፤ ንገዛኢ ገንዘብ ኣይእክብን ናብ ሒሳብ ኣይልእኽን። ናይ ሓቂ ክፍሊት፣ ኣባልነት ገዛኢ፣ ቦርሳ ገንዘብ፣ ልቓሕን ታሪኽ ግዢን ገና ኣይርከቡን።',
+    so: 'Qiimaha liisaska suuqu ma aha lacag-bixinno. Habka tijaabada maxalliga ah wuxuu taageeraa dalab iyo lacag-bixin la matalay oo loogu talagalay iibyada qiimaha go’an ee la daabacay; wax lacag ah kama qaado iibsadaha mana diiwaangeliyo Xisaabaadka. Lacag-bixin dhab ah, xubinnimada iibsadaha, boorsooyin, amaah iyo taariikhda wax-iibsigu weli lama heli karo.',
+    ar: 'أسعار قوائم السوق ليست مدفوعات. يدعم وضع المحاكاة المحلي طلبًا تجريبيًا ودفعًا محاكى للمبيعات المنشورة ذات السعر الثابت؛ ولا يخصم من المشتري أو يرحّل قيدًا إلى المحاسبة. الدفع الفعلي وعضويات المشترين والمحافظ والقروض وسجل المشتريات غير متاحة حاليًا.',
+    sw: 'Bei za matangazo ya sokoni si malipo. Hali ya majaribio ya ndani inaruhusu oda ya majaribio na malipo yaliyoigwa kwa mauzo ya bei maalumu yaliyochapishwa; haimtozi mnunuzi wala kutuma taarifa kwenye Uhasibu. Malipo halisi, uanachama wa wanunuzi, pochi, mikopo na historia ya ununuzi bado havipatikani.',
+  },
+  'Your detailed listing activity': {
+    am: 'ዝርዝር የማስታወቂያ እንቅስቃሴዎ', om: 'Sochii balʼinaan tarreeffame', ti: 'ዝርዝር ንጥፈት ዝርዝርኩም', so: 'Faahfaahinta dhaqdhaqaaqa liiskaaga', ar: 'تفاصيل نشاط قائمتك', sw: 'Shughuli za kina za tangazo lako',
+  },
+  'No marketplace listing activity is linked to your account.': {
+    am: 'ከመለያዎ ጋር የተያያዘ የገበያ ዝርዝር እንቅስቃሴ የለም።', om: 'Sochiin tarree gabaa herrega keessan waliin walqabate hin jiru.', ti: 'ምስ ሕሳብኩም ዝተኣሳሰረ ንጥፈት ዝርዝር ዕዳጋ የለን።', so: 'Ma jiro dhaqdhaqaaq liis suuqeed oo ku xiran akoonkaaga.', ar: 'لا يوجد نشاط لقوائم السوق مرتبط بحسابك.', sw: 'Hakuna shughuli za matangazo ya sokoni zilizounganishwa na akaunti yako.',
+  },
+  'Insurance report dashboard': {
+    am: 'የኢንሹራንስ ሪፖርት ዳሽቦርድ', om: 'Daashboordii gabaasa inshuraansii', ti: 'ዳሽቦርድ ሪፖርት ውሕስነት', so: 'Guddiga warbixinta caymiska', ar: 'لوحة تقارير التأمين', sw: 'Dashibodi ya ripoti za bima',
+  },
+  'Insurance policy enrollment, claims, member wallets, and loans are not available in this platform. Existing Insurance ledgers are separate organization accounting records and do not prove personal cover or a payment balance.': {
+    am: 'በዚህ መድረክ የኢንሹራንስ ፖሊሲ ምዝገባ፣ የጥያቄ ክፍያ፣ የአባላት የገንዘብ ቦርሳና ብድር አይገኙም። ያሉት የኢንሹራንስ ደብተሮች የድርጅት የሂሳብ መዝገቦች ናቸው፤ የግል ሽፋንን ወይም የክፍያ ቀሪን አያረጋግጡም።',
+    om: 'Waltajjiin inshuraansii, gaafannaan beenyaa, boorsaan miseensotaa fi liqiin waltajjii kana irratti hin argaman. Galmeewwan inshuraansii jiran galmeewwan herrega dhaabbata addaati; inshuraansii dhuunfaa yookaan baaqii kaffaltii hin mirkaneessan.',
+    ti: 'ኣብዚ መድረኽ ምዝገባ ፖሊሲ ውሕስነት፣ ክሲ ካሕሳ፣ ቦርሳ ኣባላትን ልቓሕን ኣይርከቡን። ዘለዉ መዝገባት ውሕስነት ናይ በይኖም ናይ ትካል ሒሳብ መዝገባት እዮም፣ ውልቃዊ ሽፋን ወይ ቀሪ ክፍሊት ኣየረጋግጹን።',
+    so: 'Diiwaangelinta siyaasadda caymiska, sheegashooyinka, boorsooyinka xubnaha iyo amaahdu lagama heli karo madashan. Diiwaannada caymiska ee jira waa diiwaanno xisaabeed oo urur oo gooni ah, mana caddaynayaan caymis shakhsi ah ama hadhaaga lacag-bixin.',
+    ar: 'لا يتوفر في هذه المنصة التسجيل في وثائق التأمين أو المطالبات أو محافظ الأعضاء أو القروض. سجلات التأمين الحالية هي سجلات محاسبية منفصلة للمؤسسة، ولا تثبت وجود تغطية شخصية أو رصيد مستحق.',
+    sw: 'Usajili wa sera za bima, madai, pochi za wanachama na mikopo havipatikani kwenye jukwaa hili. Daftari za bima zilizopo ni rekodi tofauti za uhasibu wa shirika, na hazithibitishi bima ya mtu binafsi au salio la malipo.',
+  },
+  'Agents may only make a consented, non-binding follow-up or refer a customer to the Insurance service team. Product recommendations, comparisons, quotes, premium collection, policy issuance or changes, and claims decisions are not available.': {
+    am: 'ወኪሎች በደንበኛው ፈቃድ የማያስገድድ ክትትል ብቻ ማድረግ ወይም ደንበኛውን ወደ ኢንሹራንስ አገልግሎት ቡድን መላክ ይችላሉ። የምርት ምክር፣ ማነጻጸር፣ የዋጋ ጥቅስ፣ ፕሪሚየም መሰብሰብ፣ ፖሊሲ ማውጣት ወይም መቀየር፣ እና የጥያቄ ውሳኔ አይገኙም።',
+    om: 'Bakka buʼoonni hordoffii hayyama maamilaan, isa dirqama hin taane, gochuu yookaan maamila gara garee tajaajila inshuraansiitti erguu qofa dandaʼu. Gorsaan oomishaa, walbira qabuu, tilmaamni gatii, walitti qabaan kaffaltii inshuraansii, baasiin yookaan jijjiirraan poolisii, fi murtiin gaaffii beenyaa hin kennaman.',
+    ti: 'ወከልቲ ብፍቓድ ዓሚል ዘይግድን ምክትታል ጥራይ ክገብሩ ወይ ንዓሚል ናብ ጉጅለ ኣገልግሎት ውሕስነት ክመርሑ ይኽእሉ። ምኽሪ ፍርያት፣ ምንጽጻር፣ ጥቕሲ ዋጋ፣ ምእካብ ፕሪሚየም፣ ምውጻእ ወይ ምቕያር ፖሊሲን ውሳነ ክሲን ኣይርከቡን።',
+    so: 'Wakiilladu waxay samayn karaan oo keliya dabagal aan qasab ahayn oo oggolaansho lagu saleeyey ama waxay macmiilka u gudbin karaan kooxda adeegga Caymiska. Talooyinka badeecadaha, isbarbardhigga, qiime-soo-jeedinta, ururinta khidmadaha, bixinta ama beddelka siyaasadaha, iyo go’aamada sheegashooyinka lama bixiyo.',
+    ar: 'يقتصر دور الوكلاء على متابعة غير ملزمة بموافقة العميل أو إحالته إلى فريق خدمات التأمين. لا تتوفر توصيات المنتجات أو المقارنات أو عروض الأسعار أو تحصيل الأقساط أو إصدار الوثائق أو تعديلها أو اتخاذ قرارات المطالبات.',
+    sw: 'Mawakala wanaweza tu kufanya ufuatiliaji usio wa lazima kwa ridhaa ya mteja au kumwelekeza kwa timu ya huduma za Bima. Mapendekezo na ulinganisho wa bidhaa, makadirio ya bei, ukusanyaji wa ada, utoaji au mabadiliko ya sera, na maamuzi ya madai hayapatikani.',
+  },
+  'EthioLife Edir membership offer': {
+    am: 'የEthioLife እድር አባልነት ጥያቄ', om: 'Dhiyeessa miseensummaa Edir EthioLife', ti: 'ቅርቦት ኣባልነት Edir EthioLife', so: 'Dalabka xubinnimada Edir ee EthioLife', ar: 'عرض عضوية إدير من EthioLife', sw: 'Ofa ya uanachama wa EthioLife Edir',
+  },
+  'Edir membership is available to registered workers, employers, landlords, tenants, sellers, buyers, and other EthioLife users after KYC has been verified. Complete KYC review to request membership.': {
+    am: 'የKYC ማረጋገጫ ከተጠናቀቀ በኋላ የእድር አባልነት ለተመዘገቡ ሠራተኞች፣ አሠሪዎች፣ አከራዮች፣ ተከራዮች፣ ሻጮች፣ ገዢዎችና ሌሎች የEthioLife ተጠቃሚዎች ይገኛል። አባልነት ለመጠየቅ የKYC ግምገማውን ያጠናቅቁ።',
+    om: 'Miseensummaan Edir hojjettoota, hojjechiistota, abbootii mana kiraa, kireeffattoota, gurgurtootaa, bitattootaa fi fayyadamtoota EthioLife biroof galmee KYC erga mirkanaaʼee booda ni argama. Miseensummaa gaafachuuf gamaaggama KYC xumuraa.',
+    ti: 'ምርመራ KYC ምስ ተረጋገጸ ኣባልነት Edir ንዝተመዝገቡ ሰራሕተኛታት፣ ኣስራሕቲ፣ ኣካረይቲ፣ ተኻረይቲ፣ ሻየጥቲ፣ ገዛእቲን ካልኦት ተጠቀምቲ EthioLifeን ይርከብ። ኣባልነት ንምሕታት ግምገማ KYC ዛዝሙ።',
+    so: 'Xubinnimada Edir waxay heli karaan shaqaale, loo-shaqeeyayaal, mulkiilayaal, kiraystayaal, iibiyayaal, iibsadayaal iyo isticmaalayaasha kale ee EthioLife ee diiwaangashan marka KYC la xaqiijiyo. Dhammaystir dib-u-eegista KYC si aad u codsato xubinnimo.',
+    ar: 'تتاح عضوية إدير للعمال وأصحاب العمل ومُلّاك العقارات والمستأجرين والبائعين والمشترين وغيرهم من مستخدمي EthioLife المسجلين بعد التحقق من KYC. أكمل مراجعة KYC لطلب العضوية.',
+    sw: 'Uanachama wa Edir unapatikana kwa wafanyakazi, waajiri, wamiliki wa nyumba, wapangaji, wauzaji, wanunuzi na watumiaji wengine wa EthioLife waliosajiliwa baada ya KYC kuthibitishwa. Kamilisha ukaguzi wa KYC ili kuomba uanachama.',
+  },
+  'Request EthioLife Edir membership': {
+    am: 'የEthioLife እድር አባልነት ይጠይቁ', om: 'Miseensummaa Edir EthioLife gaafadhaa', ti: 'ኣባልነት Edir EthioLife ሕተቱ', so: 'Codso xubinnimada Edir ee EthioLife', ar: 'اطلب عضوية إدير من EthioLife', sw: 'Omba uanachama wa EthioLife Edir',
+  },
+  'I understand this pilot records a membership request only. No dues, contributions, insurance, or payouts are collected or promised.': {
+    am: 'ይህ የሙከራ ፕሮግራም የአባልነት ጥያቄን ብቻ እንደሚመዘግብ ተረድቻለሁ። ክፍያ፣ መዋጮ፣ ኢንሹራንስ ወይም የጥቅም ክፍያ አይሰበሰብም ወይም ቃል አይገባም።',
+    om: 'Pilootiin kun gaaffii miseensummaa qofa akka galmeessu hubadheera. Kaffaltiin miseensummaa, gumaachi, inshuraansiin yookaan kaffaltiin faayidaa hin sassaabamu yookaan hin waadaa galamu.',
+    ti: 'እዚ ፓይሎት ሕቶ ኣባልነት ጥራይ ከም ዝምዝግብ ተረዲአ ኣለኹ። ክፍሊት ኣባልነት፣ ኣበርክቶ፣ ውሕስነት ወይ ክፍሊት ጥቕሚ ኣይእከብን ወይ ቃል ኣይኣቱን።',
+    so: 'Waan fahamsanahay in tijaabadani ay diiwaangelinayso codsi xubinnimo oo keliya. Lacag xubinnimo, tabarucaad, caymis ama lacag-bixin faa’iido lama qaadayo lamana ballanqaadayo.',
+    ar: 'أفهم أن هذه المرحلة التجريبية تسجل طلب العضوية فقط. لن يتم تحصيل أو التعهد برسوم أو مساهمات أو تأمين أو مدفوعات مزايا.',
+    sw: 'Ninaelewa kuwa jaribio hili linasajili ombi la uanachama pekee. Ada, michango, bima au malipo ya manufaa hayakusanywi wala kuahidiwa.',
+  },
+  'Available Edir benefits and services': {
+    am: 'ያሉ የእድር ጥቅሞችና አገልግሎቶች', om: 'Faayidaalee fi tajaajiloota Edir jiran', ti: 'ዘለዉ ረብሓታትን ኣገልግሎታትን Edir', so: 'Faa’iidooyinka iyo adeegyada Edir ee la heli karo', ar: 'مزايا وخدمات إدير المتاحة', sw: 'Manufaa na huduma za Edir zinazopatikana',
+  },
+  'Membership includes a reviewed request to join the central Edir community. The active product options below are set by EthioLife Edir administrators and may be subject to product terms and approval.': {
+    am: 'አባልነት ማዕከላዊውን የእድር ማኅበረሰብ ለመቀላቀል የሚቀርብና የሚገመገም ጥያቄን ያካትታል። ከታች ያሉት ንቁ የምርት አማራጮች በEthioLife Edir አስተዳዳሪዎች ይወሰናሉ፤ የምርት ውሎችና ፈቃድ ሊያስፈልጉ ይችላሉ።',
+    om: 'Miseensummaan gaaffii gamaaggamamee hawaasa Edir giddugaleessaa makamuuf dhiyaatu of keessatti qaba. Filannoowwan oomishaa hojii irra jiran armaan gadii bulchitoota EthioLife Edir tiin murtaaʼu; haalota oomishaa fi hayyamaaf saaxilamuu dandaʼu.',
+    ti: 'ኣባልነት ናብ ማእከላይ ማሕበረሰብ Edir ንምጽንባር ዝግምገም ሕቶ የጠቓልል። እቶም ኣብ ታሕቲ ዘለዉ ንጡፋት ኣማራጺታት ፍርያት ብምምሕዳራት EthioLife Edir ይውሰኑ፣ ስለዚ ውዕላት ፍርያትን ፍቓድን ከድልዩ ይኽእሉ።',
+    so: 'Xubinnimadu waxay ka kooban tahay codsi dib loo eegayo oo lagu biirayo bulshada dhexe ee Edir. Ikhtiyaarrada badeecadaha ee hoose waxaa dejiya maamulayaasha EthioLife Edir, waxaana laga yaabaa inay ku xirnaadaan shuruudo iyo oggolaansho.',
+    ar: 'تشمل العضوية طلبًا خاضعًا للمراجعة للانضمام إلى مجتمع إدير المركزي. يحدد مسؤولو EthioLife Edir خيارات المنتجات النشطة أدناه، وقد تخضع لشروط وموافقة.',
+    sw: 'Uanachama unajumuisha ombi linalokaguliwa la kujiunga na jumuiya kuu ya Edir. Chaguo za bidhaa zinazotumika hapa chini huwekwa na wasimamizi wa EthioLife Edir na zinaweza kutegemea masharti na idhini.',
+  },
+  'Community membership and group participation are available after review. No financial products are currently open for enrollment.': {
+    am: 'የማኅበረሰብ አባልነትና በቡድን መሳተፍ ከግምገማ በኋላ ይገኛሉ። በአሁኑ ጊዜ ለምዝገባ የተከፈተ የፋይናንስ ምርት የለም።', om: 'Miseensummaan hawaasaa fi hirmaannaan garee gamaaggama booda ni argamu. Yeroo ammaa oomishni faayinaansii galmeessuuf banaa taʼe hin jiru.', ti: 'ኣባልነት ማሕበረሰብን ተሳትፎ ጉጅለን ድሕሪ ግምገማ ይርከቡ። ኣብዚ እዋን ንምዝገባ ዝተኸፍተ ፋይናንሳዊ ፍርያት የለን።', so: 'Xubinnimada bulshada iyo ka qaybgalka kooxdu waxay diyaar yihiin dib-u-eegista ka dib. Hadda ma jiro badeecad maaliyadeed oo diiwaangelin u furan.', ar: 'تتاح عضوية المجتمع والمشاركة في المجموعات بعد المراجعة. لا توجد حاليًا منتجات مالية مفتوحة للتسجيل.', sw: 'Uanachama wa jumuiya na ushiriki wa kikundi hupatikana baada ya ukaguzi. Kwa sasa hakuna bidhaa za kifedha zilizo wazi kwa usajili.',
+  },
+  'Insurance, lending, and benefit payouts are not currently available through this pilot. Product availability and terms can change as the program is configured.': {
+    am: 'በዚህ የሙከራ ፕሮግራም ኢንሹራንስ፣ ብድርና የጥቅም ክፍያዎች በአሁኑ ጊዜ አይገኙም። ፕሮግራሙ ሲዘጋጅ የምርቶቹ መገኘትና ውሎች ሊቀየሩ ይችላሉ።',
+    om: 'Inshuraansiin, liqiin fi kaffaltiin faayidaa ammaaf pilootii kanaan hin argaman. Sagantaan yeroo qophaaʼutti argamuun oomishaa fi haalotni isaa jijjiiramuu dandaʼu.',
+    ti: 'ኣብዚ ፓይሎት ውሕስነት፣ ልቓሕን ክፍሊት ጥቕምን ኣብዚ እዋን ኣይርከቡን። እቲ ፕሮግራም እናተዳለወ ከሎ ተረኻብነትን ውዕላትን ፍርያት ክቕየሩ ይኽእሉ።',
+    so: 'Caymiska, amaahda iyo bixinta faa’iidooyinku hadda lagama heli karo tijaabadan. Helitaanka badeecadaha iyo shuruudahoodu way isbeddeli karaan marka barnaamijka la diyaarinayo.',
+    ar: 'لا يتوفر التأمين أو الإقراض أو صرف المزايا حاليًا ضمن هذه المرحلة التجريبية. وقد يتغير توفر المنتجات وشروطها أثناء إعداد البرنامج.',
+    sw: 'Bima, mikopo na malipo ya manufaa havipatikani kwa sasa katika jaribio hili. Upatikanaji na masharti ya bidhaa yanaweza kubadilika programu inapoandaliwa.',
+  },
+  'Your membership is awaiting independent review. No financial activity is enabled.': {
+    am: 'አባልነትዎ ገለልተኛ ግምገማን እየጠበቀ ነው። ምንም የፋይናንስ እንቅስቃሴ አልነቃም።', om: 'Miseensummaan keessan gamaaggama bilisaa eeggachaa jira. Sochiin faayinaansii kamiyyuu hin banamne.', ti: 'ኣባልነትኩም ናጻ ግምገማ ይጽበ ኣሎ። ዝኾነ ፋይናንሳዊ ንጥፈት ኣይተነቓቕሐን።', so: 'Xubinnimadaadu waxay sugaysaa dib-u-eegis madax-bannaan. Wax dhaqdhaqaaq maaliyadeed ah lama hawlgelin.', ar: 'عضويتك بانتظار مراجعة مستقلة. لم يتم تفعيل أي نشاط مالي.', sw: 'Uanachama wako unasubiri ukaguzi huru. Hakuna shughuli za kifedha zilizowezeshwa.',
+  },
+  'You are enrolled in the central EthioLife Edir registry. Your membership does not create a deposit or payment account.': {
+    am: 'በማዕከላዊው የEthioLife እድር መዝገብ ተመዝግበዋል። አባልነትዎ የተቀማጭ ወይም የክፍያ መለያ አይፈጥርም።',
+    om: 'Galmee Edir giddugaleessaa EthioLife keessatti galmooftaniittu. Miseensummaan keessan herrega kuusaa yookaan kaffaltii hin uumu.',
+    ti: 'ኣብ ማእከላይ መዝገብ EthioLife Edir ተመዝጊብኩም ኣለኹም። ኣባልነትኩም ሕሳብ ተቐማጢ ወይ ክፍሊት ኣይፈጥርን።',
+    so: 'Waxaad ka diiwaangashan tahay diiwaanka dhexe ee EthioLife Edir. Xubinnimadaadu ma abuureyso akoon deebaaji ama lacag-bixin.',
+    ar: 'أنت مسجل في سجل EthioLife Edir المركزي. لا تنشئ عضويتك حساب إيداع أو دفع.',
+    sw: 'Umesajiliwa katika sajili kuu ya EthioLife Edir. Uanachama wako haufungui akaunti ya amana au malipo.',
+  },
+  'Your Edir groups': {
+    am: 'የእድር ቡድኖችዎ', om: 'Gareewwan Edir keessan', ti: 'ጉጅለታት Edirኩም', so: 'Kooxahaaga Edir', ar: 'مجموعات إدير الخاصة بك', sw: 'Vikundi vyako vya Edir',
+  },
+  'You are not assigned to an Edir group yet. Contact an Edir administrator.': {
+    am: 'ገና ለእድር ቡድን አልተመደቡም። የእድር አስተዳዳሪን ያነጋግሩ።', om: 'Ammaaf garee Edir keessatti hin ramadamne. Bulchaa Edir qunnamaa.', ti: 'ክሳብ ሕጂ ናብ ጉጅለ Edir ኣይተመደብኩምን። ምምሕዳር Edir ርኸቡ።', so: 'Weli laguma darin koox Edir ah. La xiriir maamulaha Edir.', ar: 'لم يتم تعيينك في مجموعة إدير بعد. تواصل مع مسؤول إدير.', sw: 'Bado hujapangiwa kikundi cha Edir. Wasiliana na msimamizi wa Edir.',
+  },
+  'No Edir membership requests have been submitted.': {
+    am: 'ምንም የእድር አባልነት ጥያቄ አልቀረበም።', om: 'Gaaffiin miseensummaa Edir hin dhiyaanne.', ti: 'ዝኾነ ሕቶ ኣባልነት Edir ኣይቀረበን።', so: 'Wax codsiyo xubinnimo Edir ah lama gudbin.', ar: 'لم يتم تقديم أي طلبات لعضوية إدير.', sw: 'Hakuna maombi ya uanachama wa Edir yaliyowasilishwa.',
+  },
+  'Umbrella Master Edir management': {
+    am: 'የዋናው እድር አስተዳደር', om: 'Bulchiinsa Edir guddaa', ti: 'ምምሕዳር ዋና Edir', so: 'Maamulka Edir-ka dalladda', ar: 'إدارة إدير المظلة', sw: 'Usimamizi wa Edir mwavuli',
+  },
+  'Onboard independent Edirs and coordinate their operations. Each Edir keeps its own governance, member registry, staff assignments, financial products, and ledger. This dashboard contains cross-Edir totals only.': {
+    am: 'ገለልተኛ እድሮችን ያስመዝግቡና ሥራቸውን ያስተባብሩ። እያንዳንዱ እድር የራሱን አስተዳደር፣ የአባላት መዝገብ፣ የሠራተኛ ምደባ፣ የፋይናንስ ምርቶችና ደብተር ይይዛል። ይህ ዳሽቦርድ በእድሮች መካከል ያሉ ጠቅላላ ድምሮችን ብቻ ያሳያል።',
+    om: 'Edirwwan of dandaʼan galmeessaa, hojii isaanii qindeessaa. Edir hundi bulchiinsa, galmee miseensotaa, ramaddii hojjettootaa, oomisha faayinaansii fi kitaaba herregaa mataa isaa qaba. Daashboordiin kun idaʼama Edirwwan gidduu jiru qofa agarsiisa.',
+    ti: 'Edirwwan bilisa taʼan galmeessaa, hojii isaanii qindeessaa። Edir ነናቱ ምምሕዳር፣ መዝገብ ኣባላት፣ ምደባ ሰራሕተኛታት፣ ፋይናንሳዊ ፍርያትን መዝገብ ሒሳብን ይሕዝ። እዚ ዳሽቦርድ ናይ ኩሎም Edir ጠቕላላ ድምር ጥራይ የርኢ።',
+    so: 'Diiwaangeli Edirro madax-bannaan oo isku-dubarid hawlahooda. Edir kasta wuxuu leeyahay maamul, diiwaanka xubnaha, shaqaale loo qoondeeyey, badeecooyin maaliyadeed iyo buug-xisaabeed u gaar ah. Guddigani wuxuu muujinayaa wadarta guud ee Edirrada oo keliya.',
+    ar: 'سجّل إديرات مستقلة ونسّق عملياتها. يحتفظ كل إدير بحوكمته وسجل أعضائه وتعيينات موظفيه ومنتجاته المالية ودفتره الخاص. تعرض لوحة المعلومات هذه الإجماليات بين الإديرات فقط.',
+    sw: 'Sajili Edir huru na uratibu shughuli zake. Kila Edir ina utawala, sajili ya wanachama, upangaji wa wafanyakazi, bidhaa za kifedha na daftari lake. Dashibodi hii inaonyesha jumla za Edir mbalimbali pekee.',
+  },
+  'Onboard an independent Edir': {
+    am: 'ገለልተኛ እድር ያስመዝግቡ', om: 'Edir of dandaʼe galmeessaa', ti: 'Edir bilisa መዝግቡ', so: 'Diiwaangeli Edir madax-bannaan', ar: 'سجّل إديرًا مستقلًا', sw: 'Sajili Edir huru',
+  },
+  'Official registration and governance documents must both be verified before approval.': {
+    am: 'ከመፍቀድ በፊት ይፋዊ የምዝገባና የአስተዳደር ሰነዶች ሁለቱም መረጋገጥ አለባቸው።', om: 'Hayyama dura sanadoonni galmee mootummaa fi bulchiinsaa lamaan isaanii mirkanaaʼuu qabu.', ti: 'ቅድሚ ምፍቃድ ወግዓዊ ሰነዳት ምዝገባን ምምሕዳርን ክልቲኦም ክረጋገጹ ኣለዎም።', so: 'Dukumentiyada rasmiga ah ee diiwaangelinta iyo maamulka labadaba waa in la xaqiijiyaa ka hor oggolaanshaha.', ar: 'يجب التحقق من وثائق التسجيل والحوكمة الرسمية كلتيهما قبل الموافقة.', sw: 'Hati rasmi za usajili na utawala lazima zithibitishwe zote kabla ya idhini.',
+  },
+  'Independent Edirs': {
+    am: 'ገለልተኛ እድሮች', om: 'Edirwwan of dandaʼan', ti: 'Edirwwan bilisa', so: 'Edirro madax-bannaan', ar: 'إديرات مستقلة', sw: 'Edir huru',
+  },
+  'Local Edir role': {
+    am: 'የአካባቢ እድር ሚና', om: 'Gahee Edir naannoo', ti: 'ሚና ከባቢ Edir', so: 'Doorka Edir maxalliga ah', ar: 'دور إدير المحلي', sw: 'Jukumu la Edir ya eneo',
+  },
+  'Separate Insurance Edir ledgers and reporting': {
+    am: 'የተለዩ የኢንሹራንስ እድር ደብተሮችና ሪፖርት', om: 'Galmeewwan herregaa fi gabaasa Edir inshuraansii adda taʼan', ti: 'ፍሉያት መዝገባት ሒሳብን ሪፖርትን Insurance Edir', so: 'Diiwaannada iyo warbixinta Edir caymiska oo kala gaar ah', ar: 'دفاتر وتقارير إدير التأمين المنفصلة', sw: 'Daftari na ripoti tofauti za Edir ya Bima',
+  },
+  'Insurance role': {
+    am: 'የኢንሹራንስ ሚና', om: 'Gahee inshuraansii', ti: 'ሚና ውሕስነት', so: 'Doorka caymiska', ar: 'دور التأمين', sw: 'Jukumu la bima',
+  },
+  'Insurance consolidated totals': {
+    am: 'የተጠቃለሉ የኢንሹራንስ ድምሮች', om: 'Idaʼama inshuraansii waliigalaa', ti: 'ጠቕላላ ድምር ውሕስነት', so: 'Wadarta guud ee caymiska', ar: 'إجماليات التأمين الموحّدة', sw: 'Jumla za bima zilizounganishwa',
+  },
+  'Edir administration': {
+    am: 'የእድር አስተዳደር', om: 'Bulchiinsa Edir', ti: 'ምምሕዳር Edir', so: 'Maamulka Edir', ar: 'إدارة إدير', sw: 'Usimamizi wa Edir',
+  },
+  'Review central membership requests, organize community groups, and inspect the append-only Edir audit trail. Money movement requires a separate approver and creates immutable double-entry ledger postings.': {
+    am: 'ማዕከላዊ የአባልነት ጥያቄዎችን ይገምግሙ፣ የማኅበረሰብ ቡድኖችን ያደራጁና ተጨማሪ ሊጻፍበት ብቻ የሚችለውን የእድር ኦዲት መዝገብ ይመርምሩ። የገንዘብ እንቅስቃሴ የተለየ አጽዳቂ ይፈልጋል፣ በማይለወጥ ድርብ-ግቤት ደብተርም ይመዘገባል።',
+    om: 'Gaaffii miseensummaa giddugaleessaa gamaaggamaa, gareewwan hawaasaa qindeessaa, galmee odiitii Edir irratti dabaluu qofa dandaʼamu ilaalaa. Sochiin maallaqaa nama biraatiin raggaasifamuu qaba; galmee herregaa galmee lamaan hin jijjiiramne keessatti galmaaʼa.',
+    ti: 'ማእከላይ ሕቶታት ኣባልነት ግምግሙ፣ ጉጅለታት ማሕበረሰብ ኣዳልዉ፣ እቲ ተወሳኺ ጽሑፍ ጥራይ ዝቕበል መዝገብ ኦዲት Edir ድማ መርምሩ። ምንቅስቓስ ገንዘብ ፍሉይ ኣጽዳቒ ይሓትት፣ ኣብ ዘይቀየር ድርብ መዝገብ ሒሳብ ይምዝገብ።',
+    so: 'Dib u eeg codsiyada xubinnimada dhexe, abaabul kooxaha bulshada, oo kormeer diiwaanka hanti-dhawrka Edir ee wax lagu kordhin karo oo keliya. Dhaqdhaqaaqa lacagtu wuxuu u baahan yahay ansixiye kale, waxaana lagu qoraa buug-xisaabeed laba-gelin ah oo aan la beddeli karin.',
+    ar: 'راجع طلبات العضوية المركزية ونظّم مجموعات المجتمع وافحص سجل تدقيق إدير الذي يسمح بالإضافة فقط. تتطلب حركة الأموال موافقة شخص آخر، وتُسجّل في دفتر قيود مزدوجة غير قابل للتغيير.',
+    sw: 'Kagua maombi ya uanachama ya kati, panga vikundi vya jamii na kagua kumbukumbu ya ukaguzi ya Edir inayoruhusu nyongeza pekee. Uhamishaji wa fedha unahitaji mwidhinishaji tofauti na huandikwa katika daftari lisilobadilika la hesabu za pande mbili.',
+  },
+  'Create a central Edir group': {
+    am: 'ማዕከላዊ የእድር ቡድን ይፍጠሩ', om: 'Garee Edir giddugaleessaa uumaa', ti: 'ማእከላይ ጉጅለ Edir ፍጠሩ', so: 'Abuur koox Edir dhexe ah', ar: 'أنشئ مجموعة إدير مركزية', sw: 'Unda kikundi cha Edir cha kati',
+  },
+  'Central groups': {
+    am: 'ማዕከላዊ ቡድኖች', om: 'Gareewwan giddugaleessaa', ti: 'ማእከላይ ጉጅለታት', so: 'Kooxaha dhexe', ar: 'المجموعات المركزية', sw: 'Vikundi vya kati',
+  },
+  'No groups have been created.': {
+    am: 'ምንም ቡድን አልተፈጠረም።', om: 'Gareen hin uumamne.', ti: 'ዝኾነ ጉጅለ ኣይተፈጥረን።', so: 'Wax kooxo ah lama abuurin.', ar: 'لم يتم إنشاء أي مجموعات.', sw: 'Hakuna vikundi vilivyoundwa.',
+  },
+  'Assign Edir staff': {
+    am: 'የእድር ሠራተኞችን ይመድቡ', om: 'Hojjettoota Edir ramadaa', ti: 'ሰራሕተኛታት Edir ምድቡ', so: 'Qoondee shaqaalaha Edir', ar: 'عيّن موظفي إدير', sw: 'Panga wafanyakazi wa Edir',
+  },
+  'Edir role': {
+    am: 'የእድር ሚና', om: 'Gahee Edir', ti: 'ሚና Edir', so: 'Doorka Edir', ar: 'دور إدير', sw: 'Jukumu la Edir',
+  },
+  'Edir accounts are not a digital wallet. This view is read-only for your balances and activity; payment and transfer rails are not connected.': {
+    am: 'የእድር ሂሳቦች ዲጂታል የገንዘብ ቦርሳ አይደሉም። ይህ እይታ ቀሪ ሂሳብዎንና እንቅስቃሴዎን ለማንበብ ብቻ ነው፤ የክፍያና የዝውውር ሥርዓቶች አልተገናኙም።',
+    om: 'Herregni Edir boorsaa maallaqaa dijitaalaa miti. Ilaalchi kun baaqii fi sochii keessan dubbisuuf qofa; sirni kaffaltii fi dabarsaa hin walqabsiifamne.',
+    ti: 'ሕሳባት Edir ዲጂታላዊ ቦርሳ ገንዘብ ኣይኮኑን። እዚ ርእይቶ ቀሪ ሒሳብኩምን ንጥፈትኩምን ንምንባብ ጥራይ እዩ፤ መስመራት ክፍሊትን ምትሕልላፍን ኣይተራኸቡን።',
+    so: 'Akoonnada Edir ma aha boorsooyin lacag dijitaal ah. Muuqaalkani waa akhris-keliya oo ku saabsan hadhaaga iyo dhaqdhaqaaqa; hababka lacag-bixinta iyo wareejintu iskuma xirna.',
+    ar: 'حسابات إدير ليست محفظة رقمية. هذا العرض مخصّص للقراءة فقط للأرصدة والأنشطة؛ ولم يتم ربط قنوات الدفع والتحويل.',
+    sw: 'Akaunti za Edir si pochi za kidijitali. Mwonekano huu ni wa kusoma salio na shughuli pekee; mifumo ya malipo na uhamisho haijaunganishwa.',
+  },
+  'Financial products require independent approval before opening. Deposits and withdrawals post only after a second authorized person approves them. Amounts use ETB; lending and benefit payouts will be introduced as separately controlled stages.': {
+    am: 'የፋይናንስ ምርቶች ከመከፈታቸው በፊት ገለልተኛ ፈቃድ ይፈልጋሉ። ተቀማጭና ወጪ ገንዘብ በሁለተኛ የተፈቀደለት ሰው ከጸደቀ በኋላ ብቻ ይመዘገባሉ። መጠኖች በETB ናቸው፤ ብድርና የጥቅም ክፍያዎች በተለያዩ ቁጥጥር ያላቸው ደረጃዎች ይጀምራሉ።',
+    om: 'Oomishaaleen faayinaansii banamuu isaanii dura hayyama nama biraa barbaadu. Kuusaa fi baasii maallaqaa nama hayyamame lammaffaan erga raggaasisee booda qofa galmaaʼu. Maallaqni ETB tiin ibsama; liqii fi kaffaltiin faayidaa akka sadarkaa toʼannoo adda addaatti ni jalqabu.',
+    ti: 'ፋይናንሳዊ ፍርያት ቅድሚ ምኽፋቱ ናጻ ፍቓድ ይሓትት። ተቐማጢን ወጻኢን ገንዘብ ብካልኣይ ዝተፈቕደሉ ሰብ ድሕሪ ምጽዳቑ ጥራይ ይምዝገቡ። መጠናት ብETB እዮም፤ ልቓሕን ክፍሊት ጥቕምን ከም ብፍሉይ ዝቆጻጸሩ ደረጃታት ክኣትዉ እዮም።',
+    so: 'Badeecooyinka maaliyadeed waxay u baahan yihiin oggolaansho madax-bannaan ka hor furitaanka. Dhigashada iyo bixitaanku waxay diiwaangashamaan kaddib marka qof labaad oo la oggolaaday ansixiyo. Lacagaha waxaa lagu muujiyaa ETB; amaahda iyo bixinta faa’iidooyinka waxaa loo soo bandhigi doonaa heerar si gaar ah loo xakameeyo.',
+    ar: 'تتطلب المنتجات المالية موافقة مستقلة قبل فتحها. لا تُسجّل الإيداعات والسحوبات إلا بعد موافقة شخص ثانٍ مخوّل. المبالغ بعملة ETB؛ وسيتم طرح الإقراض وصرف المزايا في مراحل منفصلة خاضعة للرقابة.',
+    sw: 'Bidhaa za kifedha zinahitaji idhini huru kabla ya kufunguliwa. Amana na utoaji huandikishwa tu baada ya mtu wa pili aliyeidhinishwa kuidhinisha. Kiasi huonyeshwa kwa ETB; mikopo na malipo ya manufaa yataanzishwa katika hatua tofauti zinazodhibitiwa.',
+  },
+  'No financial products are available yet. An authorized financial manager must propose a product and a different reviewer must approve it.': {
+    am: 'እስካሁን ምንም የፋይናንስ ምርት አልተገኘም። የተፈቀደለት የፋይናንስ አስተዳዳሪ ምርት ማቅረብ አለበት፤ ሌላ ገምጋሚም ማጽደቅ አለበት።',
+    om: 'Ammaaf oomishni faayinaansii hin jiru. Bulchaan faayinaansii hayyamame oomisha dhiyeessuu qaba; gamaaggamaan biraa immoo raggaasisuu qaba.',
+    ti: 'ክሳብ ሕጂ ዝኾነ ፋይናንሳዊ ፍርያት የለን። ዝተፈቕደሉ ሓላፊ ፋይናንስ ፍርያት ከቕርብ ኣለዎ፣ ካልእ ገምጋሚ ድማ ከጽድቖ ኣለዎ።',
+    so: 'Weli ma jiraan badeecooyin maaliyadeed. Maamule maaliyadeed oo la oggolaaday waa inuu soo jeediyaa badeecad, qof kale oo dib-u-eegis sameeyaana waa inuu ansixiyaa.',
+    ar: 'لا تتوفر منتجات مالية بعد. يجب أن يقترح مدير مالي مخوّل منتجًا وأن يوافق عليه مراجع آخر.',
+    sw: 'Bado hakuna bidhaa za kifedha. Meneja wa fedha aliyeidhinishwa lazima apendekeze bidhaa na mkaguzi mwingine aiidhinishe.',
+  },
+  'You have no Edir financial accounts.': {
+    am: 'ምንም የእድር የፋይናንስ ሂሳብ የለዎትም።', om: 'Herrega faayinaansii Edir hin qabdan.', ti: 'ዝኾነ ሕሳብ ፋይናንስ Edir የብልኩምን።', so: 'Ma lihid akoon maaliyadeed oo Edir ah.', ar: 'ليس لديك حسابات مالية لدى إدير.', sw: 'Huna akaunti za kifedha za Edir.',
+  },
+  'Request a withdrawal': {
+    am: 'ወጪ ገንዘብ ይጠይቁ', om: 'Baasii maallaqaa gaafadhaa', ti: 'ወጻኢ ገንዘብ ሕተቱ', so: 'Codso lacag-bixin', ar: 'اطلب سحبًا', sw: 'Omba kutoa fedha',
+  },
+  'Your detailed Edir transaction activity': {
+    am: 'ዝርዝር የእድር ግብይት እንቅስቃሴዎ', om: 'Sochii balʼinaan daldala Edir keessan', ti: 'ዝርዝር ንጥፈት ግብይት Edirኩም', so: 'Faahfaahinta dhaqdhaqaaqa macaamilka Edir', ar: 'تفاصيل معاملات إدير الخاصة بك', sw: 'Shughuli za kina za miamala yako ya Edir',
+  },
+  'No Edir transaction activity is linked to your membership.': {
+    am: 'ከአባልነትዎ ጋር የተያያዘ የእድር ግብይት እንቅስቃሴ የለም።', om: 'Sochiin daldala Edir miseensummaa keessan waliin walqabate hin jiru.', ti: 'ምስ ኣባልነትኩም ዝተኣሳሰረ ንጥፈት ግብይት Edir የለን።', so: 'Ma jiro dhaqdhaqaaq macaamil Edir oo ku xiran xubinnimadaada.', ar: 'لا توجد معاملات إدير مرتبطة بعضويتك.', sw: 'Hakuna shughuli za miamala ya Edir zilizounganishwa na uanachama wako.',
+  },
+  'Propose a financial product': {
+    am: 'የፋይናንስ ምርት ያቅርቡ', om: 'Oomisha faayinaansii dhiyeessaa', ti: 'ፋይናንሳዊ ፍርያት ኣቕርቡ', so: 'Soo jeedi badeecad maaliyadeed', ar: 'اقترح منتجًا ماليًا', sw: 'Pendekeza bidhaa ya kifedha',
+  },
+  'Product type': {
+    am: 'የምርት ዓይነት', om: 'Gosa oomishaa', ti: 'ዓይነት ፍርያት', so: 'Nooca badeecadda', ar: 'نوع المنتج', sw: 'Aina ya bidhaa',
+  },
+  'Allow withdrawals from this product after independent approval.': {
+    am: 'ገለልተኛ ፈቃድ ከተገኘ በኋላ ከዚህ ምርት ገንዘብ ማውጣት ይፍቀዱ።',
+    om: 'Erga hayyamni nama biraa argamee booda oomisha kana irraa maallaqa baasuu hayyamaa.',
+    ti: 'ናጻ ፍቓድ ምስ ተረኽበ ካብዚ ፍርያት ገንዘብ ክወጽእ ፍቐዱ።',
+    so: 'Oggolow in badeecaddan lacag lagala baxo marka ansixin madax-bannaan la helo.',
+    ar: 'اسمح بالسحب من هذا المنتج بعد الحصول على موافقة مستقلة.',
+    sw: 'Ruhusu kutoa fedha kwenye bidhaa hii baada ya idhini huru.',
+  },
+  'Entity finance operations': {
+    am: 'የድርጅት ፋይናንስ ሥራዎች', om: 'Hojii faayinaansii dhaabbataa', ti: 'ስራሕ ፋይናንስ ትካል', so: 'Hawlaha maaliyadeed ee hay’adda', ar: 'العمليات المالية للكيان', sw: 'Shughuli za kifedha za taasisi',
+  },
+  'Add customer or vendor': {
+    am: 'ደንበኛ ወይም አቅራቢ ያክሉ', om: 'Maamila yookaan dhiyeessaa dabalaa', ti: 'ዓሚል ወይ ኣቕራቢ ወስኹ', so: 'Ku dar macmiil ama alaab-qeybiye', ar: 'أضف عميلًا أو مورّدًا', sw: 'Ongeza mteja au muuzaji',
+  },
+  'Save contact': {
+    am: 'እውቂያውን ያስቀምጡ', om: 'Quunnamtii olkaaʼaa', ti: 'ርክብ ዓቅቡ', so: 'Kaydi xiriirka', ar: 'احفظ جهة الاتصال', sw: 'Hifadhi mawasiliano',
+  },
+  'Create invoice or bill': {
+    am: 'ደረሰኝ ወይም ሂሳብ ይፍጠሩ', om: 'Invooysii yookaan biilii uumaa', ti: 'ኢንቮይስ ወይ ቢል ፍጠሩ', so: 'Abuur qaansheeg ama biil', ar: 'أنشئ فاتورة أو مطالبة', sw: 'Unda ankara au bili',
+  },
+  'Document line': {
+    am: 'የሰነድ መስመር ንጥል', om: 'Sarara sanadaa', ti: 'መስመር ሰነድ', so: 'Qaybta dukumentiga', ar: 'بند المستند', sw: 'Kipengee cha hati',
+  },
+  'The first version accepts one document line per submission; create separate documents for additional lines.': {
+    am: 'የመጀመሪያው ስሪት በአንድ ማስገባት አንድ የሰነድ መስመር ብቻ ይቀበላል፤ ተጨማሪ መስመሮችን ለማስገባት የተለዩ ሰነዶችን ይፍጠሩ።',
+    om: 'Jalqabni kun yeroo galchaa tokkootti sarara sanadaa tokko qofa fudhata; sararoota dabalataaf sanadoota adda addaa uumaa.',
+    ti: 'እቲ ቀዳማይ ስሪት ኣብ ነፍሲ ወከፍ ምቕራብ ሓደ መስመር ሰነድ ጥራይ ይቕበል፤ ንተወሳኺ መስመራት ፍሉያት ሰነዳት ፍጠሩ።',
+    so: 'Nooca koowaad wuxuu aqbalaa hal sadar oo dukumenti ah gudbin kasta; u samee dukumentiyo gaar ah sadar kasta oo dheeraad ah.',
+    ar: 'يقبل الإصدار الأول بندًا واحدًا لكل مستند عند الإرسال؛ أنشئ مستندات منفصلة للبنود الإضافية.',
+    sw: 'Toleo la kwanza linakubali kipengee kimoja cha hati kwa kila uwasilishaji; unda hati tofauti kwa vipengee vya ziada.',
+  },
+  'Entity documents': {
+    am: 'የድርጅት ሰነዶች', om: 'Sanadoota dhaabbataa', ti: 'ሰነዳት ትካል', so: 'Dukumentiyada hay’adda', ar: 'مستندات الكيان', sw: 'Hati za taasisi',
+  },
+  'Create monthly budget': {
+    am: 'ወርሃዊ በጀት ይፍጠሩ', om: 'Baajata jiʼaa uumaa', ti: 'ወርሓዊ ባጀት ፍጠሩ', so: 'Abuur miisaaniyad bille ah', ar: 'أنشئ ميزانية شهرية', sw: 'Unda bajeti ya kila mwezi',
+  },
+  'Save draft': {
+    am: 'ረቂቅ አስቀምጥ', om: 'Wixinee olkaa’i', ti: 'ረቂቕ ዓቅብ', so: 'Kaydi qabyo-qoraalka', ar: 'احفظ المسودة', sw: 'Hifadhi rasimu',
+  },
+  'Choose at least one picture to upload.': {
+    so: 'Dooro ugu yaraan hal sawir si aad u geliso.', ar: 'اختر صورة واحدة على الأقل لتحميلها.', sw: 'Chagua angalau picha moja ya kupakia.',
+  },
+  'Save draft budget': {
+    am: 'የበጀት ረቂቁን ያስቀምጡ', om: 'Baajata wixinee olkaaʼaa', ti: 'ረቂቕ ባጀት ዓቅቡ', so: 'Kaydi qabyo-qoraalka miisaaniyadda', ar: 'احفظ مسودة الميزانية', sw: 'Hifadhi rasimu ya bajeti',
+  },
+  'Register entity bank account': {
+    am: 'የድርጅቱን የባንክ ሂሳብ ያስመዝግቡ', om: 'Herrega baankii dhaabbataa galmeessaa', ti: 'ሕሳብ ባንኪ ትካል መዝግቡ', so: 'Diiwaangeli akoon bangi oo hay’adeed', ar: 'سجّل الحساب المصرفي للكيان', sw: 'Sajili akaunti ya benki ya taasisi',
+  },
+  'Save bank account': {
+    am: 'የባንክ ሂሳቡን ያስቀምጡ', om: 'Herrega baankii olkaaʼaa', ti: 'ሕሳብ ባንኪ ዓቅቡ', so: 'Kaydi akoonka bangiga', ar: 'احفظ الحساب المصرفي', sw: 'Hifadhi akaunti ya benki',
+  },
+  'Import bank statement CSV': {
+    am: 'የባንክ መግለጫ CSV ያስመጡ', om: 'Ibsa baankii CSV galchaa', ti: 'CSV መግለጺ ባንኪ ኣእትዉ', so: 'Soo geli CSV-ga bayaanka bangiga', ar: 'استورد كشف حساب البنك بصيغة CSV', sw: 'Ingiza taarifa ya benki ya CSV',
+  },
+  'Import statement': {
+    am: 'መግለጫውን ያስመጡ', om: 'Ibsa galchaa', ti: 'መግለጺ ኣእትዉ', so: 'Soo geli bayaanka', ar: 'استورد الكشف', sw: 'Ingiza taarifa',
+  },
+  'Prepare tax period workpaper': {
+    am: 'የግብር ጊዜ የሥራ ሰነድ ያዘጋጁ', om: 'Waraqaa hojii yeroo gibiraa qopheessaa', ti: 'ሰነድ ስራሕ እዋን ግብሪ ኣዳልዉ', so: 'Diyaari waraaqda shaqada ee muddada canshuurta', ar: 'أعد ورقة عمل الفترة الضريبية', sw: 'Andaa karatasi ya kazi ya kipindi cha kodi',
+  },
+  'Save filing workpaper': {
+    am: 'የማስገቢያ የሥራ ሰነዱን ያስቀምጡ', om: 'Waraqaa hojii galchaa olkaaʼaa', ti: 'ሰነድ ስራሕ ምቕራብ ዓቅቡ', so: 'Kaydi waraaqda shaqada ee gudbinta', ar: 'احفظ ورقة عمل الإقرار', sw: 'Hifadhi karatasi ya kazi ya uwasilishaji',
+  },
+  'Entity reporting basis': {
+    am: 'የድርጅት ሪፖርት ማቅረቢያ መሠረት', om: 'Buʼuura gabaasa dhaabbataa', ti: 'መሰረት ሪፖርት ትካል', so: 'Habka warbixinta hay’adda', ar: 'أساس التقارير للكيان', sw: 'Msingi wa taarifa za taasisi',
+  },
+  'Save reporting basis': {
+    am: 'የሪፖርት መሠረቱን ያስቀምጡ', om: 'Buʼuura gabaasaa olkaaʼaa', ti: 'መሰረት ሪፖርት ዓቅቡ', so: 'Kaydi habka warbixinta', ar: 'احفظ أساس التقارير', sw: 'Hifadhi msingi wa taarifa',
+  },
+  'Accounting & Finance uses the same AfroLife mini-app subscription and payment review as other services. Subscription access is managed from Service subscriptions; this workspace is for accounting standards and books.': {
+    am: 'የሂሳብና ፋይናንስ አገልግሎት ከሌሎች አገልግሎቶች ጋር ተመሳሳይ የAfroLife ሚኒ-መተግበሪያ አባልነትና የክፍያ ግምገማ ይጠቀማል። የአባልነት መዳረሻ ከአገልግሎት አባልነቶች ይተዳደራል፤ ይህ የሥራ ቦታ ለሂሳብ ደረጃዎችና መዝገቦች ነው።',
+    om: 'Herregnii fi Faayinaansii tajaajiloota biroo wajjin miseensummaa mini-app AfroLife fi gamaaggama kaffaltii walfakkaataa fayyadama. Seensaan miseensummaa Tajaajila Miseensota irraa bulfama; iddoo hojii kun ulaagaalee herregaa fi galmeewwaniif qofa.',
+    ti: 'ሒሳብን ፋይናንስን ከም ካልኦት ኣገልግሎታት ተመሳሳሊ ኣባልነት ሚኒ-ኣፕ AfroLifeን ግምገማ ክፍሊትን ይጥቀም። መእተዊ ኣባልነት ካብ ኣባልነት ኣገልግሎታት ይመሓደር፤ እዚ ቦታ ስራሕ ንመለክዒታት ሒሳብን መዝገባትን እዩ።',
+    so: 'Xisaabaadka iyo Maaliyaddu waxay isticmaalaan rukhsadda mini-app-ka AfroLife iyo dib-u-eegista lacag-bixinta ee adeegyada kale. Gelitaanka rukhsadda waxaa laga maamulaa Rukhsadaha Adeegga; goobtan shaqadu waxay u gaar tahay halbeegyada xisaabaadka iyo buugaagta.',
+    ar: 'يستخدم قسم المحاسبة والمالية اشتراك تطبيق AfroLife المصغّر ومراجعة الدفع نفسيهما المستخدمين في الخدمات الأخرى. تُدار صلاحية الاشتراك من اشتراكات الخدمات؛ ومساحة العمل هذه مخصصة لمعايير المحاسبة ودفاترها.',
+    sw: 'Uhasibu na Fedha hutumia usajili huohuo wa programu ndogo ya AfroLife na ukaguzi wa malipo kama huduma nyingine. Ufikiaji wa usajili husimamiwa kwenye Usajili wa Huduma; eneo hili la kazi ni la viwango na vitabu vya uhasibu.',
+  },
+  'Submit for approval': {
+    am: 'ለማጽደቅ ያቅርቡ', om: 'Raggaasiisuuf dhiyeessaa', ti: 'ንምጽዳቕ ኣቕርቡ', so: 'U gudbi ansixin', ar: 'أرسل للموافقة', sw: 'Wasilisha ili kuidhinishwa',
+  },
+  'Submit payment for review': {
+    am: 'ክፍያውን ለግምገማ ያቅርቡ', om: 'Kaffaltii gamaaggamaaf dhiyeessaa', ti: 'ክፍሊት ንግምገማ ኣቕርቡ', so: 'U gudbi lacag-bixinta dib-u-eegis', ar: 'أرسل الدفعة للمراجعة', sw: 'Wasilisha malipo yakaguliwe',
+  },
+  'Approve budget': {
+    am: 'በጀቱን ያጽድቁ', om: 'Baajata raggaasisaa', ti: 'ባጀት ኣጽድቑ', so: 'Ansixi miisaaniyadda', ar: 'اعتمد الميزانية', sw: 'Idhinisha bajeti',
+  },
+  'Match & reconcile': {
+    am: 'ያዛምዱና ያስታርቁ', om: 'Walsimsiisaa fi herrega sirreessaa', ti: 'ኣዛምዱን ኣስማምዑን', so: 'Waafaji oo iswaafaji xisaabaadka', ar: 'طابق وسوِّ الحسابات', sw: 'Linganisha na sawazisha',
+  },
+  'Simulate test submission (no authority filing)': {
+    am: 'የሙከራ ማስገባት አስመስሉ (ለባለሥልጣን አይቀርብም)', om: 'Galchaa yaalii fakkeessaa (qaama mootummaa bira hin gaʼu)', ti: 'ምቕራብ ፈተነ ኣስምስሉ (ናብ በዓል ስልጣን ኣይቀርብን)', so: 'Matala gudbin tijaabo ah (looma gudbinayo hay’ad rasmi ah)', ar: 'حاكِ إرسالًا تجريبيًا (لن يُرسل إلى جهة رسمية)', sw: 'Iga uwasilishaji wa majaribio (haupelekwi kwa mamlaka)',
+  },
+  'Request information': {
+    am: 'መረጃ ይጠይቁ', om: 'Odeeffannoo gaafadhaa', ti: 'ሓበሬታ ሕተቱ', so: 'Codso macluumaad', ar: 'اطلب معلومات', sw: 'Omba maelezo',
+  },
+  'I consent to AfroLife forwarding this information request to the Insurance service team. This is not an application, policy, quote, or coverage confirmation.': {
+    am: 'AfroLife ይህን የመረጃ ጥያቄ ወደ ኢንሹራንስ አገልግሎት ቡድን እንዲያስተላልፍ ተስማምቻለሁ። ይህ ማመልከቻ፣ ፖሊሲ፣ የዋጋ ጥቅስ ወይም የሽፋን ማረጋገጫ አይደለም።',
+    om: 'AfroLife gaaffii odeeffannoo kana gara garee tajaajila inshuraansiitti akka dabarsu nan hayyama. Kun iyyata, poolisii, tilmaama gatii yookaan mirkaneessa inshuraansii miti.',
+    ti: 'AfroLife እዚ ሕቶ ሓበሬታ ናብ ጉጅለ ኣገልግሎት ውሕስነት ከመሓላልፎ ፈቒደ ኣለኹ። እዚ መመልከቲ፣ ፖሊሲ፣ ጥቕሲ ዋጋ ወይ ምርግጋጽ ሽፋን ኣይኮነን።',
+    so: 'Waxaan oggolahay in AfroLife codsigan macluumaadka u gudbiso kooxda adeegga Caymiska. Tani ma aha codsi caymis, caymis la soo saaray, qiime-soo-jeedin ama xaqiijin caymis.',
+    ar: 'أوافق على إحالة AfroLife لطلب المعلومات هذا إلى فريق خدمات التأمين. لا يُعد ذلك طلب تأمين أو وثيقة أو عرض سعر أو تأكيدًا للتغطية.',
+    sw: 'Ninakubali AfroLife kupeleka ombi hili la maelezo kwa timu ya huduma za Bima. Hili si ombi la bima, sera, makadirio ya bei wala uthibitisho wa bima.',
+  },
+  'Optional: I consent to sharing my name, phone number, and selected topic with one assigned AfroLife Agent for non-binding follow-up and referral to the Insurance service team. The Agent cannot advise, quote, collect premiums, submit applications, or influence underwriting or claims.': {
+    am: 'አማራጭ፦ ስሜን፣ ስልክ ቁጥሬንና የመረጥኩትን ርዕስ ለአንድ የተመደበ የAfroLife ወኪል ለማጋራት ተስማምቻለሁ፤ ወኪሉ የማያስገድድ ክትትል ያደርጋልና ወደ ኢንሹራንስ አገልግሎት ቡድን ይመራል። ወኪሉ ምክር መስጠት፣ ዋጋ መጥቀስ፣ ፕሪሚየም መሰብሰብ፣ ማመልከቻ ማቅረብ ወይም በአደጋ ግምገማና በካሳ ውሳኔ ላይ ተጽዕኖ ማድረግ አይችልም።',
+    om: 'Filannoo: Maqaa, lakkoofsa bilbilaa fi mata-duree filattan bakka buʼaa AfroLife tokkoof akka qoodamu nan hayyama; inni hordoffii dirqama hin taane godhee gara garee inshuraansiitti isin qajeelcha. Bakka buʼaan gorsa, tilmaama gatii, walitti qabaa kaffaltii, dhiyeessa iyyataa yookaan murtii madaallii balaa fi gaaffii beenyaa irratti dhiibbaa gochuu hin dandaʼu.',
+    ti: 'ኣማራጺ፦ ስመይ፣ ቁጽሪ ስልከይን ዝመረጽክዎ ኣርእስትን ምስ ሓደ ዝተመደበ ወኪል AfroLife ክካፈል ፈቒደ ኣለኹ፤ እቲ ወኪል ዘይግድን ክትትል ገይሩ ናብ ጉጅለ ኣገልግሎት ውሕስነት ይመርሕ። ወኪል ምኽሪ፣ ጥቕሲ ዋጋ፣ ምእካብ ፕሪሚየም፣ ምቕራብ መመልከቲ ወይ ኣብ ግምገማ ስግኣትን ውሳነ ካሕሳን ጽልዋ ምግባር ኣይክእልን።',
+    so: 'Ikhtiyaari: Waxaan oggolahay in magacayga, lambarka telefoonka iyo mawduuca aan doortay lala wadaago hal Wakiil AfroLife oo la ii qoondeeyey si uu dabagal aan khasab ahayn u sameeyo iiguna gudbiyo kooxda adeegga Caymiska. Wakiilku ma bixin karo talo ama qiime, mana qaadi karo khidmad, gudbin karo codsi ama saamayn ku yeelan karo qiimaynta khatarta ama go’aamada sheegashada.',
+    ar: 'اختياري: أوافق على مشاركة اسمي ورقم هاتفي والموضوع الذي اخترته مع وكيل واحد معيّن من AfroLife للمتابعة غير الملزمة وإحالتي إلى فريق خدمات التأمين. لا يجوز للوكيل تقديم المشورة أو عرض سعر أو تحصيل أقساط أو تقديم طلبات أو التأثير في الاكتتاب أو المطالبات.',
+    sw: 'Hiari: Ninakubali jina langu, nambari yangu ya simu na mada niliyochagua kushirikiwa na Wakala mmoja wa AfroLife niliyekabidhiwa kwa ufuatiliaji usio wa lazima na kuelekezwa kwa timu ya huduma za Bima. Wakala haruhusiwi kutoa ushauri au bei, kukusanya ada, kutuma maombi, au kuathiri tathmini ya hatari au madai.',
+  },
+  'Your requests and activity': {
+    am: 'ጥያቄዎችዎና እንቅስቃሴዎ', om: 'Gaaffii fi sochii keessan', ti: 'ሕቶታትኩምን ንጥፈታትኩምን', so: 'Codsiyadaada iyo dhaqdhaqaaqaaga', ar: 'طلباتك ونشاطك', sw: 'Maombi na shughuli zako',
+  },
+  'No Insurance information requests are linked to your account.': {
+    am: 'ከመለያዎ ጋር የተያያዘ የኢንሹራንስ መረጃ ጥያቄ የለም።', om: 'Gaaffiin odeeffannoo inshuraansii herrega keessan waliin walqabate hin jiru.', ti: 'ምስ ሕሳብኩም ዝተኣሳሰረ ሕቶ ሓበሬታ ውሕስነት የለን።', so: 'Ma jiro codsi macluumaad caymis oo ku xiran akoonkaaga.', ar: 'لا توجد طلبات معلومات تأمين مرتبطة بحسابك.', sw: 'Hakuna maombi ya maelezo ya bima yaliyounganishwa na akaunti yako.',
+  },
+  'Consent-based Agent referrals': {
+    am: 'በፈቃድ የሚደረጉ የወኪል ሪፈራሎች', om: 'Ergaa bakka buʼaa hayyama irratti hundaaʼe', ti: 'ምምራሕ ወኪል ብፍቓድ', so: 'Gudbin wakiil oo oggolaansho ku salaysan', ar: 'إحالات الوكلاء بموافقة العميل', sw: 'Rufaa za mawakala kwa ridhaa',
+  },
+  'No consented Insurance referrals are assigned in your Agent scope.': {
+    am: 'በወኪል ሚናዎ የተመደበ የተፈቀደ የኢንሹራንስ ሪፈራል የለም።', om: 'Gahee bakka buʼaa keessan keessatti ergaan inshuraansii hayyamame hin ramadamne.', ti: 'ኣብ ሚና ወኪልኩም ፍቓድ ዝረኸበ ምምራሕ ውሕስነት ኣይተመደበን።', so: 'Ma jiro gudbin caymis oo oggolaansho leh oo laguugu qoondeeyey doorka wakiilkaaga.', ar: 'لا توجد إحالات تأمين بموافقة العميل ضمن نطاق عملك كوكيل.', sw: 'Hakuna rufaa ya bima iliyoidhinishwa iliyokabidhiwa katika jukumu lako la uwakala.',
+  },
+  'Brokerage lifecycle training sandbox': {
+    am: 'የኢንሹራንስ ደላላ የሥራ ዑደት ሥልጠና ማስመሰያ', om: 'Fakkeessaa leenjii marsaa hojii daldala inshuraansii', ti: 'ማሰልጠኒ ሞዴል ዑደት ስራሕ ደላላ ውሕስነት', so: 'Jawi tababarka wareegga shaqada ee dilaalka caymiska', ar: 'بيئة تدريب محاكاة لدورة عمل وساطة التأمين', sw: 'Mazingira ya mafunzo ya mzunguko wa shughuli za udalali wa bima',
+  },
+  'Development-only simulated workflow using synthetic product and transaction data. It cannot contact insurers, issue real policies, move money, settle commissions, or decide real claims.': {
+    am: 'ለልማት ብቻ የተዘጋጀ የሙከራ ሥራ ሂደት ነው፤ ሰው ሠራሽ የምርትና የግብይት መረጃ ይጠቀማል። ከኢንሹራንስ ድርጅቶች ጋር መገናኘት፣ እውነተኛ ፖሊሲ ማውጣት፣ ገንዘብ ማንቀሳቀስ፣ ኮሚሽን ማጠናቀቅ ወይም ትክክለኛ የካሳ ጥያቄ መወሰን አይችልም።',
+    om: 'Adeemsi kun misoomaaf qofa yaalii taasifame; odeeffannoo oomishaa fi daldalaa nam-tolchee fayyadama. Dhaabbata inshuraansii qunnamuu, poolisii dhugaa baasuu, maallaqa sochoosuu, koomishinii xumuru yookaan gaafii beenyaa dhugaa irratti murteessuu hin dandaʼu.',
+    ti: 'እዚ ንምምዕባል ጥራይ ዝተዳለወ ዝተመስለ መስርሕ እዩ፤ ሰብ ሰራሕ ሓበሬታ ፍርያትን ግብይትን ይጥቀም። ምስ ኢንሹራንስ ምርኻብ፣ ናይ ሓቂ ፖሊሲ ምውጻእ፣ ገንዘብ ምንቅስቓስ፣ ኮሚሽን ምጽራይ ወይ ናይ ሓቂ ክሲ ምውሳን ኣይክእልን።',
+    so: 'Hab-socodkan la matalayey waxaa loogu talagalay horumarinta oo keliya, wuxuuna adeegsadaa xog badeecad iyo macaamil oo la sameeyey. Lama xiriiri karo shirkadaha caymiska, ma soo saari karo caymis dhab ah, ma dhaqaajin karo lacag, ma xallin karo guddiyo, mana go’aamin karo sheegashooyin dhab ah.',
+    ar: 'هذا سير عمل محاكى للتطوير فقط ويستخدم بيانات اصطناعية للمنتجات والمعاملات. لا يمكنه الاتصال بشركات التأمين أو إصدار وثائق حقيقية أو تحويل الأموال أو تسوية العمولات أو البت في مطالبات حقيقية.',
+    sw: 'Mtiririko huu wa majaribio ni wa maendeleo pekee na hutumia data ghushi ya bidhaa na miamala. Hauwezi kuwasiliana na bima, kutoa sera halisi, kuhamisha fedha, kulipa kamisheni au kuamua madai halisi.',
+  },
+  'I confirm that this scenario uses no real customer, policy, payment, or claims data.': {
+    am: 'ይህ ሁኔታ እውነተኛ የደንበኛ፣ የፖሊሲ፣ የክፍያ ወይም የካሳ ጥያቄ መረጃ እንደማይጠቀም አረጋግጣለሁ።', om: 'Haalli kun odeeffannoo maamilaa, poolisii, kaffaltii yookaan gaafii beenyaa dhugaa akka hin fayyadamne nan mirkaneessa.', ti: 'እዚ ኩነታት ናይ ሓቂ ሓበሬታ ዓሚል፣ ፖሊሲ፣ ክፍሊት ወይ ክሲ ከም ዘይጥቀም አረጋግጽ።', so: 'Waxaan xaqiijinayaa in xaaladdani aysan adeegsanayn xog dhab ah oo macaamiil, caymis, lacag-bixin ama sheegasho ah.', ar: 'أؤكد أن هذا السيناريو لا يستخدم أي بيانات حقيقية للعملاء أو الوثائق أو المدفوعات أو المطالبات.', sw: 'Ninathibitisha kuwa hali hii haitumii data halisi ya mteja, sera, malipo au madai.',
+  },
+  'Edir credit policy and loan requests': {
+    am: 'የእድር የብድር ፖሊሲና የብድር ጥያቄዎች', om: 'Imaammata liqaa Edir fi gaaffii liqaa', ti: 'ፖሊሲ ልቓሕ Edirን ሕቶታት ልቓሕን', so: 'Siyaasadda amaahda Edir iyo codsiyada amaahda', ar: 'سياسة إدير الائتمانية وطلبات القروض', sw: 'Sera ya mikopo ya Edir na maombi ya mkopo',
+  },
+  'Each Edir proposes and independently approves its own versioned credit policy. Loan offers are interest-free and fee-free; member acceptance selects an active savings account, followed by separately approved savings-account disbursement and savings-funded principal repayments. Cash, mobile-wallet, and third-party payouts are later stages and are not simulated.': {
+    am: 'እያንዳንዱ እድር የራሱን በስሪት የተመዘገበ የብድር ፖሊሲ ያቀርባልና በተለየ ሂደት ያጸድቃል። ብድሮቹ ወለድና ክፍያ የላቸውም። አባሉ ሲቀበል ንቁ የቁጠባ ሂሳብ ይመርጣል፤ ብድሩ ለየት ባለ ፈቃድ በዚያ ሂሳብ ይከፈላል፣ ዋናውም ገንዘብ ከቁጠባው ተመልሶ ይከፈላል። በጥሬ ገንዘብ፣ በሞባይል ቦርሳ ወይም በሶስተኛ ወገን የሚፈጸሙ ክፍያዎች የወደፊት ደረጃዎች ናቸው፤ በዚህ ማስመሰያ አይካተቱም።',
+    om: 'Edir hundi imaammata liqaa mataa isaa isa fooyyaʼiinsaan galmaaʼe dhiyeessee of dandaʼee raggaasisa. Liqiin dhala fi kaffaltii hin qabu. Miseensi yeroo fudhatu herrega qusannoo hojii irra jiru filata; erga adda baafamee raggaasifamee booda liqiin herrega qusannoo sana keessatti galmaaʼa, maallaqni buʼuuraas qusannoo irraa deebifama. Kaffaltiin maallaqa callaa, boorsaa bilbilaa yookaan qaama sadaffaa karaa itti aanu ti; as keessatti hin fakkeeffamu.',
+    ti: 'ነፍሲ ወከፍ Edir ናይ ገዛእ ርእሱ ብስሪት ዝተመዝገበ ፖሊሲ ልቓሕ የቕርብን ብናጻ የጽድቕን። እቶም ልቓሓት ወለድን ክፍሊትን የብሎምን። ኣባል ምስ ተቐበሎ ንጡፍ ሕሳብ ዕቋር ይመርጽ፤ ልቓሕ ብፍሉይ ምጽዳቕ ናብቲ ሕሳብ ይኣቱ፣ ዋና ገንዘብ ድማ ካብ ዕቋር ይምለስ። ብጥረ ገንዘብ፣ ብሞባይል ቦርሳ ወይ ብሳልሳይ ወገን ዝፍጸም ክፍሊት ናይ ዝቕጽል ደረጃታት እዩ፣ ኣብዚ ኣይምሰልን።',
+    so: 'Edir kastaa wuxuu soo jeediyaa oo si madax-bannaan u ansixiyaa siyaasaddiisa amaahda ee noocaysan. Amaahdu dulsaar iyo khidmad midna ma laha. Marka xubintu aqbasho waxay doorataa akoon kayd firfircoon; amaahda waxaa akoonkaas loogu shubaa oggolaansho gaar ah kaddib, raasamaalkana waxaa laga bixiyaa kaydka. Lacag caddaan ah, boorso moobil iyo lacag-bixin dhinac saddexaad waa heerar dambe mana aha kuwo halkan lagu matalo.',
+    ar: 'يقترح كل إدير سياسة ائتمانية خاصة به بإصدارات موثقة ويعتمدها بشكل مستقل. القروض بلا فوائد أو رسوم. عند قبول العضو يختار حساب ادخار نشطًا؛ ثم يُصرف القرض إلى الحساب بعد موافقة منفصلة، ويُسدّد أصل المبلغ من المدخرات. الصرف النقدي أو عبر محفظة الهاتف أو طرف ثالث مراحل لاحقة ولا تحاكيها هذه البيئة.',
+    sw: 'Kila Edir hupendekeza na kuidhinisha kwa uhuru sera yake ya mikopo yenye matoleo yaliyorekodiwa. Mikopo haina riba wala ada. Mwanachama akikubali huchagua akaunti hai ya akiba; fedha za mkopo huwekwa kwenye akaunti hiyo baada ya idhini tofauti na mtaji hurejeshwa kutoka akiba. Malipo ya pesa taslimu, pochi ya simu au wahusika wengine ni hatua za baadaye na haziigiwi hapa.',
+  },
+  'Platform-wide daily disbursement limits': {
+    am: 'የመድረኩ አጠቃላይ ዕለታዊ የብድር ክፍያ ገደቦች', om: 'Daangaa waliigalaa guyyaa guyyaa kaffaltii liqaa', ti: 'ጠቕላላ መድረኽ ዕለታዊ ደረት ምኽፋል ልቓሕ', so: 'Xadka guud ee maalinlaha ah ee bixinta amaahda', ar: 'الحدود اليومية لصرف القروض على مستوى المنصة', sw: 'Vikomo vya jumla vya kila siku vya utoaji wa mikopo',
+  },
+  'This maker-checker control caps total posted Edir loan disbursements across all independent Edirs. Per-Edir limits remain active as additional controls.': {
+    am: 'ይህ የአዘጋጅና የአጽዳቂ ቁጥጥር በሁሉም ገለልተኛ እድሮች የተመዘገበውን ጠቅላላ ዕለታዊ የብድር ክፍያ ይገድባል። ለእያንዳንዱ እድር የተቀመጡ ገደቦችም እንደ ተጨማሪ ቁጥጥር ይቀጥላሉ።',
+    om: 'Toʼannoon qopheessaa fi raggaasisaa kun waliigala kaffaltii liqaa Edir kan galmaaʼe Edirwwan bilisa hundarra jiru daangessa. Daangaawwan Edir tokkoon tokkoo immoo toʼannoo dabalataatti hojii irra turu.',
+    ti: 'እዚ ቁጽጽር ኣዳላውን ኣጽዳቕን ኣብ ኩሎም ናጻ Edir ዝተመዝገበ ጠቕላላ ክፍሊት ልቓሕ ይድርት። ንነፍሲ ወከፍ Edir ዝተቐመጡ ደረታት ከም ተወሳኺ ቁጽጽር ንጡፋት ይኾኑ።',
+    so: 'Xakamayntan diyaarinta iyo hubinta waxay xaddidaysaa wadarta maalinlaha ah ee amaahda Edir ee dhammaan Edirrada madax-bannaan. Xadka Edir kasta wuu sii shaqaynayaa isagoo ah xakamayn dheeraad ah.',
+    ar: 'يضع نظام الإعداد والمراجعة هذا حدًا لإجمالي قروض إدير المصروفة والمسجلة عبر جميع الإديرات المستقلة. وتظل حدود كل إدير ساريةً كضوابط إضافية.',
+    sw: 'Udhibiti huu wa mtayarishaji na mkaguzi huweka kikomo cha jumla ya mikopo ya Edir iliyotolewa na kurekodiwa katika Edir zote huru. Vikomo vya kila Edir vinaendelea kutumika kama udhibiti wa ziada.',
+  },
+  'No platform-wide cap is active.': {
+    am: 'በመድረኩ ሁሉ ላይ የሚሠራ ገደብ የለም።', om: 'Daangaan waltajjii guutuu hojii irra jiru hin jiru.', ti: 'ኣብ ምሉእ መድረኽ ንጡፍ ደረት የለን።', so: 'Ma jiro xad guud oo madashu hadda shaqaynaya.', ar: 'لا يوجد حد أقصى فعّال على مستوى المنصة.', sw: 'Hakuna kikomo cha jumla cha jukwaa kinachotumika sasa.',
+  },
+  'Credit policy versions': {
+    am: 'የብድር ፖሊሲ ስሪቶች', om: 'Fooyyaʼiinsa imaammata liqaa', ti: 'ስሪታት ፖሊሲ ልቓሕ', so: 'Noocyada siyaasadda amaahda', ar: 'إصدارات سياسة الائتمان', sw: 'Matoleo ya sera ya mikopo',
+  },
+  'No policy is approved. Loan applications cannot be underwritten until this Edir approves its own policy.': {
+    am: 'ምንም ፖሊሲ አልጸደቀም። ይህ እድር የራሱን ፖሊሲ እስኪያጸድቅ ድረስ የብድር ማመልከቻዎች በአደጋ ምዘና ሊገመገሙ አይችሉም።',
+    om: 'Imaammanni hin raggaasifamne. Edir kun imaammata mataa isaa hanga raggaasisutti iyyanni liqaa madaallii balaa irratti hundaaʼee hin ilaalamu.',
+    ti: 'ዝኾነ ፖሊሲ ኣይጸደቐን። እዚ Edir ናይ ገዛእ ርእሱ ፖሊሲ ክሳብ ዘጽድቕ፣ መመልከቲ ልቓሕ ብግምገማ ስግኣት ኣይምርመርን።',
+    so: 'Siyaasad lama ansixin. Codsiyada amaahda lama qiimayn karo ilaa Edir-kan uu ansixiyo siyaasaddiisa.',
+    ar: 'لم تُعتمد أي سياسة. لا يمكن تقييم طلبات القروض ائتمانيًا حتى يعتمد هذا الإدير سياسته الخاصة.',
+    sw: 'Hakuna sera iliyoidhinishwa. Maombi ya mkopo hayawezi kutathminiwa hadi Edir hii iidhinishe sera yake.',
+  },
+  'Propose this Edir’s credit policy': {
+    am: 'የዚህን እድር የብድር ፖሊሲ ያቅርቡ', om: 'Imaammata liqaa Edir kanaa dhiyeessaa', ti: 'ፖሊሲ ልቓሕ ናይዚ Edir ኣቕርቡ', so: 'Soo jeedi siyaasadda amaahda ee Edir-kan', ar: 'اقترح سياسة الائتمان الخاصة بهذا الإدير', sw: 'Pendekeza sera ya mikopo ya Edir hii',
+  },
+  'Weights must add up to 100. Interest and fees are locked at 0. Disbursement and repayment use the separately reviewed savings-account workflow.': {
+    am: 'የመመዘኛ ነጥቦቹ ድምር 100 መሆን አለበት። ወለድና ክፍያ በ0 ተቆልፈዋል። የብድር ክፍያና መመለስ በተለየ የቁጠባ ሂሳብ ሂደት ይከናወናሉ።',
+    om: 'Ulfaatinni waliigalaa 100 taʼuu qaba. Dhaltii fi kaffaltiin 0 irratti cufamaniiru. Kaffaltii liqaa fi deebiin isaa adeemsa herrega qusannoo adda baafamee gamaaggamame fayyadamu.',
+    ti: 'Ulfaatinni waliigalaa 100 ክኸውን ኣለዎ። ወለድን ክፍሊትን ኣብ 0 ተቆሊፎም ኣለዉ። ምኽፋልን ምምላስን ልቓሕ በቲ ብፍሉይ ዝተገምገመ ስርዓት ሕሳብ ዕቋር ይካየዱ።',
+    so: 'Miisaannadu waa inay isu geeyaan 100. Dulsaarka iyo khidmadaha waxaa lagu xaddiday 0. Bixinta amaahda iyo dib-u-bixinteedu waxay maraan habka koontada kaydka ee si gaar ah loo eegay.',
+    ar: 'يجب أن يكون مجموع الأوزان 100. الفوائد والرسوم مضبوطة على صفر. يتم الصرف والسداد عبر إجراءات حساب الادخار التي تخضع لمراجعة منفصلة.',
+    sw: 'Jumla ya uzani lazima iwe 100. Riba na ada zimefungwa kuwa 0. Utoaji na urejeshaji wa mkopo hutumia utaratibu wa akaunti ya akiba uliokaguliwa kando.',
+  },
+  'No identity or loan documents uploaded yet.': {
+    am: 'እስካሁን ምንም የመታወቂያ ወይም የብድር ሰነድ አልተጫነም።', om: 'Sanadni eenyummaa yookaan liqaa ammaaf hin olkaaʼamne.', ti: 'ክሳብ ሕጂ ዝኾነ ሰነድ መንነት ወይ ልቓሕ ኣይተጸዓነን።', so: 'Weli lama soo gelin dukumenti aqoonsi ama amaah.', ar: 'لم يتم رفع أي مستندات هوية أو قرض بعد.', sw: 'Bado hakuna hati za utambulisho au mkopo zilizopakiwa.',
+  },
+  'Request a loan assessment': {
+    am: 'የብድር ግምገማ ይጠይቁ', om: 'Madaallii liqaa gaafadhaa', ti: 'ግምገማ ልቓሕ ሕተቱ', so: 'Codso qiimaynta amaahda', ar: 'اطلب تقييمًا للقرض', sw: 'Omba tathmini ya mkopo',
+  },
+  'Loan requests are unavailable until an independent reviewer verifies your national ID and KYC documents.': {
+    am: 'ገለልተኛ ገምጋሚ ብሔራዊ መታወቂያዎንና የKYC ሰነዶችዎን እስኪያረጋግጥ ድረስ የብድር ጥያቄ ማቅረብ አይቻልም።',
+    om: 'Gamaaggamaan bilisaa eenyummaa biyyaalessaa fi sanadoota KYC keessan hanga mirkaneessutti gaaffii liqaa dhiyeessuun hin dandaʼamu.',
+    ti: 'Gamaaggamaan naqa ID biyyaalessaa fi sanadoota KYCኹም ክሳብ ዘረጋግጽ ሕቶ ልቓሕ ምቕራብ ኣይከኣልን።',
+    so: 'Codsiyada amaahdu lama heli karo ilaa dib-u-eegaha madaxa-bannaan uu xaqiijiyo aqoonsigaaga qaranka iyo dukumentiyada KYC.',
+    ar: 'لا تتاح طلبات القروض حتى يتحقق مراجع مستقل من هويتك الوطنية ومستندات KYC.',
+    sw: 'Maombi ya mkopo hayapatikani hadi mkaguzi huru athibitishe kitambulisho chako cha taifa na hati za KYC.',
+  },
+  'Active Edir membership is required to request a loan assessment.': {
+    am: 'የብድር ግምገማ ለመጠየቅ ንቁ የእድር አባልነት ያስፈልጋል።', om: 'Madaallii liqaa gaafachuuf miseensummaan Edir hojii irra jiru barbaachisa.', ti: 'ግምገማ ልቓሕ ንምሕታት ንጡፍ ኣባልነት Edir የድሊ።', so: 'Si aad u codsato qiimaynta amaahda waa inaad xubin firfircoon ka tahay Edir.', ar: 'يشترط وجود عضوية نشطة في إدير لطلب تقييم القرض.', sw: 'Unahitaji uanachama hai wa Edir ili kuomba tathmini ya mkopo.',
+  },
+  'Your loan requests': {
+    am: 'የብድር ጥያቄዎችዎ', om: 'Gaaffiiwwan liqaa keessan', ti: 'ሕቶታት ልቓሕኩም', so: 'Codsiyadaada amaahda', ar: 'طلبات القروض الخاصة بك', sw: 'Maombi yako ya mkopo',
+  },
+  'You have no Edir credit requests.': {
+    am: 'ምንም የእድር ብድር ጥያቄ የለዎትም።', om: 'Gaaffii liqaa Edir hin qabdan.', ti: 'ዝኾነ ሕቶ ልቓሕ Edir የብልኩምን።', so: 'Ma lihid codsiyo amaah Edir ah.', ar: 'ليس لديك طلبات ائتمان لدى إدير.', sw: 'Huna maombi ya mkopo ya Edir.',
+  },
+  'Select an active savings account': {
+    am: 'ንቁ የቁጠባ ሂሳብ ይምረጡ', om: 'Herrega qusannoo hojii irra jiru filadhaa', ti: 'ንጡፍ ሕሳብ ዕቋር ምረጹ', so: 'Dooro akoon kayd oo firfircoon', ar: 'اختر حساب ادخار نشطًا', sw: 'Chagua akaunti hai ya akiba',
+  },
+  'I accept the interest-free, fee-free principal-only loan and savings-account payout terms.': {
+    am: 'ወለድና ክፍያ የሌለውን፣ ዋናውን ገንዘብ ብቻ የሚከፍለውን ብድርና ወደ ቁጠባ ሂሳብ የሚገባበትን ውል ተቀብያለሁ።',
+    om: 'Liqaa dhala fi kaffaltii hin qabne, maallaqa buʼuuraa qofa kaffaluu fi gara herrega qusannoo galuu isaa nan fudhadha.',
+    ti: 'ወለድን ክፍሊትን ዘይብሉ፣ ዋና ገንዘብ ጥራይ ዝሓትትን ናብ ሕሳብ ዕቋር ዝኣቱን ውዕል ተቐቢለ ኣለኹ።',
+    so: 'Waxaan aqbalayaa shuruudaha amaah aan dulsaar iyo khidmad lahayn oo raasamaalka oo keliya la bixinayo, laguna shubayo akoon kayd.',
+    ar: 'أوافق على شروط القرض الخالي من الفوائد والرسوم، الذي يقتصر سداده على أصل المبلغ ويُصرف إلى حساب ادخار.',
+    sw: 'Ninakubali masharti ya mkopo usio na riba wala ada, unaohitaji kurejesha mtaji pekee na kulipwa kupitia akaunti ya akiba.',
+  },
+  'Enter the API server address first.': {
+    am: 'መጀመሪያ የAPI አገልጋይ አድራሻውን ያስገቡ።', om: 'Jalqaba teessoo sarvarii API galchaa.', ti: 'መጀመርታ ኣድራሻ ሰርቨር API ኣእትዉ።', so: 'Marka hore geli cinwaanka adeegaha API-ga.', ar: 'أدخل عنوان خادم API أولًا.', sw: 'Kwanza weka anwani ya seva ya API.',
+  },
+  'Enter a valid number.': {
+    am: 'ትክክለኛ ቁጥር ያስገቡ።', om: 'Lakkoofsa sirrii galchaa.', ti: 'ቅኑዕ ቁጽሪ ኣእትዉ።', so: 'Geli lambar sax ah.', ar: 'أدخل رقمًا صحيحًا.', sw: 'Weka nambari halali.',
+  },
+  'Enter the six-digit code from your authenticator app.': {
+    am: 'ከማረጋገጫ መተግበሪያዎ የስድስት አሃዝ ኮድ ያስገቡ።', om: 'Appii mirkaneessaa keessan irraa koodii lakkoofsa jaʼaa galchaa.', ti: 'ካብ መተግበሪ መረጋገጺኹም ናይ ሽዱሽተ ኣሃዝ ኮድ ኣእትዉ።', so: 'Geli koodhka lixda lambar ah ee ku jira abka xaqiijinta.', ar: 'أدخل الرمز المكوّن من ستة أرقام من تطبيق المصادقة.', sw: 'Weka msimbo wa tarakimu sita kutoka kwenye programu yako ya uthibitishaji.',
+  },
+  'A registration is already pending. Upload the required documents to finish it.': {
+    am: 'ምዝገባ በሂደት ላይ አለ። ለማጠናቀቅ የሚፈለጉትን ሰነዶች ይጫኑ።', om: 'Galmeen tokko duraan adeemsarra jira. Xumuruuf sanadoota barbaachisan olkaaʼaa.', ti: 'ሓደ ምዝገባ ኣብ ምክያድ ኣሎ። ንምዝዛም ዝድለዩ ሰነዳት ጽዓኑ።', so: 'Diiwaangelin ayaa hore u sugaysa. Soo geli dukumentiyada loo baahan yahay si aad u dhammaystirto.', ar: 'يوجد طلب تسجيل قيد الانتظار بالفعل. ارفع المستندات المطلوبة لإكماله.', sw: 'Usajili unasubiriwa tayari. Pakia hati zinazohitajika ili kuukamilisha.',
+  },
+  'Password confirmation does not match.': {
+    am: 'የይለፍ ቃል ማረጋገጫው አይዛመድም።', om: 'Mirkaneessi jecha icciitii wal hin simu.', ti: 'ምርግጋጽ መሕለፊ ቃል ኣይሰማማዕን።', so: 'Xaqiijinta erayga sirta ahi isma waafaqsana.', ar: 'تأكيد كلمة المرور غير مطابق.', sw: 'Uthibitisho wa nenosiri haulingani.',
+  },
+  'Select each required KYC document before submitting.': {
+    am: 'ከማስገባትዎ በፊት እያንዳንዱን የሚፈለግ የKYC ሰነድ ይምረጡ።', om: 'Dura erguu sanada KYC barbaachisu hunda filadhaa.', ti: 'ቅድሚ ምቕራብ ነፍሲ ወከፍ ዝድለ ሰነድ KYC ምረጹ።', so: 'Dooro dhammaan dukumentiyada KYC ee loo baahan yahay ka hor gudbinta.', ar: 'اختر كل مستندات KYC المطلوبة قبل الإرسال.', sw: 'Chagua kila hati ya KYC inayohitajika kabla ya kuwasilisha.',
+  },
+  'Registration succeeded but a secure document-upload token was not issued. Contact AfroLife support.': {
+    am: 'ምዝገባው ተሳክቷል፣ ግን ደህንነቱ የተጠበቀ የሰነድ መጫኛ ቶከን አልተሰጠም። የAfroLife ድጋፍን ያነጋግሩ።',
+    om: 'Galmeen milkaaʼeera; garuu mallattoon nageenyaa sanada olkaaʼu hin kennamne. Deeggarsa AfroLife qunnamaa.',
+    ti: 'ምዝገባ ተሳኺዑ፣ ግን ውሑስ ምልክት ምጽዓን ሰነድ ኣይተዋህበን። ደገፍ AfroLife ርኸቡ።',
+    so: 'Diiwaangelintu way guulaysatay, balse lama bixin summaddii amniga ee dukumentiga lagu gelin lahaa. La xiriir taageerada AfroLife.',
+    ar: 'نجح التسجيل، لكن لم يصدر رمز آمن لرفع المستندات. تواصل مع دعم AfroLife.',
+    sw: 'Usajili umefaulu, lakini tokeni salama ya kupakia hati haikutolewa. Wasiliana na usaidizi wa AfroLife.',
+  },
+  'Use a valid HTTPS server URL. HTTP is allowed only for localhost development.': {
+    am: 'ትክክለኛ የHTTPS አገልጋይ URL ይጠቀሙ። HTTP የሚፈቀደው ለlocalhost ልማት ብቻ ነው።',
+    om: 'URL sarvarii HTTPS sirrii fayyadamaa. HTTP kan hayyamamu localhost irratti yeroo misoomaa qofa.',
+    ti: 'ቅኑዕ URL ሰርቨር HTTPS ተጠቐሙ። HTTP ንልምዓት localhost ጥራይ ይፍቀድ።',
+    so: 'Isticmaal URL adeegaha HTTPS oo sax ah. HTTP waxa la oggol yahay oo keliya horumarinta localhost.',
+    ar: 'استخدم عنوان URL صالحًا لخادم HTTPS. يُسمح بـHTTP في بيئة localhost للتطوير فقط.',
+    sw: 'Tumia URL halali ya seva ya HTTPS. HTTP inaruhusiwa tu kwa uendelezaji wa localhost.',
+  },
+  'Some services are temporarily unavailable: ': {
+    am: 'አንዳንድ አገልግሎቶች ለጊዜው አይገኙም፦ ', om: 'Tajaajiloonni tokko tokko yeroo muraasaaf hin hojjetan: ', ti: 'ገለ ኣገልግሎታት ንግዚኡ ኣይርከቡን: ', so: 'Adeegyada qaarkood si ku-meel-gaar ah looma heli karo: ', ar: 'بعض الخدمات غير متاحة مؤقتًا: ', sw: 'Baadhi ya huduma hazipatikani kwa muda: ',
+  },
+  'ETHIOLIFE EDIR · MEMBERSHIP OFFER': {
+    am: 'ETHIOLIFE EDIR · የአባልነት ጥያቄ', om: 'ETHIOLIFE EDIR · DHIYEESSA MISEENSUMMAA', ti: 'ETHIOLIFE EDIR · ቅርቦት ኣባልነት', so: 'ETHIOLIFE EDIR · DALABKA XUBINNIMADA', ar: 'ETHIOLIFE EDIR · عرض العضوية', sw: 'ETHIOLIFE EDIR · OFA YA UANACHAMA',
+  },
+  'API request metrics': {
+    am: 'የAPI ጥያቄ መለኪያዎች', om: 'Safartuu gaaffii API', ti: 'መለክዒታት ሕቶ API', so: 'Cabbirrada codsiyada API-ga', ar: 'مقاييس طلبات API', sw: 'Vipimo vya maombi ya API',
+  },
+  'In-memory aggregate for this API process; counters reset when it restarts.': {
+    am: 'ለዚህ የAPI ሂደት በማህደረ ትውስታ የተሰበሰበ ድምር ነው፤ ሂደቱ እንደገና ሲጀምር ቆጣሪዎቹ ይጀምራሉ።',
+    om: 'Idaʼama adeemsa API kanaaf yaadannoo keessatti kuufame; yeroo adeemsi deebiʼee jalqabu lakkoofsi haaromsa.',
+    ti: 'ንእዚ መስርሕ API ኣብ ናይ ስራሕ ዝኽሪ ዝተኣከበ ድምር እዩ፤ መስርሕ እንደገና ምስ ጀመረ ቆጸርቲ ይጅምሩ።',
+    so: 'Waa wadarta xusuusta hawsha API-gan; tirooyinku waxay eber ka bilaabmaan marka dib loo bilaabo.',
+    ar: 'إجمالي محفوظ في الذاكرة لعملية API هذه؛ تُصفّر العدادات عند إعادة تشغيلها.',
+    sw: 'Hii ni jumla iliyohifadhiwa kwenye kumbukumbu ya mchakato huu wa API; vihesabio huanza upya mchakato unapowashwa tena.',
+  },
+  'More workspace sections': {
+    am: 'ተጨማሪ የሥራ ቦታ ክፍሎች', om: 'Kutaa hojii dabalataa', ti: 'ተወሳኺ ክፍልታት ቦታ ስራሕ', so: 'Qaybo kale oo goobta shaqada ah', ar: 'أقسام مساحة العمل الإضافية', sw: 'Sehemu zaidi za eneo la kazi',
+  },
+  'More': {
+    am: 'ተጨማሪ', om: 'Dabalata', ti: 'ተወሳኺ', so: 'Dheeraad', ar: 'المزيد', sw: 'Zaidi',
+  },
+  'Add a lead': {
+    am: 'ደንበኛ ጨምር', om: 'Maamila dabali', ti: 'መራሒ ወስኽ', so: 'Ku dar macmiil', ar: 'أضف عميلًا محتملًا', sw: 'Ongeza mteja mtarajiwa',
+  },
+  'Add a worker': {
+    am: 'ሠራተኛ ጨምር', om: 'Hojjetaa dabali', ti: 'ሰራሕተኛ ወስኽ', so: 'Ku dar shaqaale', ar: 'أضف عاملًا', sw: 'Ongeza mfanyakazi',
+  },
+  'Choose an area': {
+    am: 'አካባቢ ይምረጡ', om: 'Naannoo filadhaa', ti: 'ከባቢ ምረጹ', so: 'Dooro goob', ar: 'اختر منطقة', sw: 'Chagua eneo',
+  },
+  'Create a request': {
+    am: 'ጥያቄ ይፍጠሩ', om: 'Gaaffii uumaa', ti: 'ሕቶ ፍጠሩ', so: 'Abuur codsi', ar: 'أنشئ طلبًا', sw: 'Unda ombi',
+  },
+  'Choose a household or business lead': {
+    am: 'የቤተሰብ ወይም የንግድ ደንበኛ ይምረጡ', om: 'Maamila maatii yookaan daldalaa filadhaa', ti: 'ዓሚል ስድራቤት ወይ ንግዲ ምረጹ', so: 'Dooro macmiil qoys ama ganacsi', ar: 'اختر عميلًا من أسرة أو شركة', sw: 'Chagua mteja wa kaya au biashara',
+  },
+  'Open skills': {
+    am: 'ክህሎቶችን ይክፈቱ', om: 'Dandeettiiwwan bani', ti: 'ክእለታት ክፈቱ', so: 'Fur xirfadaha', ar: 'افتح المهارات', sw: 'Fungua ujuzi',
+  },
+  'Add a property listing': {
+    am: 'የንብረት ዝርዝር ጨምር', om: 'Tarree qabeenyaa dabali', ti: 'ዝርዝር ንብረት ወስኽ', so: 'Ku dar liiska hanti', ar: 'أضف إعلان عقار', sw: 'Ongeza tangazo la nyumba',
+  },
+  'Category': {
+    am: 'ምድብ', om: 'Ramaddii', ti: 'ምድብ', so: 'Qaybta', ar: 'الفئة', sw: 'Aina',
+  },
+  'Optional: I consent to sharing my name, phone number, and selected topic with one assigned AfroLife Agent for non-binding follow-up and referral to the Insurance service team. The Agent cannot advise, quote, collect premiums, or issue or change a policy.': {
+    am: 'አማራጭ፦ ስሜን፣ ስልክ ቁጥሬንና የመረጥኩትን ርዕስ ለአንድ የተመደበ የAfroLife ወኪል ለማጋራት ተስማምቻለሁ፤ ወኪሉ የማያስገድድ ክትትል ያደርጋልና ወደ ኢንሹራንስ ቡድን ይመራል። ወኪሉ ምክር ወይም ዋጋ መስጠት፣ ፕሪሚየም መሰብሰብ፣ ፖሊሲ ማውጣት ወይም መቀየር አይችልም።',
+    om: 'Filannoo: Maqaa, lakkoofsa bilbilaa fi mata-duree filattan bakka buʼaa AfroLife tokkoof akka qoodamu nan hayyama; inni hordoffii dirqama hin taane godhee gara garee inshuraansiitti isin qajeelcha. Bakka buʼaan gorsa kennuu, gatii himuu, kaffaltii inshuraansii walitti qabuu yookaan poolisii baasuu fi jijjiiruu hin dandaʼu.',
+    ti: 'ኣማራጺ፦ ስመይ፣ ቁጽሪ ስልከይን ዝመረጽክዎ ኣርእስትን ምስ ሓደ ዝተመደበ ወኪል AfroLife ክካፈል ፈቒደ ኣለኹ፤ እቲ ወኪል ዘይግድን ክትትል ገይሩ ናብ ጉጅለ ውሕስነት ይመርሕ። ወኪል ምኽሪ ወይ ዋጋ ምሃብ፣ ፕሪሚየም ምእካብ፣ ፖሊሲ ምውጻእ ወይ ምቕያር ኣይክእልን።',
+    so: 'Ikhtiyaari: Waxaan oggolahay in magacayga, lambarka telefoonka iyo mawduuca aan doortay lala wadaago hal Wakiil AfroLife oo la ii qoondeeyey si uu dabagal aan khasab ahayn u sameeyo iiguna gudbiyo kooxda adeegga Caymiska. Wakiilku ma bixin karo talo ama qiime, ma qaadi karo khidmad, mana soo saari karo ama beddeli karo caymis.',
+    ar: 'اختياري: أوافق على مشاركة اسمي ورقم هاتفي والموضوع الذي اخترته مع وكيل واحد معيّن من AfroLife للمتابعة غير الملزمة وإحالتي إلى فريق التأمين. لا يجوز للوكيل تقديم المشورة أو عرض الأسعار أو تحصيل الأقساط أو إصدار وثيقة أو تعديلها.',
+    sw: 'Hiari: Ninakubali jina langu, nambari ya simu na mada niliyochagua kushirikiwa na Wakala mmoja wa AfroLife kwa ufuatiliaji usio wa lazima na kuelekezwa kwa timu ya Bima. Wakala haruhusiwi kutoa ushauri au bei, kukusanya ada, kutoa au kubadilisha sera.',
+  },
+  'Insurance information request review': {
+    am: 'የኢንሹራንስ መረጃ ጥያቄ ግምገማ', om: 'Gamaaggama gaaffii odeeffannoo inshuraansii', ti: 'ግምገማ ሕቶ ሓበሬታ ውሕስነት', so: 'Dib-u-eegista codsiyada macluumaadka caymiska', ar: 'مراجعة طلبات معلومات التأمين', sw: 'Ukaguzi wa maombi ya maelezo ya bima',
+  },
+  'Marketplace configuration': {
+    am: 'የገበያ ቦታ ውቅር', om: 'Qindaaʼina gabaa', ti: 'ቅንብር ዕዳጋ', so: 'Dejinta suuqa', ar: 'إعدادات السوق', sw: 'Mipangilio ya soko',
+  },
+  'Manage domain availability, approval rules, media limits and listing categories. Changes apply to new submissions immediately.': {
+    am: 'የገበያ ዘርፎችን መገኘት፣ የማጽደቅ ሕጎችን፣ የሚዲያ ገደቦችንና የዝርዝር ምድቦችን ያስተዳድሩ። ለአዳዲስ ማስገቢያዎች ለውጦቹ ወዲያውኑ ይተገበራሉ።',
+    om: 'Argama dameewwan, seerota raggaasisaa, daangaa meediyaa fi ramaddiiwwan tarree bulchaa. Jijjiiramoonni galchaa haaraa irratti battalumatti hojii irra oolu.',
+    ti: 'ተረኻብነት ዘርፍታት፣ ሕግታት ምጽዳቕ፣ ደረት ሚድያን ምድባት ዝርዝርን ኣመሓድሩ። ለውጢ ኣብ ሓደስቲ ምቕራባት ብኡንብኡ ይትግበር።',
+    so: 'Maamul helitaanka qaybaha, xeerarka ansixinta, xadka warbaahinta iyo qaybaha liisaska. Isbeddelladu isla markiiba waxay khuseeyaan gudbinnada cusub.',
+    ar: 'أدر إتاحة المجالات وقواعد الموافقة وحدود الوسائط وفئات القوائم. تُطبّق التغييرات فورًا على الطلبات الجديدة.',
+    sw: 'Dhibiti upatikanaji wa maeneo, kanuni za idhini, vikomo vya midia na aina za matangazo. Mabadiliko hutumika mara moja kwa mawasilisho mapya.',
+  },
+  'Enabled domains': {
+    am: 'የነቁ ዘርፎች', om: 'Dameewwan hojii irra jiran', ti: 'ዝነቑ ዘርፍታት', so: 'Qaybaha shaqaynaya', ar: 'المجالات المفعّلة', sw: 'Maeneo yaliyowezeshwa',
+  },
+  'Require staff review before publishing': {
+    am: 'ከማተም በፊት የሠራተኛ ግምገማ ያስፈልጋል', om: 'Maxxansuu dura gamaaggama hojjettootaa barbaadi', ti: 'ቅድሚ ምሕታም ግምገማ ሰራሕተኛ ኣድሊ', so: 'U baahan dib-u-eegis shaqaale ka hor daabacaadda', ar: 'اشترط مراجعة الموظفين قبل النشر', sw: 'Hitaji ukaguzi wa wafanyakazi kabla ya kuchapisha',
+  },
+  'Self-registration account types and KYC': {
+    am: 'የራስ-ምዝገባ የመለያ ዓይነቶችና KYC', om: 'Gosoota herregaa galmee ofii fi KYC', ti: 'ዓይነታት ሕሳብ ርእሰ-ምዝገባን KYCን', so: 'Noocyada akoonka isdiiwaangelinta iyo KYC', ar: 'أنواع الحسابات ذاتية التسجيل وKYC', sw: 'Aina za akaunti za kujisajili na KYC',
+  },
+  'Required registration documents': {
+    am: 'የሚፈለጉ የምዝገባ ሰነዶች', om: 'Sanadoota galmee barbaachisan', ti: 'ሰነዳት ምዝገባ ዝድለዩ', so: 'Dukumentiyada diiwaangelinta ee loo baahan yahay', ar: 'مستندات التسجيل المطلوبة', sw: 'Hati za usajili zinazohitajika',
+  },
+  'Create a contract': {
+    am: 'ውል ይፍጠሩ', om: 'Waliigaltee uumaa', ti: 'ውዕሊ ፍጠሩ', so: 'Abuur heshiis', ar: 'أنشئ عقدًا', sw: 'Unda mkataba',
+  },
+  'Choose an eligible lead': {
+    am: 'ብቁ ደንበኛ ይምረጡ', om: 'Maamila ulaagaa guute filadhaa', ti: 'ብቑዕ መራሒ ምረጹ', so: 'Dooro macmiil u qalma', ar: 'اختر عميلًا مؤهلًا', sw: 'Chagua mteja anayestahili',
+  },
+  'Property period-close checks': {
+    am: 'የንብረት ወቅት-መዝጊያ ምርመራዎች', om: 'Sakattaʼiinsa cufiinsa yeroo qabeenyaa', ti: 'ምርመራታት መዕጸዊ እዋን ንብረት', so: 'Hubinta xidhitaanka muddada hantida', ar: 'فحوصات إقفال فترة العقار', sw: 'Ukaguzi wa kufunga kipindi cha mali',
+  },
+  'Read-only exception checks for outstanding rent, receipts awaiting reconciliation and unbalanced rent journals. This is evidence for Finance review, not a period lock or accounting approval.': {
+    am: 'ያልተከፈለ ኪራይን፣ ማስታረቅ የሚጠብቁ ደረሰኞችንና ሚዛን ያልጠበቁ የኪራይ መዝገቦችን በማንበብ ብቻ የሚደረጉ የልዩነት ምርመራዎች ናቸው። ይህ ለፋይናንስ ግምገማ ማስረጃ ነው፤ ወቅትን አይቆልፍም ወይም ሂሳብን አያጸድቅም።',
+    om: 'Kiraa kaffaluu hafe, nagahee walsimsiisuu eeggatu fi galmee kiraa madaallii hin qabne kan dubbisuu qofaaf taʼe sakattaʼa. Kun gamaaggama Faayinaansiif ragaa dha; yeroo hin cufu yookaan herrega hin raggaasisu.',
+    ti: 'እዞም ክንበቡ ጥራይ ዝኽእሉ ምርመራታት ክራይ ዘይተኸፍለ፣ ምስምማዕ ዝጽበዩ ደረሰኛታትን ዘይተመጣጠኑ መዝገባት ክራይን የለልዩ። እዚ ንግምገማ ፋይናንስ መርትዖ እዩ፤ እዋን ኣይዓጽውን ወይ ሒሳብ ኣየጽድቕን።',
+    so: 'Waa hubin akhris-keliya ah oo lagu ogaado kirooyinka dhiman, rasiidhada sugaya isu-waafajinta iyo diiwaannada kirada ee aan dheellitirsanayn. Tani waa caddayn ay Maaliyaddu eegto, mana xidhayso muddada mana ansixinayso xisaabaadka.',
+    ar: 'هذه فحوصات استثناء للقراءة فقط للإيجارات المستحقة والإيصالات التي تنتظر التسوية ودفاتر الإيجار غير المتوازنة. وهي دليل لمراجعة المالية، وليست إقفالًا للفترة أو موافقة محاسبية.',
+    sw: 'Huu ni ukaguzi wa kusoma pekee wa kodi inayodaiwa, risiti zinazosubiri kulinganishwa na daftari za kodi zisizo sawia. Huu ni ushahidi wa ukaguzi wa Fedha, si kufunga kipindi wala idhini ya uhasibu.',
+  },
+  'Register a tenant': {
+    am: 'ተከራይ ያስመዝግቡ', om: 'Kireeffataa galmeessaa', ti: 'ተኻራዪ መዝግቡ', so: 'Diiwaangeli kirayste', ar: 'سجّل مستأجرًا', sw: 'Sajili mpangaji',
+  },
+  'Create a lease draft': {
+    am: 'የኪራይ ውል ረቂቅ ይፍጠሩ', om: 'Wixinee waliigaltee kiraa uumaa', ti: 'ረቂቕ ውዕሊ ክራይ ፍጠሩ', so: 'Abuur qabyo-qoraalka heshiiska kirada', ar: 'أنشئ مسودة عقد إيجار', sw: 'Unda rasimu ya mkataba wa upangaji',
+  },
+  'A lease stays inactive until independent approval, signature evidence, handover, and move-in inspection are recorded.': {
+    am: 'ገለልተኛ ፈቃድ፣ የፊርማ ማስረጃ፣ ርክክብና የመግቢያ ምርመራ እስኪመዘገቡ ድረስ የኪራይ ውሉ ንቁ አይሆንም።',
+    om: 'Waliigalteen kiraa hanga hayyamni nama biraa, ragaan mallattoo, dabarsuun fi sakattaʼiinsi seensaa galmaaʼanitti hojii irra hin oolu.',
+    ti: 'ውዕሊ ክራይ ክሳብ ናጻ ፍቓድ፣ መርትዖ ፊርማ፣ ርክክብን ምርመራ ምእታውን ዝምዝገቡ ንጡፍ ኣይከውንን።',
+    so: 'Heshiiska kiradu ma hawlgalo ilaa la diiwaangeliyo oggolaansho madax-bannaan, caddaynta saxeexa, wareejinta iyo kormeerka gelitaanka.',
+    ar: 'يبقى عقد الإيجار غير نشط حتى تسجيل الموافقة المستقلة وإثبات التوقيع والتسليم وفحص الانتقال.',
+    sw: 'Mkataba wa upangaji hubaki bila kutumika hadi idhini huru, uthibitisho wa sahihi, makabidhiano na ukaguzi wa kuhamia virekodiwe.',
+  },
+  'Choose a unit': {
+    am: 'ክፍል ይምረጡ', om: 'Kutaa filadhaa', ti: 'ክፍሊ ምረጹ', so: 'Dooro qayb', ar: 'اختر وحدة', sw: 'Chagua nyumba',
+  },
+  'Choose a tenant': {
+    am: 'ተከራይ ይምረጡ', om: 'Kireeffataa filadhaa', ti: 'ተኻራዪ ምረጹ', so: 'Dooro kirayste', ar: 'اختر مستأجرًا', sw: 'Chagua mpangaji',
+  },
+  'Payments awaiting reconciliation': {
+    am: 'ማስታረቅን የሚጠብቁ ክፍያዎች', om: 'Kaffaltiiwwan walsimsiisuu eeggatan', ti: 'ክፍሊታት ምስምማዕ ዝጽበዩ', so: 'Lacag-bixinnada sugaya isu-waafajin', ar: 'المدفوعات التي تنتظر التسوية', sw: 'Malipo yanayosubiri kulinganishwa',
+  },
+  'Record a notice (operational record only)': {
+    am: 'ማስታወቂያ ይመዝግቡ (የሥራ መዝገብ ብቻ)', om: 'Beeksisa galmeessaa (galmee hojii qofa)', ti: 'ምልክታ መዝግቡ (መዝገብ ስራሕ ጥራይ)', so: 'Diiwaangeli ogeysiis (diiwaan hawleed oo keliya)', ar: 'سجّل إشعارًا (سجل تشغيلي فقط)', sw: 'Rekodi notisi (rekodi ya shughuli pekee)',
+  },
+  'Recording does not verify legal service, create a legally valid notice, change lease status, or end the lease.': {
+    am: 'መዝገቡ ሕጋዊ አገልግሎትን አያረጋግጥም፣ ሕጋዊ ማስታወቂያ አይፈጥርም፣ የኪራይ ውሉን ሁኔታ አይቀይርም ወይም አያቋርጥም።',
+    om: 'Galmeessuun tajaajila seeraa hin mirkaneessu, beeksisa seeraan fudhatama qabu hin uumu, haala waliigaltee kiraa hin jijjiiru yookaan hin xumuru.',
+    ti: 'ምምዝጋብ ሕጋዊ ምቕራብ ኣየረጋግጽን፣ ብሕጊ ቅቡል ዝኾነ ምልክታ ኣይፈጥርን፣ ኩነታት ውዕሊ ክራይ ኣይቅይርን ወይ ኣየቋርጽን።',
+    so: 'Diiwaangelintu ma xaqiijiso adeeg sharci ah, ma abuureyso ogeysiis sharci ahaan sax ah, mana beddesho ama joojiso xaaladda heshiiska kirada.',
+    ar: 'لا يثبت التسجيل التبليغ القانوني ولا ينشئ إشعارًا صالحًا قانونًا ولا يغيّر حالة عقد الإيجار أو ينهيه.',
+    sw: 'Kurekodi hakuthibitishi huduma ya kisheria, hakuundi notisi halali kisheria, wala hakubadilishi au kusitisha hali ya mkataba wa upangaji.',
+  },
+  'Business rules': {
+    am: 'የንግድ ሕጎች', om: 'Seerota daldalaa', ti: 'ሕግታት ንግዲ', so: 'Xeerarka ganacsiga', ar: 'قواعد الأعمال', sw: 'Kanuni za biashara',
+  },
+  'Changes apply to new calculations immediately. Unsigned contracts are repriced; signed contracts, recorded payments, and ledger entries are not rewritten.': {
+    am: 'ለውጦች በአዲስ ስሌቶች ላይ ወዲያውኑ ይተገበራሉ። ያልተፈረሙ ውሎች ዋጋቸው እንደገና ይሰላል፤ የተፈረሙ ውሎች፣ የተመዘገቡ ክፍያዎችና የሂሳብ መዝገቦች አይቀየሩም።',
+    om: 'Jijjiiramoonni shallaggii haaraa irratti battalumatti hojii irra oolu. Waliigalteewwan hin mallatteeffamne gatiin isaanii deebiʼee shallagama; waliigalteewwan mallatteeffaman, kaffaltiin galmaaʼe fi galmeewwan herregaa hin jijjiiraman.',
+    ti: 'ለውጥታት ኣብ ሓደስቲ ስሌታት ብኡንብኡ ይትግበሩ። ዘይተፈረሙ ውዕላት ዋጋኦም ዳግማይ ይሕሰብ፤ ዝተፈረሙ ውዕላት፣ ዝተመዝገቡ ክፍሊታትን መዝገባት ሒሳብን ኣይቅየሩን።',
+    so: 'Isbeddelladu isla markiiba waxay khuseeyaan xisaabaha cusub. Heshiisyada aan la saxeexin qiimahooda dib ayaa loo xisaabiyaa; heshiisyada la saxeexay, lacagaha la diiwaangeliyey iyo gelinnada xisaabtu dib looma qoro.',
+    ar: 'تُطبّق التغييرات فورًا على الحسابات الجديدة. يعاد تسعير العقود غير الموقعة؛ ولا يعاد تحرير العقود الموقعة أو المدفوعات المسجلة أو قيود الدفاتر.',
+    sw: 'Mabadiliko hutumika mara moja kwa hesabu mpya. Bei za mikataba ambayo haijasainiwa hukokotolewa upya; mikataba iliyosainiwa, malipo yaliyorekodiwa na maingizo ya daftari hayabadilishwi.',
+  },
+  'Required identity and police-clearance checks, role permissions, and separate payment approvals cannot be disabled here.': {
+    am: 'የሚፈለጉ የመታወቂያና የፖሊስ ማረጋገጫ ምርመራዎች፣ የሚና ፈቃዶችና የተለየ የክፍያ ማጽደቅ እዚህ ሊሰናከሉ አይችሉም።',
+    om: 'Sakattaʼiinsi eenyummaa fi qulqullina poolisii barbaachisan, hayyamni gahee fi raggaasifni kaffaltii adda taʼe asitti dhaabuu hin dandaʼamu.',
+    ti: 'ዝድለዩ ምርመራታት መንነትን ናይ ፖሊስ ምጽራይን፣ ፍቓዳት ሚናን ፍሉይ ምጽዳቕ ክፍሊትን ኣብዚ ክስናኽሉ ኣይክእሉን።',
+    so: 'Hubinta aqoonsiga iyo warqadda booliska ee loo baahan yahay, oggolaanshaha doorarka iyo ansixinta lacag-bixinta ee goonida ah halkan lagama damin karo.',
+    ar: 'لا يمكن تعطيل فحوصات الهوية والسجل الشرطي المطلوبة أو صلاحيات الأدوار أو موافقات الدفع المنفصلة هنا.',
+    sw: 'Ukaguzi unaohitajika wa utambulisho na cheti cha polisi, ruhusa za majukumu na idhini tofauti za malipo haviwezi kuzimwa hapa.',
+  },
+  'Global Admin governance': {
+    am: 'የግሎባል አስተዳዳሪ አስተዳደር', om: 'Bulchiinsa Admin Addunyaa', ti: 'ምምሕዳር Global Admin', so: 'Maamulka Global Admin', ar: 'حوكمة المسؤول العام', sw: 'Utawala wa Msimamizi wa Jumla',
+  },
+  'Promotion requires two different active, MFA-enabled platform administrators. Global Admin access does not bypass financial maker-checker approvals.': {
+    am: 'ማሳደግ ሁለት የተለያዩ፣ ንቁና MFA የነቃላቸው የመድረክ አስተዳዳሪዎችን ይፈልጋል። የግሎባል አስተዳዳሪ መዳረሻ የፋይናንስ አዘጋጅ-አጽዳቂ ፈቃድን አያልፍም።',
+    om: 'Ol kaasuuf bulchitoota waltajjii lama, kanneen adda taʼan, hojii irra jiran fi MFA isaanii baname barbaachisa. Seensaan Admin Addunyaa raggaasisa faayinaansii qopheessaa-raggaasisaa hin bira darbu.',
+    ti: 'ምስ ምዕባለ ክልተ ዝተፈላለዩ፣ ንጡፋትን MFA ዝተነቕሐሎምን ምምሕዳራት መድረኽ የድሊ። መእተዊ Global Admin ናይ ፋይናንስ ኣዳላው-ኣጽዳቒ ምጽዳቕ ኣይሓልፍን።',
+    so: 'Dallacaaddu waxay u baahan tahay laba maamule madal oo kala duwan, firfircoon, MFA-na u shaqaynayso. Gelitaanka Global Admin kama boodo ansixinta maaliyadeed ee diyaariye iyo hubiye.',
+    ar: 'يتطلب الترفيع وجود مسؤولين مختلفين ونشطين في المنصة مع تفعيل MFA. ولا يتجاوز وصول المسؤول العام موافقات الإعداد والمراجعة المالية.',
+    sw: 'Kupandishwa cheo kunahitaji wasimamizi wawili tofauti wa jukwaa walio hai na wenye MFA. Ufikiaji wa Msimamizi wa Jumla haupiti idhini za kifedha za mtayarishaji na mkaguzi.',
+  },
+  'Choose a Super Admin': {
+    am: 'ሱፐር አስተዳዳሪ ይምረጡ', om: 'Super Admin filadhaa', ti: 'Super Admin ምረጹ', so: 'Dooro Super Admin', ar: 'اختر مسؤولًا فائقًا', sw: 'Chagua Msimamizi Mkuu',
+  },
+  'No other active, MFA-enabled Super Admin is currently eligible for nomination.': {
+    am: 'በአሁኑ ጊዜ ለመመረጥ ብቁ የሆነ ሌላ ንቁና MFA የነቃለት ሱፐር አስተዳዳሪ የለም።',
+    om: 'Yeroo ammaa Super Admin biraa hojii irra jiru, MFA qabuu fi muudamaaf ulaagaa guute hin jiru.',
+    ti: 'ኣብዚ እዋን ንምምራጽ ብቑዕ ዝኾነ ካልእ ንጡፍ፣ MFA ዝተነቕሐሉ Super Admin የለን።',
+    so: 'Hadda ma jiro Super Admin kale oo firfircoon, MFA leh, isla markaana u qalma in la magacaabo.',
+    ar: 'لا يوجد حاليًا مسؤول فائق آخر نشط ومفعّل لديه MFA ومؤهل للترشيح.',
+    sw: 'Kwa sasa hakuna Msimamizi Mkuu mwingine aliye hai, mwenye MFA na anayestahili kuteuliwa.',
+  },
+  'Promotion requests': {
+    am: 'የማሳደግ ጥያቄዎች', om: 'Gaaffiiwwan ol kaasuu', ti: 'ሕቶታት ምምዕባለ', so: 'Codsiyada dallacaadda', ar: 'طلبات الترفيع', sw: 'Maombi ya kupandishwa cheo',
+  },
+  'Role and activity access': {
+    am: 'የሚናና የእንቅስቃሴ መዳረሻ', om: 'Seensa gahee fi sochii', ti: 'መእተዊ ሚናን ንጥፈትን', so: 'Gelitaanka doorka iyo hawsha', ar: 'الوصول حسب الدور والنشاط', sw: 'Ufikiaji wa jukumu na shughuli',
+  },
+  'Select the activities each role may perform. Sensitive financial actions remain subject to transaction controls and independent-actor checks. Tenant Super Admin scope is managed through tenant assignments.': {
+    am: 'እያንዳንዱ ሚና ሊያከናውናቸው የሚችሉ እንቅስቃሴዎችን ይምረጡ። ስሱ የፋይናንስ ድርጊቶች ለግብይት ቁጥጥርና ለገለልተኛ ተዋናይ ማረጋገጫ ተገዢ ናቸው። የተከራይ ሱፐር አስተዳዳሪ ወሰን በተከራይ ምደባዎች ይተዳደራል።',
+    om: 'Sochiiwwan gaheen tokkoon tokkoon isaanii raawwachuu dandaʼan filadhaa. Hojiiwwan faayinaansii miira-qabeeyyiin toʼannoo daldalaa fi mirkaneessa nama biraa jalatti hafu. Daangaan Super Admin tenant ramaddii tenant tiin bulfama.',
+    ti: 'ነፍሲ ወከፍ ሚና ከካይዶም ዝኽእል ንጥፈታት ምረጹ። ስሱዓት ፋይናንሳዊ ተግባራት ቁጽጽር ግብይትን ናጻ ምርግጋጽ ተዋሳኢን ይምልከቶም። ወሰን Super Admin ተናንት ብምደባ ተናንት ይምራሕ።',
+    so: 'Dooro hawlaha door kastaa qaban karo. Tallaabooyinka maaliyadeed ee xasaasiga ahi waxay weli hoos imanayaan xakamaynta macaamilka iyo hubinta qof kale oo madax-bannaan. Baaxadda Super Admin-ka kiraystaha waxaa lagu maamulaa meelaynta kiraystaha.',
+    ar: 'حدد الأنشطة التي يمكن لكل دور تنفيذها. تظل الإجراءات المالية الحساسة خاضعة لضوابط المعاملات والتحقق من استقلالية المنفّذ. يُدار نطاق المسؤول الفائق للمستأجر عبر تعيينات المستأجر.',
+    sw: 'Chagua shughuli ambazo kila jukumu linaweza kufanya. Hatua nyeti za kifedha bado zinadhibitiwa na taratibu za miamala na ukaguzi wa mhusika huru. Wigo wa Msimamizi Mkuu wa mpangaji husimamiwa kupitia ugawaji wa wapangaji.',
+  },
+  'Production readiness evidence': {
+    am: 'የምርት ዝግጁነት ማስረጃ', om: 'Ragaa qophii oomishaa', ti: 'መርትዖ ድልውነት ምርት', so: 'Caddaynta u-diyaargarowga wax-soo-saarka', ar: 'أدلة الجاهزية للإنتاج', sw: 'Ushahidi wa utayari wa uzalishaji',
+  },
+  'Append operational evidence for each service. Records are stored in the shared database and attributed to the signed-in administrator. An evidence record does not itself grant legal, provider, finance, or production authorization.': {
+    am: 'ለእያንዳንዱ አገልግሎት የሥራ ማስረጃ ይጨምሩ። መዝገቦቹ በጋራ የውሂብ ጎታ ይቀመጣሉና ከገባው አስተዳዳሪ ጋር ይያያዛሉ። የማስረጃ መዝገብ ብቻውን ሕጋዊ፣ የአቅራቢ፣ የፋይናንስ ወይም የምርት ፈቃድ አይሰጥም።',
+    om: 'Tajaajila tokkoon tokkoof ragaa hojii dabaladhaa. Galmeewwan kuusdeetaa waliinii keessatti kuufamu, bulchaa seeneettis ramadamu. Galmeen ragaa qofti hayyama seeraa, dhiyeessaa, faayinaansii yookaan oomishaa hin kennu.',
+    ti: 'ንነፍሲ ወከፍ ኣገልግሎት መርትዖ ስራሕ ወስኹ። መዝገባት ኣብ ሓባራዊ ዳታቤዝ ይቕመጡን ምስቲ ዝኣተወ ምምሕዳር ይተሓሓዙን። መዝገብ መርትዖ ባዕሉ ሕጋዊ፣ ናይ ኣቕራቢ፣ ፋይናንሳዊ ወይ ናይ ምርት ፍቓድ ኣይህብን።',
+    so: 'Ku dar caddayn hawlgal adeeg kasta. Diiwaannada waxaa lagu kaydiyaa xogta la wadaago, waxaana loo nisbeeyaa maamulaha galay. Diiwaanka caddayntu keligiis ma bixiyo oggolaansho sharci, bixiye, maaliyadeed ama wax-soo-saar.',
+    ar: 'أضف أدلة تشغيلية لكل خدمة. تُحفظ السجلات في قاعدة البيانات المشتركة وتُنسب إلى المسؤول المسجل دخوله. لا يمنح سجل الأدلة بحد ذاته تفويضًا قانونيًا أو من مزود أو ماليًا أو للإنتاج.',
+    sw: 'Ongeza ushahidi wa uendeshaji kwa kila huduma. Rekodi huhifadhiwa kwenye hifadhidata ya pamoja na kuhusishwa na msimamizi aliyeingia. Rekodi ya ushahidi yenyewe haitoi idhini ya kisheria, mtoa huduma, fedha au uzalishaji.',
+  },
+  'Insurance brokerage regulatory release gates': {
+    am: 'Vikwazo vya idhini ya udhibiti wa udalali wa bima', om: 'Ulaagaalee eeyyama seeraa daldala inshuraansii', ti: 'መዕገቲታት ምፍታሕ ሕጊ ደላላ ውሕስነት', so: 'Shuruudaha sii-daynta sharciyeynta dilaalka caymiska', ar: 'بوابات الإطلاق التنظيمي لوساطة التأمين', sw: 'Vigezo vya kutolewa kwa udhibiti wa udalali wa bima',
+  },
+  'Evidence is a readiness record, not a regulatory approval or certification. Live brokerage activity remains disabled until all applicable gates are independently reviewed and separately approved.': {
+    am: 'ማስረጃው የዝግጁነት መዝገብ ነው፤ የቁጥጥር ፈቃድ ወይም ማረጋገጫ አይደለም። ሁሉም ተፈጻሚ መድረኮች በገለልተኛ ሁኔታ ተገምግመው ለየት ብለው እስኪጸድቁ ድረስ ቀጥታ የደላላ ሥራ ይሰናከላል።',
+    om: 'Ragaan galmee qophii ti; hayyama seeraa yookaan ragaa mirkaneessaa miti. Hojii daldala kallattii kanneen ilaallatan hundi of dandaʼanii gamaaggamamee adda baafamanii hanga raggaasifamanitti cufaa taʼu.',
+    ti: 'መርትዖ መዝገብ ድልውነት እዩ፣ ፍቓድ ቁጽጽር ወይ ምስክር ወረቐት ኣይኮነን። ኩሎም ዝምልከቱ መዕገቲታት ብናጻ ክሳብ ዝግምገሙን ብፍሉይ ዝጸድቁን ንጡፍ ስራሕ ደላላ ይስናኸል።',
+    so: 'Caddayntu waa diiwaanka diyaargarowga, ma aha oggolaansho ama shahaado sharciyeyn. Hawsha dilaalka tooska ahi way xirnaanaysaa ilaa dhammaan shuruudaha la khuseeyo si madax-bannaan loo eego loona ansixiyo.',
+    ar: 'الأدلة سجل للجاهزية وليست موافقة تنظيمية أو شهادة. يظل نشاط الوساطة الفعلي معطلًا حتى تُراجع جميع المتطلبات المنطبقة بشكل مستقل وتُعتمد كلٌّ على حدة.',
+    sw: 'Ushahidi ni rekodi ya utayari, si idhini au cheti cha udhibiti. Udalali wa moja kwa moja hubaki umezimwa hadi vigezo vyote vinavyohusika vikaguliwe kwa uhuru na kuidhinishwa kando.',
+  },
+  'No evidence recorded.': {
+    am: 'ምንም ማስረጃ አልተመዘገበም።', om: 'Ragaan hin galmoofne.', ti: 'ዝኾነ መርትዖ ኣይተመዝገበን።', so: 'Wax caddayn ah lama diiwaangelin.', ar: 'لم يتم تسجيل أي أدلة.', sw: 'Hakuna ushahidi uliorekodiwa.',
+  },
+  'Tenant and service control plane': {
+    am: 'የተከራይና የአገልግሎት መቆጣጠሪያ ማዕከል', om: 'Buufata toʼannoo tenant fi tajaajilaa', ti: 'ማእከል ቁጽጽር ተናንትን ኣገልግሎትን', so: 'Xarunta xakamaynta kiraystaha iyo adeegga', ar: 'مركز التحكم بالمستأجر والخدمات', sw: 'Kitovu cha udhibiti wa mpangaji na huduma',
+  },
+  'Manage platform services, packages, tenant deployments, assignments, and non-financial catalog products. Tenant database credentials and infrastructure secrets are never stored here. Package availability affects workspace modules only when an authorized platform-tenant context is selected; it does not replace user role, activity, or service checks.': {
+    am: 'የመድረክ አገልግሎቶችን፣ ጥቅሎችን፣ የተከራይ ማሰማራቶችን፣ ምደባዎችንና የፋይናንስ ያልሆኑ የካታሎግ ምርቶችን ያስተዳድሩ። የተከራይ የውሂብ ጎታ መግቢያ መረጃና የመሠረተ ልማት ምስጢሮች እዚህ አይቀመጡም። የጥቅል መገኘት የሥራ ቦታ ሞጁሎችን የሚነካው የተፈቀደ የመድረክ-ተከራይ አውድ ሲመረጥ ብቻ ነው፤ የተጠቃሚ ሚናን፣ እንቅስቃሴን ወይም የአገልግሎት ምርመራዎችን አይተካም።',
+    om: 'Tajaajiloota waltajjii, paakeejii, hojii irra oolmaa tenant, ramaddii fi oomisha kaataaloogii faayinaansii hin taane bulchaa. Ragaan seensaa kuusdeetaa fi iccitiin buʼuraalee teeknooloojii tenant asitti matumaa hin kuufamu. Paakeejiin jiru mojuulota iddoo hojii kan miidhu yeroo qofa haalli tenant waltajjii hayyamame filatamu; gahee fayyadamaa, sochii yookaan sakattaʼiinsa tajaajilaa hin bakka buʼu.',
+    ti: 'ኣገልግሎታት መድረኽ፣ ጥሙራት፣ ምስፋሕ ተናንት፣ ምደባታትን ፋይናንሳዊ ዘይኮኑ ፍርያት ካታሎግን ኣመሓድሩ። ምስጢራት መእተዊ ዳታቤዝን መሰረተ ልምዓትን ተናንት ኣብዚ ኣይቕመጡን። ተረኻብነት ጥሙር ንሞጁላት ቦታ ስራሕ ዝጸልዎ ፍቑድ ኣውድ ተናንት መድረኽ ምስ ተመርጸ ጥራይ እዩ፤ ሚና፣ ንጥፈት ወይ ምርመራ ኣገልግሎት ኣይትክእን።',
+    so: 'Maamul adeegyada madasha, xirmooyinka, geynta kiraystayaasha, meelaynta iyo badeecooyinka aan maaliyadda ahayn ee buugga. Aqoonsiyada xogta kiraystaha iyo siraha kaabayaasha halkan laguma kaydiyo. Helitaanka xirmadu wuxuu saameeyaa qaybaha goobta shaqada oo keliya marka la doorto macnaha kiraystaha madasha ee la oggolaaday; ma beddelayo doorka, hawsha ama hubinta adeegga isticmaalaha.',
+    ar: 'أدر خدمات المنصة وباقاتها وعمليات نشر المستأجرين والتعيينات ومنتجات الكتالوج غير المالية. لا تُحفظ هنا بيانات اعتماد قواعد بيانات المستأجرين أو أسرار البنية التحتية. يؤثر توفر الباقة في وحدات مساحة العمل فقط عند اختيار سياق مستأجر منصة مخوّل؛ ولا يحل محل التحقق من دور المستخدم أو نشاطه أو الخدمة.',
+    sw: 'Dhibiti huduma za jukwaa, vifurushi, mifumo ya wapangaji, ugawaji na bidhaa zisizo za kifedha za katalogi. Taarifa za kuingia kwenye hifadhidata ya mpangaji na siri za miundombinu hazihifadhiwi hapa. Upatikanaji wa kifurushi huathiri moduli za eneo la kazi tu muktadha ulioidhinishwa wa mpangaji wa jukwaa unapochaguliwa; hauchukui nafasi ya ukaguzi wa jukumu, shughuli au huduma.',
+  },
+  'No tenant package context': {
+    am: 'የተከራይ ጥቅል አውድ የለም', om: 'Haalli paakeejii tenant hin jiru', ti: 'ኣውድ ጥሙር ተናንት የለን', so: 'Ma jiro macnaha xirmada kiraystaha', ar: 'لا يوجد سياق باقة للمستأجر', sw: 'Hakuna muktadha wa kifurushi cha mpangaji',
+  },
+  'Services included': {
+    am: 'የተካተቱ አገልግሎቶች', om: 'Tajaajiloota dabalaman', ti: 'ዝተኣከቱ ኣገልግሎታት', so: 'Adeegyada ku jira', ar: 'الخدمات المشمولة', sw: 'Huduma zilizojumuishwa',
+  },
+  'Included services': {
+    am: 'የተካተቱ አገልግሎቶች', om: 'Tajaajiloota dabalaman', ti: 'ኣገልግሎታት ዝተኣከቱ', so: 'Adeegyada ku jira', ar: 'الخدمات المشمولة', sw: 'Huduma zilizojumuishwa',
+  },
+  'Choose service package': {
+    am: 'የአገልግሎት ጥቅል ይምረጡ', om: 'Paakeejii tajaajilaa filadhaa', ti: 'ጥሙር ኣገልግሎት ምረጹ', so: 'Dooro xirmada adeegga', ar: 'اختر باقة الخدمات', sw: 'Chagua kifurushi cha huduma',
+  },
+  'Agent and Super Admin business tenants': {
+    am: 'የወኪልና የሱፐር አስተዳዳሪ የንግድ ተከራዮች', om: 'Tenant daldalaa bakka buʼaa fi Super Admin', ti: 'ተናንት ንግዲ ወኪልን Super Adminን', so: 'Kiraystayaasha ganacsi ee wakiilka iyo Super Admin-ka', ar: 'مستأجرو أعمال الوكلاء والمسؤولين الفائقين', sw: 'Wapangaji wa biashara wa wakala na Msimamizi Mkuu',
+  },
+  'These are business workspaces in the Global Platform. They are separate from deployment tenants, which track hosting and infrastructure. Master Agents own agent-network tenants; their Field Agents join through the registered parent relationship. Tenant Super Admins have their own tenant boundary.': {
+    am: 'እነዚህ በግሎባል መድረክ ያሉ የንግድ የሥራ ቦታዎች ናቸው። ማስተናገጃና መሠረተ ልማትን ከሚከታተሉ የማሰማራት ተከራዮች የተለዩ ናቸው። ዋና ወኪሎች የወኪል መረብ ተከራዮችን ይይዛሉ፤ የመስክ ወኪሎቻቸው በተመዘገበው የወላጅ ግንኙነት ይቀላቀላሉ። የተከራይ ሱፐር አስተዳዳሪዎች የራሳቸው የተከራይ ወሰን አላቸው።',
+    om: 'Iddoowwan hojii daldalaa waltajjii Addunyaa keessa jiran kana. Tenant hojii irra oolmaa kan keessummeessitoota fi buʼura teeknooloojii hordofu irraa adda. Master Agent tenant neetworkii bakka buʼootaa qaba; Field Agent isaanii karaa hariiroo warra galmaaʼeen makamu. Super Admin tenant daangaa tenant mataa isaa qaba.',
+    ti: 'እዚኣቶም ኣብ መድረኽ ዓለምለኻዊ ዘለዉ ቦታታት ስራሕ ንግዲ እዮም። ካብ ምእንጋድን መሰረተ ልምዓትን ዝከታተሉ ተናንት ምስፋሕ ፍሉያት እዮም። Master Agent ተናንት መርበብ ወከልቲ ይውንን፤ Field Agentኡ ብዝተመዝገበ ርክብ ወላዲ ይጽንበር። Super Admin ተናንት ናይ ገዛእ ርእሱ ወሰን ተናንት ኣለዎ።',
+    so: 'Kuwani waa goobo shaqo ganacsi oo ku jira Madasha Caalamiga ah. Way ka duwan yihiin kiraystayaasha geynta ee la socda martigelinta iyo kaabayaasha. Master Agents waxay leeyihiin kiraystayaasha shabakadda wakiillada; Field Agents-koodu waxay ku biiraan xiriirka waalidka ee diiwaangashan. Super Admin kasta oo kirayste ahi wuxuu leeyahay xad u gaar ah.',
+    ar: 'هذه مساحات عمل تجارية على المنصة العالمية، وهي منفصلة عن مستأجري النشر الذين يتابعون الاستضافة والبنية التحتية. يمتلك الوكلاء الرئيسيون مستأجري شبكات الوكلاء، وينضم وكلاء الميدان عبر علاقة الوالد المسجلة. ولكل مسؤول فائق للمستأجر نطاق مستأجر خاص.',
+    sw: 'Haya ni maeneo ya biashara kwenye Jukwaa la Kimataifa. Ni tofauti na wapangaji wa usambazaji wanaofuatilia upangishaji wa seva na miundombinu. Mawakala Wakuu wanamiliki wapangaji wa mtandao wa mawakala; Mawakala wa Uwanjani hujiunga kupitia uhusiano wa mzazi uliosajiliwa. Wasimamizi Wakuu wa wapangaji wana mipaka yao binafsi.',
+  },
+  'Choose an active Super Admin': {
+    am: 'ንቁ ሱፐር አስተዳዳሪ ይምረጡ', om: 'Super Admin hojii irra jiru filadhaa', ti: 'ንጡፍ Super Admin ምረጹ', so: 'Dooro Super Admin firfircoon', ar: 'اختر مسؤولًا فائقًا نشطًا', sw: 'Chagua Msimamizi Mkuu aliye hai',
+  },
+  'Keep current packages': {
+    am: 'ያሉትን ጥቅሎች ይቀጥሉ', om: 'Paakeejiiwwan amma jiran tursaa', ti: 'እዞም ዘለዉ ጥሙራት ዓቅቡ', so: 'Hay xirmooyinka hadda jira', ar: 'أبقِ الباقات الحالية', sw: 'Hifadhi vifurushi vya sasa',
+  },
+  'Assigned business entities': {
+    am: 'የተመደቡ የንግድ ድርጅቶች', om: 'Dhaabbilee daldalaa ramadaman', ti: 'ትካላት ንግዲ ዝተመደቡ', so: 'Hay’adaha ganacsi ee laguu qoondeeyey', ar: 'الكيانات التجارية المعيّنة', sw: 'Mashirika ya biashara yaliyogawiwa',
+  },
+  'Configure business modules only within entities assigned by the Global System Admin. Global System Admin controls tenant onboarding, service packages, platform-wide module availability, and Super Admin assignments.': {
+    am: 'በግሎባል ሲስተም አስተዳዳሪ በተመደቡ ድርጅቶች ውስጥ ብቻ የንግድ ሞጁሎችን ያዋቅሩ። ግሎባል ሲስተም አስተዳዳሪ የተከራይ ምዝገባን፣ የአገልግሎት ጥቅሎችን፣ የመድረክ ሁሉ ሞጁል መገኘትንና የሱፐር አስተዳዳሪ ምደባን ይቆጣጠራል።',
+    om: 'Mojuulota daldalaa dhaabbilee Admin Sirna Addunyaa tiin ramadaman keessatti qofa qindeessaa. Admin Sirna Addunyaa galmee tenant, paakeejii tajaajilaa, argama mojuulii waltajjii guutuu fi ramaddii Super Admin ni toʼata.',
+    ti: 'ሞጁላት ንግዲ ኣብቶም ብGlobal System Admin ዝተመደቡ ትካላት ጥራይ ኣዳልዉ። Global System Admin ምምዝጋብ ተናንት፣ ጥሙራት ኣገልግሎት፣ ኣብ ምሉእ መድረኽ ተረኻብነት ሞጁላትን ምደባ Super Adminን ይቆጻጸር።',
+    so: 'Deji qaybaha ganacsiga oo keliya hay’adaha uu kuu qoondeeyey Maamulaha Nidaamka Caalamiga ah. Maamulaha Nidaamka Caalamiga ahi wuxuu xakameeyaa diiwaangelinta kiraystaha, xirmooyinka adeegga, helitaanka qaybaha guud ee madasha iyo meelaynta Super Admin.',
+    ar: 'اضبط وحدات الأعمال داخل الكيانات التي يعيّنها مسؤول النظام العالمي فقط. يتحكم مسؤول النظام العالمي في تسجيل المستأجرين وباقات الخدمات وإتاحة الوحدات على مستوى المنصة وتعيينات المسؤولين الفائقين.',
+    sw: 'Sanidi moduli za biashara ndani ya mashirika aliyokukabidhi Msimamizi wa Mfumo wa Kimataifa pekee. Msimamizi huyo hudhibiti usajili wa wapangaji, vifurushi vya huduma, upatikanaji wa moduli katika jukwaa lote na ugawaji wa Wasimamizi Wakuu.',
+  },
+  'Select an assigned entity': {
+    am: 'የተመደበ ድርጅት ይምረጡ', om: 'Dhaabbata ramadame filadhaa', ti: 'ትካል ዝተመደበ ምረጹ', so: 'Dooro hay’ad laguu qoondeeyey', ar: 'اختر كيانًا معيّنًا', sw: 'Chagua shirika ulilokabidhiwa',
+  },
+  'Choose an assigned active entity to open its approved business modules.': {
+    am: 'የተፈቀዱ የንግድ ሞጁሎችን ለመክፈት ንቁ የተመደበ ድርጅት ይምረጡ።', om: 'Mojuulota daldalaa hayyamaman banuuf dhaabbata hojii irra jiru kan ramadame filadhaa.', ti: 'ሞጁላት ንግዲ ዝተፈቕዱ ንምኽፋት ንጡፍ ትካል ዝተመደበ ምረጹ።', so: 'Dooro hay’ad firfircoon oo laguu qoondeeyey si aad u furto qaybaha ganacsiga ee la ansixiyey.', ar: 'اختر كيانًا نشطًا معيّنًا لفتح وحدات الأعمال المعتمدة له.', sw: 'Chagua shirika hai ulilokabidhiwa ili kufungua moduli zake za biashara zilizoidhinishwa.',
+  },
+  'Enabled business modules': {
+    am: 'የነቁ የንግድ ሞጁሎች', om: 'Mojuulota daldalaa hojii irra jiran', ti: 'ሞጁላት ንግዲ ዝነቑ', so: 'Qaybaha ganacsi ee shaqaynaya', ar: 'وحدات الأعمال المفعّلة', sw: 'Moduli za biashara zilizowezeshwa',
+  },
+  'Global System Admin must activate this entity before its business modules can be used.': {
+    am: 'የንግድ ሞጁሎቹን ከመጠቀምዎ በፊት ግሎባል ሲስተም አስተዳዳሪ ይህን ድርጅት ማንቃት አለበት።',
+    om: 'Mojuulota daldalaa isaa fayyadamuu dura Admin Sirna Addunyaa dhaabbata kana hojii irra oolchuu qaba.',
+    ti: 'ሞጁላት ንግዲ ቅድሚ ምጥቃምኩም Global System Admin ነዚ ትካል ከንቅሖ ኣለዎ።',
+    so: 'Maamulaha Nidaamka Caalamiga ahi waa inuu dhaqaajiyaa hay’addan ka hor inta aan la adeegsan qaybaha ganacsigeeda.',
+    ar: 'يجب على مسؤول النظام العالمي تفعيل هذا الكيان قبل استخدام وحدات أعماله.',
+    sw: 'Msimamizi wa Mfumo wa Kimataifa lazima awashe shirika hili kabla moduli zake za biashara hazijatumika.',
+  },
+  'GLOBAL CONTROL PLANE': {
+    am: 'ዓለም አቀፍ የቁጥጥር ማዕከል', om: 'BUUFATA TOʼANNOO ADDUNYAA', ti: 'ማእከል ቁጽጽር ዓለምለኻዊ', so: 'XARUNTA XAKAMAYNTA CAALAMIGA AH', ar: 'مركز التحكم العالمي', sw: 'KITOVU CHA UDHIBITI WA KIMATAIFA',
+  },
+  'Tenant data administration': {
+    am: 'የተከራይ ውሂብ አስተዳደር', om: 'Bulchiinsa daataa tenant', ti: 'ምምሕዳር ዳታ ተናንት', so: 'Maamulka xogta kiraystaha', ar: 'إدارة بيانات المستأجر', sw: 'Usimamizi wa data ya mpangaji',
+  },
+  'Global Admin assigns tenant-scoped Database Admin and Analytics Admin capability records to active eligible accounts. These assignments grant no platform database connection, SQL console, tenant database access, credential access, or change execution. Tenant operators remain responsible for their own data plane.': {
+    am: 'ግሎባል አስተዳዳሪ ለንቁና ብቁ መለያዎች የተከራይ-ወሰን ያላቸውን የውሂብ ጎታ አስተዳዳሪና የትንታኔ አስተዳዳሪ ችሎታዎች ይመድባል። እነዚህ ምደባዎች የመድረክ ውሂብ ጎታ ግንኙነት፣ SQL ኮንሶል፣ የተከራይ ውሂብ ጎታ መዳረሻ፣ የምስጢር መዳረሻ ወይም ለውጥ ማስኬድ አይሰጡም። የተከራይ ኦፕሬተሮች የራሳቸውን የውሂብ አካባቢ ይቆጣጠራሉ።',
+    om: 'Admin Addunyaa herrega hojii irra jiru fi ulaagaa guuteef dandeettii Bulchaa Kuusdeetaa fi Bulchaa Xiinxalaa daangaa tenant keessatti ramada. Ramaddiin kun walqabsiisa kuusdeetaa waltajjii, konsoolii SQL, seensa kuusdeetaa tenant, seensa ragaa iccitii yookaan raawwii jijjiirraa hin kennu. Ogeeyyiin tenant lafa daataa isaanii mataa isaanii itti gaafatamu.',
+    ti: 'Global Admin ንንጡፋትን ብቑዓትን ሕሳባት ብወሰን ተናንት ዝተወሰኑ ሓላፊ ዳታቤዝን ሓላፊ ትንተናን ይምድብ። እዞም ምደባታት ምርኻብ ዳታቤዝ መድረኽ፣ ኮንሶል SQL፣ መእተዊ ዳታቤዝ ተናንት፣ መእተዊ ምስጢራት ወይ ምፍጻም ለውጢ ኣይህቡን። ኦፐሬተራት ተናንት ናይ ገዛእ ርእሶም ዳታ ይሓልዉ።',
+    so: 'Global Admin wuxuu akoonnada firfircoon ee u qalma u qoondeeyaa awoodaha Database Admin iyo Analytics Admin ee ku kooban kiraystaha. Meelayntani ma bixiso isku-xirka xogta madasha, konsole SQL, gelitaanka xogta kiraystaha, aqoonsiyada sirta ah ama fulinta isbeddel. Hawl-wadeennada kiraystuhu iyagaa mas’uul ka ah xogtooda.',
+    ar: 'يعيّن المسؤول العام سجلات صلاحيات مسؤول قاعدة البيانات ومسؤول التحليلات ضمن نطاق المستأجر للحسابات النشطة المؤهلة. لا تمنح هذه التعيينات اتصالًا بقاعدة بيانات المنصة أو وحدة SQL أو وصولًا لقاعدة بيانات المستأجر أو بيانات الاعتماد أو تنفيذ التغييرات. يظل مشغلو المستأجر مسؤولين عن بيئة بياناتهم.',
+    sw: 'Global Admin hukabidhi uwezo wa Database Admin na Analytics Admin wenye mipaka ya mpangaji kwa akaunti hai zinazostahili. Ugawaji huo hautoi muunganisho wa hifadhidata ya jukwaa, dashibodi ya SQL, ufikiaji wa hifadhidata ya mpangaji, vitambulisho vya siri au utekelezaji wa mabadiliko. Waendeshaji wa mpangaji wanawajibika kwa mazingira yao ya data.',
+  },
+  'Tenant control-plane metadata is unavailable. Retry the workspace connection; no status is inferred.': {
+    am: 'የተከራይ የቁጥጥር ማዕከል ዳታ አይገኝም። የሥራ ቦታ ግንኙነቱን እንደገና ይሞክሩ፤ ሁኔታ አይገመትም።',
+    om: 'Metadaataan buufata toʼannoo tenant hin argamu. Walqunnamtii iddoo hojii irra deebiʼaa; haalli kamiyyuu hin tilmaamamu.',
+    ti: 'Metadaataa buufata toʼannoo tenant ኣይርከብን። ርክብ ቦታ ስራሕ ደጊምኩም ፈትኑ፤ ኩነታት ኣይግመትን።',
+    so: 'Xogta xakamaynta kiraystaha lama heli karo. Dib u tijaabi isku-xirka goobta shaqada; xaalad lama qiyaasayo.',
+    ar: 'بيانات التحكم الخاصة بالمستأجر غير متاحة. أعد محاولة اتصال مساحة العمل؛ لن يُستنتج أي وضع.',
+    sw: 'Metadata ya kitovu cha udhibiti wa mpangaji haipatikani. Jaribu tena muunganisho wa eneo la kazi; hakuna hali inayokisiwa.',
+  },
+  'Select an active tenant': {
+    am: 'ንቁ ተከራይ ይምረጡ', om: 'Tenant hojii irra jiru filadhaa', ti: 'ንጡፍ ተናንት ምረጹ', so: 'Dooro kirayste firfircoon', ar: 'اختر مستأجرًا نشطًا', sw: 'Chagua mpangaji aliye hai',
+  },
+  'Select an active tenant first': {
+    am: 'መጀመሪያ ንቁ ተከራይ ይምረጡ', om: 'Jalqaba tenant hojii irra jiru filadhaa', ti: 'መጀመርታ ንጡፍ ተናንት ምረጹ', so: 'Marka hore dooro kirayste firfircoon', ar: 'اختر مستأجرًا نشطًا أولًا', sw: 'Kwanza chagua mpangaji aliye hai',
+  },
+  'Tenant-scoped capability': {
+    am: 'በተከራይ ወሰን የተገደበ ችሎታ', om: 'Dandeettii daangaa tenant qabu', ti: 'ብወሰን ተናንት ዝተወሰነ ክእለት', so: 'Awood ku kooban kiraystaha', ar: 'صلاحية محدودة بالمستأجر', sw: 'Uwezo wenye mipaka ya mpangaji',
+  },
+  'Loading eligible accounts…': {
+    am: 'ብቁ መለያዎችን በመጫን ላይ…', om: 'Herrega ulaagaa guutan feʼaa jira…', ti: 'ሕሳባት ብቑዓት ይጽዓኑ ኣለዉ…', so: 'Waxaa la soo rarayaa akoonnada u qalma…', ar: 'جارٍ تحميل الحسابات المؤهلة…', sw: 'Inapakia akaunti zinazostahili…',
+  },
+  'Choose an active eligible account': {
+    am: 'ንቁና ብቁ መለያ ይምረጡ', om: 'Herrega hojii irra jiru kan ulaagaa guute filadhaa', ti: 'ንጡፍን ብቑዕን ሕሳብ ምረጹ', so: 'Dooro akoon firfircoon oo u qalma', ar: 'اختر حسابًا نشطًا مؤهلًا', sw: 'Chagua akaunti hai inayostahili',
+  },
+  'Could not load eligible accounts': {
+    am: 'ብቁ መለያዎችን መጫን አልተቻለም', om: 'Herrega ulaagaa guutan feʼuun hin dandaʼamne', ti: 'ሕሳባት ብቑዓት ምጽዓን ኣይተኻእለን', so: 'Lama soo rarik karin akoonnada u qalma', ar: 'تعذر تحميل الحسابات المؤهلة', sw: 'Imeshindwa kupakia akaunti zinazostahili',
+  },
+  'Current assignments': {
+    am: 'አሁን ያሉ ምደባዎች', om: 'Ramaddiiwwan amma jiran', ti: 'ሕጂ ዘለዉ ምደባታት', so: 'Meelaynta hadda jirta', ar: 'التعيينات الحالية', sw: 'Ugawaji wa sasa',
+  },
+  'No Database Admin or Analytics Admin capability is assigned.': {
+    am: 'የውሂብ ጎታ አስተዳዳሪ ወይም የትንታኔ አስተዳዳሪ ችሎታ አልተመደበም።',
+    om: 'Dandeettiin Bulchaa Kuusdeetaa yookaan Bulchaa Xiinxalaa hin ramadamne.',
+    ti: 'ክእለት ሓላፊ ዳታቤዝ ወይ ሓላፊ ትንተና ኣይተመደበን።',
+    so: 'Lama meelayn awoodda Database Admin ama Analytics Admin.',
+    ar: 'لم يتم تعيين صلاحية مسؤول قاعدة البيانات أو مسؤول التحليلات.',
+    sw: 'Hakuna uwezo wa Database Admin au Analytics Admin uliogawiwa.',
+  },
+  'Operator readiness checklists (manual evidence only)': {
+    am: 'የኦፕሬተር ዝግጁነት ዝርዝሮች (በእጅ የሚዘጋጅ ማስረጃ ብቻ)', om: 'Tarree qophii ogeessaa (ragaa harkaan galmaaʼe qofa)', ti: 'ዝርዝር ድልውነት ኦፐሬተር (መርትዖ ብኢድ ጥራይ)', so: 'Liisaska hubinta diyaarinta hawl-wadeenka (caddayn gacanta oo keliya)', ar: 'قوائم جاهزية المشغّل (أدلة يدوية فقط)', sw: 'Orodha za ukaguzi wa utayari wa mwendeshaji (ushahidi wa mikono pekee)',
+  },
+  'Migration review': {
+    am: 'የማሻሻያ ግምገማ', om: 'Gamaaggama jijjiirraa', ti: 'ግምገማ ምስግጋር', so: 'Dib-u-eegista guurista', ar: 'مراجعة الترحيل', sw: 'Ukaguzi wa uhamishaji',
+  },
+  'Confirm tenant-local maintenance window and approved release; compare migration manifest and checksums; verify a tenant-local backup and restore-tested recovery point; run migrations only with that tenant’s approved operator process; capture before/after schema and readiness evidence; record rollback outcome. This panel does not run or validate those steps.': {
+    am: 'በተከራዩ አካባቢ የጥገና ጊዜንና የጸደቀ ልቀትን ያረጋግጡ፤ የማሻሻያ ዝርዝርና የቼክሰም እሴቶችን ያነጻጽሩ፤ የተከራይ ባክአፕንና በመመለስ የተፈተነ የመመለሻ ነጥብን ያረጋግጡ፤ ማሻሻያዎችን በዚያ ተከራይ የጸደቀ ኦፕሬተር ሂደት ብቻ ያስኪዱ፤ ከማስኬዱ በፊትና በኋላ የስኪማና የዝግጁነት ማስረጃ ይመዝግቡ፤ የመመለሻ ውጤትን ያስመዝግቡ። ይህ ፓነል እነዚህን አያስኬድም ወይም አያረጋግጥም።',
+    om: 'Yeroo suphaa tenant keessaa fi gadhiinsa raggaʼe mirkaneessaa; tarree migration fi checksum walbira qabaa; backup tenant keessaa fi bakka deebiʼanii yaalamu mirkaneessaa; migration adeemsa ogeessaa tenant sanaatiin raggaʼe qofa fayyadamaa; ragaa schema fi qophii dura/booda galmeessaa; buʼaa deebii duubaa galmeessaa. Paaneeliin kun tarkaanfii kana hin raawwatu yookaan hin mirkaneessu.',
+    ti: 'ኣብቲ ተናንት ዘሎ ናይ ጽገና ግዜን ዝተፈቕደ ምርካብን ኣረጋግጹ፤ ዝርዝር migrationን checksumን ኣነጻጽሩ፤ ባክኣፕ ተናንትን ብምምላስ ዝተፈተነ ነጥቢ ምድሓንን ኣረጋግጹ፤ migration ብዝተፈቕደ መስርሕ ኦፐሬተር ተናንት ጥራይ ኣካይዱ፤ ቅድሚን ድሕሪን schemaን ድልውነትን መርትዖ መዝግቡ፤ ውጽኢት ምምላስ መዝግቡ። እዚ ፓነል እቶም ስጉምትታት ኣየካይድን ወይ ኣየረጋግጽን።',
+    so: 'Xaqiiji waqtiga dayactirka ee kiraystaha iyo sii-daynta la ansixiyey; isbarbar dhig liiska guurista iyo checksums-ka; xaqiiji kaydka kiraystaha iyo barta soo-kabashada ee dib-u-soo-celinta lagu tijaabiyey; guurista ku samee oo keliya habka hawl-wadeenka ee kiraystaha ansixiyey; qor caddaynta schema iyo u-diyaargarowga ka hor/kadib; diiwaangeli natiijada dib-u-celinta. Qaybtani tallaabooyinkaas ma fuliso mana xaqiijiso.',
+    ar: 'تحقق من نافذة الصيانة المحلية للمستأجر والإصدار المعتمد؛ وقارن بيان الترحيل وقيم التحقق؛ وتحقق من النسخة الاحتياطية ونقطة الاستعادة التي اختُبرت استعادتها؛ ونفّذ الترحيل عبر عملية المشغّل المعتمدة لذلك المستأجر فقط؛ وسجّل أدلة المخطط والجاهزية قبل التنفيذ وبعده ونتيجة التراجع. لا تنفّذ هذه اللوحة الخطوات ولا تتحقق منها.',
+    sw: 'Thibitisha dirisha la matengenezo la mpangaji na toleo lililoidhinishwa; linganisha orodha ya uhamishaji na checksums; hakiki nakala rudufu ya mpangaji na sehemu ya urejeshaji iliyojaribiwa; endesha uhamishaji kwa utaratibu wa mwendeshaji ulioidhinishwa wa mpangaji huyo pekee; hifadhi ushahidi wa schema na utayari kabla/baada; rekodi matokeo ya kurejesha. Paneli hii haitekelezi wala kuthibitisha hatua hizo.',
+  },
+  'Backup / restore review': {
+    am: 'የባክአፕ / መመለሻ ግምገማ', om: 'Gamaaggama backup / deebisuu', ti: 'ግምገማ ባክኣፕ / ምምላስ', so: 'Dib-u-eegista kaydinta/soo-celinta', ar: 'مراجعة النسخ الاحتياطي والاستعادة', sw: 'Ukaguzi wa nakala rudufu / urejeshaji',
+  },
+  'Confirm tenant-local backup policy, encryption and retention; record last successful backup timestamp and immutable evidence reference; verify restore into an isolated tenant-controlled environment; perform integrity and application checks; document recovery objectives and operator sign-off. No backup, restore, or database change is triggered here.': {
+    am: 'በተከራዩ አካባቢ ያለውን የባክአፕ ፖሊሲ፣ ምስጠራና የማቆያ ጊዜ ያረጋግጡ፤ የመጨረሻውን የተሳካ ባክአፕ ጊዜና የማይለወጥ የማስረጃ ማጣቀሻ ይመዝግቡ፤ ወደ ተለየ በተከራይ ቁጥጥር ሥር ባለ አካባቢ መመለሱን ያረጋግጡ፤ የታማኝነትና የመተግበሪያ ምርመራ ያድርጉ፤ የመመለሻ ግቦችንና የኦፕሬተር ማጽደቅን ይመዝግቡ። እዚህ ባክአፕ፣ መመለስ ወይም የውሂብ ጎታ ለውጥ አይጀመርም።',
+    om: 'Imaammata backup tenant keessaa, iccitii fi yeroo kuusaa mirkaneessaa; yeroo backup milkaaʼe isa dhumaa fi wabii ragaa hin jijjiiramne galmeessaa; gara naannoo adda baafamee tenantiin toʼatamutti deebisuu mirkaneessaa; qulqullina fi hojii app sakattaʼaa; galma deebisuu fi mallattoo ogeessaa galmeessaa. Asitti backup, deebisuu yookaan jijjiirraan kuusdeetaa hin jalqabu.',
+    ti: 'ፖሊሲ ባክኣፕ ተናንት፣ ምስጠራን ግዜ ምዕቃብን ኣረጋግጹ፤ ናይ መወዳእታ ዝተዓወተ ባክኣፕ ግዜን ዘይቅየር መወከሲ መርትዖን መዝግቡ፤ ናብ ፍሉይ ብተናንት ዝቆጻጸር ከባቢ ምምላስ ኣረጋግጹ፤ ቅንዕናን መተግበሪን መርምሩ፤ ዕላማታት ምምላስን ምጽዳቕ ኦፐሬተርን ሰንዱ። ኣብዚ ባክኣፕ፣ ምምላስ ወይ ለውጢ ዳታቤዝ ኣይጅምርን።',
+    so: 'Xaqiiji siyaasadda kaydka, sirgelinta iyo muddada haynta ee kiraystaha; qor wakhtigii ugu dambeeyey ee kayd guulaystay iyo tixraac caddayn oo aan la beddeli karin; hubi in lagu soo celiyo deegaan gooni ah oo kiraystuhu maamulo; samee hubinta saxnaanta iyo barnaamijka; diiwaangeli yoolalka soo-kabashada iyo saxeexa hawl-wadeenka. Halkan lagama bilaabayo kaydin, soo-celin ama isbeddel xogeed.',
+    ar: 'تحقق من سياسة النسخ الاحتياطي والتشفير والاحتفاظ لدى المستأجر؛ وسجّل وقت آخر نسخة ناجحة ومرجع الدليل غير القابل للتغيير؛ وتحقق من الاستعادة في بيئة معزولة يديرها المستأجر؛ وافحص سلامة البيانات والتطبيق؛ ووثّق أهداف الاستعادة واعتماد المشغّل. لا يبدأ هنا نسخ احتياطي أو استعادة أو تغيير لقاعدة البيانات.',
+    sw: 'Thibitisha sera ya nakala rudufu, usimbaji fiche na muda wa kuhifadhi wa mpangaji; rekodi muda wa nakala ya mwisho iliyofaulu na rejeleo lisilobadilika la ushahidi; hakiki urejeshaji katika mazingira tofauti yanayodhibitiwa na mpangaji; fanya ukaguzi wa uadilifu na programu; andika malengo ya urejeshaji na idhini ya mwendeshaji. Hakuna nakala, urejeshaji au mabadiliko ya hifadhidata yanayoanzishwa hapa.',
+  },
+  'Create an audited operator request (no execution)': {
+    am: 'የኦፕሬተር ጥያቄ ይፍጠሩ (በኦዲት ይመዝገባል፣ አይፈጸምም)', om: 'Gaaffii ogeessaa odiitii qabu uumaa (hin raawwatamu)', ti: 'ሕቶ ኦፐሬተር ብኦዲት ዝምዝገብ ፍጠሩ (ኣይፍጸምን)', so: 'Abuur codsi hawl-wadeen oo la diiwaangeliyo (lama fulinayo)', ar: 'أنشئ طلب مشغّل خاضعًا للتدقيق (دون تنفيذ)', sw: 'Unda ombi la mwendeshaji linalokaguliwa (halitekelezwi)',
+  },
+  'Recent operator requests': {
+    am: 'የቅርብ ጊዜ የኦፕሬተር ጥያቄዎች', om: 'Gaaffiiwwan ogeessaa dhiheenyaa', ti: 'ሕቶታት ኦፐሬተር ናይ ቀረባ ግዜ', so: 'Codsiyadii ugu dambeeyey ee hawl-wadeenka', ar: 'طلبات المشغّلين الأخيرة', sw: 'Maombi ya hivi karibuni ya waendeshaji',
+  },
+  'No operational requests are recorded. Creating a request never executes a database change.': {
+    am: 'ምንም የሥራ ጥያቄ አልተመዘገበም። ጥያቄ መፍጠር የውሂብ ጎታ ለውጥን አያስኬድም።',
+    om: 'Gaaffiin hojii hin galmoofne. Gaaffii uumuun jijjiirraa kuusdeetaa matumaa hin raawwatu.',
+    ti: 'ዝኾነ ሕቶ ስራሕ ኣይተመዝገበን። ሕቶ ምፍጣር ለውጢ ዳታቤዝ ፈጺሙ ኣየካይድን።',
+    so: 'Wax codsiyo hawlgal ah lama diiwaangelin. Abuurista codsi waligeed ma fuliso isbeddel xogeed.',
+    ar: 'لا توجد طلبات تشغيلية مسجلة. إنشاء الطلب لا ينفّذ أي تغيير في قاعدة البيانات.',
+    sw: 'Hakuna maombi ya uendeshaji yaliyorekodiwa. Kuunda ombi hakutekelezi mabadiliko ya hifadhidata.',
+  },
+  'Service identity inventory': {
+    am: 'የአገልግሎት መለያ ዝርዝር', om: 'Tarree eenyummaa tajaajilaa', ti: 'ዝርዝር መንነት ኣገልግሎት', so: 'Diiwaanka aqoonsiga adeegga', ar: 'سجل هويات الخدمات', sw: 'Orodha ya utambulisho wa huduma',
+  },
+  'Record vault references and rotation evidence only. Never enter credential values or tokens. Rotation and retirement require a different platform administrator from the identity creator.': {
+    am: 'የማከማቻ ማጣቀሻዎችንና የማዞሪያ ማስረጃን ብቻ ይመዝግቡ። የምስጢር መለያ ወይም ቶከን አያስገቡ። ማዞርና ማቋረጥ ከመለያው ፈጣሪ የተለየ የመድረክ አስተዳዳሪ ይፈልጋሉ።',
+    om: 'Wabii kuusaa fi ragaa marsaa jijjiirraa qofa galmeessaa. Gatii ragaa iccitii yookaan token matumaa hin galchinaa. Marsaa jijjiirraa fi dhaabuun bulchaa waltajjii nama eenyummaa uume irraa adda taʼe barbaada.',
+    ti: 'መወከሲ ቮልትን መርትዖ ምቕያርን ጥራይ መዝግቡ። እሴታት ምስጢር ወይ token ፈጺምኩም ኣይተእትዉ። ምቕያርን ምቁራጽን ካብቲ መንነት ዝፈጠረ ዝተፈልየ ምምሕዳር መድረኽ ይሓትት።',
+    so: 'Diiwaangeli oo keliya tixraacyada kaydka sirta ah iyo caddaynta beddelka. Waligaa ha gelin qiimaha aqoonsiga sirta ah ama token-ka. Beddelka iyo hawlgab ka dhigistu waxay u baahan yihiin maamule madal oo ka duwan kii aqoonsiga sameeyey.',
+    ar: 'سجّل مراجع الخزنة وأدلة التدوير فقط. لا تُدخل قيم بيانات الاعتماد أو الرموز أبدًا. يتطلب التدوير والإيقاف مسؤول منصة مختلفًا عن منشئ الهوية.',
+    sw: 'Rekodi marejeo ya hifadhi salama na ushahidi wa kubadilisha siri pekee. Usiweke thamani za kitambulisho au tokeni kamwe. Kubadilisha na kusitisha kunahitaji msimamizi tofauti na aliyeunda utambulisho huo.',
+  },
+  'No named owner': {
+    am: 'የተጠቀሰ ባለቤት የለም', om: 'Abbaan maqaan hin ibsamne', ti: 'ዝተጠቕሰ ዋና የለን', so: 'Ma jiro milkiile la magacaabay', ar: 'لا يوجد مالك محدد بالاسم', sw: 'Hakuna mmiliki aliyetajwa',
+  },
+  'No territory': {
+    am: 'አካባቢ የለም', om: 'Naannoon hin jiru', ti: 'ከባቢ የለን', so: 'Goob lama cayimin', ar: 'لا توجد منطقة', sw: 'Hakuna eneo',
+  },
+  'Choose master agent': {
+    am: 'ዋና ወኪል ይምረጡ', om: 'Bakka buʼaa olaanaa filadhaa', ti: 'ዋና ወኪል ምረጹ', so: 'Dooro wakiilka guud', ar: 'اختر وكيلًا رئيسيًا', sw: 'Chagua wakala mkuu',
+  },
+  'Plan requested': {
+    am: 'የታቀደው እቅድ', om: 'Karoora gaafatame', ti: 'ውጥን ዝተሓተተ', so: 'Qorshaha la codsaday', ar: 'الخطة المطلوبة', sw: 'Mpango ulioombwa',
+  },
+  'Payment not configured': {
+    am: 'ክፍያ አልተዋቀረም', om: 'Kaffaltiin hin qindaaʼin', ti: 'ክፍሊት ኣይተዳለወን', so: 'Lacag-bixinta lama dejin', ar: 'لم يتم إعداد الدفع', sw: 'Malipo hayajasanidiwa',
+  },
+  'Platform snapshot': {
+    am: 'የመድረክ አጭር ሁኔታ', om: 'Cuunfaa waltajjii', ti: 'ሓፈሻዊ ርእይቶ መድረኽ', so: 'Muuqaalka madasha', ar: 'لمحة عن المنصة', sw: 'Muhtasari wa jukwaa',
+  },
+  'Set a new password': {
+    am: 'አዲስ የይለፍ ቃል ያዘጋጁ', om: 'Jecha icciitii haaraa qopheessaa', ti: 'ሓድሽ መሕለፊ ቃል ኣዳልዉ', so: 'Samee eray sir cusub', ar: 'عيّن كلمة مرور جديدة', sw: 'Weka nenosiri jipya',
+  },
+  'Your account requires a password change before continuing.': {
+    am: 'ከመቀጠልዎ በፊት የይለፍ ቃልዎን መቀየር ያስፈልጋል።', om: 'Itti fufuuf jecha icciitii keessan jijjiiruun barbaachisa.', ti: 'ቅድሚ ምቕጻልኩም መሕለፊ ቃልኩም ክትቅይሩ የድሊ።', so: 'Waa inaad beddeshaa eraygaaga sirta ah ka hor intaadan sii wadin.', ar: 'يجب تغيير كلمة المرور قبل المتابعة.', sw: 'Lazima ubadilishe nenosiri kabla ya kuendelea.',
+  },
+  'Add this account in your authenticator app using the setup key below.': {
+    am: 'ከታች ያለውን የማዋቀሪያ ቁልፍ በመጠቀም ይህን መለያ ወደ ማረጋገጫ መተግበሪያዎ ያክሉ።',
+    om: 'Furtuu qindeessaa armaan gadii fayyadamuun herrega kana appii mirkaneessaa keessan keessatti dabalaa.',
+    ti: 'Furtuu qindeessuu armaan gadii fayyadamuun ነዚ ሕሳብ ናብ መተግበሪ መረጋገጺኹም ወስኹ።',
+    so: 'Akoonkan ku dar abka xaqiijinta adigoo adeegsanaya furaha dejinta ee hoose.',
+    ar: 'أضف هذا الحساب إلى تطبيق المصادقة باستخدام مفتاح الإعداد أدناه.',
+    sw: 'Ongeza akaunti hii kwenye programu yako ya uthibitishaji kwa kutumia ufunguo wa usanidi ulio hapa chini.',
+  },
+  'Rows per page': {
+    am: 'በአንድ ገጽ ያሉ ረድፎች', om: 'Tarree fuula tokko keessatti', ti: 'ረድፍ ኣብ ሓደ ገጽ', so: 'Safafka bog kasta', ar: 'الصفوف في الصفحة', sw: 'Safu kwa kila ukurasa',
+  },
+  'No rows': {
+    am: 'ምንም ረድፍ የለም', om: 'Tarreen hin jiru', ti: 'ዝኾነ ረድፊ የለን', so: 'Safaf ma jiraan', ar: 'لا توجد صفوف', sw: 'Hakuna safu',
+  },
+  'Eligible candidates': {
+    am: 'ብቁ እጩዎች', om: 'Kaadhimamtoota ulaagaa guutan', ti: 'ብቑዓት ሕጹያት', so: 'Musharraxiinta u qalma', ar: 'المرشحون المؤهلون', sw: 'Wagombea wanaostahili',
+  },
+  'Scores are recommendations based on the factors below. A staff member reviews each proposal. Confirm the worker’s willingness and terms directly before reserving.': {
+    am: 'ውጤቶቹ ከታች ባሉት ሁኔታዎች ላይ የተመሠረቱ ምክሮች ናቸው። ሠራተኛ እያንዳንዱን ሐሳብ ይገመግማል። ከመያዝዎ በፊት የሠራተኛውን ፈቃደኝነትና ውሎች በቀጥታ ያረጋግጡ።',
+    om: 'Qabxiileen gorsa wantoota armaan gadii irratti hundaaʼani. Hojjetaan tokko yaada tokkoon tokkoo gamaaggama. Osoo hin qabsiisin dura fedhii fi haalota hojjetaa kallattiin mirkaneessaa.',
+    ti: 'እቶም ነጥብታት ኣብቶም ኣብ ታሕቲ ዘለዉ ረቛሒታት ዝተመርኮሱ ሓሳባት እዮም። ሰራሕተኛ ነፍሲ ወከፍ ሓሳብ ይግምግም። ቅድሚ ምሓዝኩም ፍቓድን ውዕላትን ሰራሕተኛ ብቐጥታ ኣረጋግጹ።',
+    so: 'Dhibcuhu waa talooyin ku salaysan qodobada hoose. Shaqaale ayaa eegaya soo-jeedin kasta. Si toos ah u xaqiiji rabitaanka shaqaalaha iyo shuruudaha ka hor boos-qabsiga.',
+    ar: 'الدرجات توصيات تستند إلى العوامل أدناه. يراجع الموظفون كل مقترح. تحقّق مباشرةً من موافقة العامل وشروطه قبل الحجز.',
+    sw: 'Alama ni mapendekezo yanayotegemea vipengele vilivyo hapa chini. Mfanyakazi hukagua kila pendekezo. Thibitisha moja kwa moja ridhaa na masharti ya mfanyakazi kabla ya kuhifadhi nafasi.',
+  },
+  'Score factors': {
+    am: 'የውጤት ሁኔታዎች', om: 'Wantoota qabxii', ti: 'ረቛሒታት ነጥቢ', so: 'Qodobbada dhibcaha', ar: 'عوامل التقييم', sw: 'Vipengele vya alama',
+  },
+  'Breakdown unavailable for this earlier match.': {
+    am: 'ለዚህ የቀድሞ ማዛመድ ዝርዝር ክፍፍል አይገኝም።', om: 'Qoodinsiin walsimannaa duraanii kanaaf hin jiru.', ti: 'ዝርዝር ነጥቢ ናይዚ ቀደም ዝበለ ምዝማድ ኣይርከብን።', so: 'Faahfaahinta kulankan hore lama heli karo.', ar: 'تفاصيل هذا التطابق السابق غير متاحة.', sw: 'Uchanganuzi wa ulinganifu huu wa awali haupatikani.',
+  },
+  'Eligibility and scoring policy': {
+    am: 'የብቁነትና የውጤት ፖሊሲ', om: 'Imaammata ulaagaa fi qabxii', ti: 'ፖሊሲ ብቕዓትን ነጥብን', so: 'Siyaasadda u-qalmitaanka iyo dhibcaha', ar: 'سياسة الأهلية والتقييم', sw: 'Sera ya ustahiki na alama',
+  },
+  'Evaluation details are unavailable for this record.': {
+    am: 'ለዚህ መዝገብ የግምገማ ዝርዝሮች አይገኙም።', om: 'Balʼinni madaallii galmee kanaaf hin jiru.', ti: 'ዝርዝር ግምገማ ናይዚ መዝገብ ኣይርከብን።', so: 'Faahfaahinta qiimaynta diiwaankan lama heli karo.', ar: 'تفاصيل التقييم غير متاحة لهذا السجل.', sw: 'Maelezo ya tathmini ya rekodi hii hayapatikani.',
+  },
+  'Proposed matches': {
+    am: 'የቀረቡ ማዛመጃዎች', om: 'Walsimsiisa dhiyaatan', ti: 'ምዝማዳት ዝቐረቡ', so: 'Is-waafajinta la soo jeediyey', ar: 'التطابقات المقترحة', sw: 'Ulinganifu uliopendekezwa',
+  },
+  'Prepare engagement terms': {
+    am: 'የሥራ ተሳትፎ ውሎችን ያዘጋጁ', om: 'Haalota bobbaʼinsa hojii qopheessaa', ti: 'ውዕላት ተሳትፎ ስራሕ ኣዳልዉ', so: 'Diyaari shuruudaha hawlgelinta', ar: 'أعد شروط الارتباط بالعمل', sw: 'Andaa masharti ya ushiriki wa kazi',
+  },
+  'Finance independently reviews these terms. They do not create payroll or ledger entries.': {
+    am: 'ፋይናንስ እነዚህን ውሎች በገለልተኛ ሁኔታ ይገመግማል። የደመወዝ ወይም የሂሳብ መዝገብ አይፈጥሩም።',
+    om: 'Faayinaansiin haalota kana of dandaʼee gamaaggama. Galmee mindaa yookaan herregaa hin uuman.',
+    ti: 'ፋይናንስ ነዞም ውዕላት ብናጻ ይግምግሞም። መዝገብ ደሞዝ ወይ ሒሳብ ኣይፈጥሩን።',
+    so: 'Maaliyaddu si madax-bannaan ayay u eegaysaa shuruudahan. Ma abuuraan mushahar-bixin ama gelinno xisaabeed.',
+    ar: 'تراجع الإدارة المالية هذه الشروط بشكل مستقل. ولا تنشئ مسيرات رواتب أو قيودًا محاسبية.',
+    sw: 'Fedha hukagua masharti haya kwa uhuru. Hayaundi malipo ya mishahara au maingizo ya daftari.',
+  },
+  'Submit completed work evidence': {
+    am: 'የተጠናቀቀ ሥራ ማስረጃ ያቅርቡ', om: 'Ragaa hojii xumurame dhiyeessaa', ti: 'መርትዖ ስራሕ ዝተዛዘመ ኣቕርቡ', so: 'Gudbi caddaynta shaqada la dhammeeyey', ar: 'أرسل دليل إتمام العمل', sw: 'Wasilisha ushahidi wa kazi iliyokamilika',
+  },
+  'Worker documents': {
+    am: 'የሠራተኛ ሰነዶች', om: 'Sanadoota hojjetaa', ti: 'ሰነዳት ሰራሕተኛ', so: 'Dukumentiyada shaqaalaha', ar: 'مستندات العامل', sw: 'Hati za mfanyakazi',
+  },
+  'not specified': {
+    am: 'አልተገለጸም', om: 'Hin ibsamne', ti: 'ኣይተገልጸን', so: 'Lama cayimin', ar: 'غير محدد', sw: 'Haijabainishwa',
+  },
+  'Upload identity document': {
+    am: 'የመታወቂያ ሰነድ ይጫኑ', om: 'Sanada eenyummaa olkaaʼaa', ti: 'ሰነድ መንነት ጽዓኑ', so: 'Soo geli dukumentiga aqoonsiga', ar: 'ارفع مستند الهوية', sw: 'Pakia hati ya utambulisho',
+  },
+  'Property photos & video': {
+    am: 'የንብረት ፎቶዎችና ቪዲዮ', om: 'Suuraa fi viidiyoo qabeenyaa', ti: 'ስእልን ቪድዮን ንብረት', so: 'Sawirrada iyo muuqaalka hantida', ar: 'صور العقار ومقاطع الفيديو', sw: 'Picha na video za nyumba',
+  },
+  'Property video': {
+    am: 'የንብረት ቪዲዮ', om: 'Viidiyoo qabeenyaa', ti: 'ቪድዮ ንብረት', so: 'Muuqaalka hantida', ar: 'فيديو العقار', sw: 'Video ya nyumba',
+  },
+  'Property picture': {
+    am: 'የንብረት ፎቶ', om: 'Suuraa qabeenyaa', ti: 'ስእሊ ንብረት', so: 'Sawirka hantida', ar: 'صورة العقار', sw: 'Picha ya nyumba',
+  },
+  'Add listing photos or video': {
+    am: 'የዝርዝሩን ፎቶዎች ወይም ቪዲዮ ያክሉ', om: 'Suuraa yookaan viidiyoo tarree dabalaa', ti: 'ስእልታት ወይ ቪድዮ ዝርዝር ወስኹ', so: 'Ku dar sawirro ama muuqaal liiska', ar: 'أضف صورًا أو فيديو للإعلان', sw: 'Ongeza picha au video kwenye tangazo',
+  },
+  'Applicant KYC documents': {
+    am: 'የአመልካች የKYC ሰነዶች', om: 'Sanadoota KYC kaadhimamaa', ti: 'ሰነዳት KYC ኣመልካቲ', so: 'Dukumentiyada KYC ee codsadaha', ar: 'مستندات KYC لمقدم الطلب', sw: 'Hati za KYC za mwombaji',
+  },
+  'Choose a JPEG/PNG image or MP4/WebM video.': {
+    am: 'JPEG/PNG ምስል ወይም MP4/WebM ቪዲዮ ይምረጡ።', om: 'Suuraa JPEG/PNG yookaan viidiyoo MP4/WebM filadhaa.', ti: 'ስእሊ JPEG/PNG ወይ ቪድዮ MP4/WebM ምረጹ።', so: 'Dooro sawir JPEG/PNG ah ama muuqaal MP4/WebM ah.', ar: 'اختر صورة JPEG/PNG أو فيديو MP4/WebM.', sw: 'Chagua picha ya JPEG/PNG au video ya MP4/WebM.',
+  },
+  'This file exceeds the configured upload size limit.': {
+    am: 'ይህ ፋይል የተዋቀረውን የመጫኛ መጠን ገደብ ይበልጣል።', om: 'Faayilli kun daangaa hamma olkaaʼinsaa qindaaʼe caala.', ti: 'እዚ ፋይል ካብ ዝተዳለወ ደረት ምጽዓን ይበልጽ።', so: 'Faylkani wuxuu ka weyn yahay xadka gelinta ee la dejiyey.', ar: 'يتجاوز هذا الملف الحد المحدد لحجم الرفع.', sw: 'Faili hii imezidi kikomo cha ukubwa wa upakiaji kilichowekwa.',
+  },
+  'Remove this Super Admin from the tenant? Their deployment access will end immediately.': {
+    am: 'ይህን ሱፐር አስተዳዳሪ ከተከራዩ ያስወግዱ? የማሰማራት መዳረሻው ወዲያውኑ ያበቃል።', om: 'Super Admin kana tenant keessaa haa baasnuu? Seensi hojii irra oolmaa isaa battalumatti ni dhaabbata.', ti: 'ነዚ Super Admin ካብ tenant ነውጽኦ? መእተዊ ምስፋሕኡ ብኡንብኡ ይውዳእ።', so: 'Ma ka saaraysaa Super Admin-kan kiraystaha? Gelitaanka geyntiisu isla markiiba wuu dhammaanayaa.', ar: 'هل تريد إزالة هذا المسؤول الفائق من المستأجر؟ سينتهي وصوله إلى النشر فورًا.', sw: 'Umwondoe Msimamizi Mkuu huyu kwenye mpangaji? Ufikiaji wake wa mfumo wa mpangaji utaisha mara moja.',
+  },
+  'Enter retirement evidence (minimum 10 characters).': {
+    am: 'የማቋረጥ ማስረጃ ያስገቡ (ቢያንስ 10 ቁምፊዎች)።', om: 'Ragaa dhaabuu galchaa (qubee yoo xiqqaate 10).', ti: 'መርትዖ ምቁራጽ ኣእትዉ (እንተወሓደ 10 ፊደላት)።', so: 'Geli caddaynta hawlgab-ka (ugu yaraan 10 xaraf).', ar: 'أدخل دليل الإيقاف (10 أحرف على الأقل).', sw: 'Weka ushahidi wa kusitisha (angalau herufi 10).',
+  },
+  'Lifecycle evidence': {
+    am: 'የሕይወት ዑደት ማስረጃ', om: 'Ragaa marsaa jireenyaa', ti: 'መርትዖ ዑደት ህይወት', so: 'Caddaynta wareegga nolosha', ar: 'أدلة دورة الحياة', sw: 'Ushahidi wa mzunguko wa maisha',
+  },
+  'Archive this training item? It will no longer appear to audiences.': {
+    am: 'ይህን የሥልጠና ንጥል ወደ ማህደር ያስገቡ? ከዚያ በኋላ ለተመልካቾች አይታይም።',
+    om: 'Meeshaa leenjii kana kuusaa keessatti haa kaaʼuu? Sana booda dhaggeeffattootaaf hin mulʼatu.',
+    ti: 'ነዚ ንጥል ስልጠና ኣብ ማህደር ንኣእትዎ? ድሕሪኡ ንተመልከትቲ ኣይርአን።',
+    so: 'Ma kaydinaysaa shaygan tababarka? Mar dambe uma muuqan doono dadka loo bandhigo.',
+    ar: 'هل تريد أرشفة هذا العنصر التدريبي؟ لن يظهر بعد ذلك للمشاهدين.',
+    sw: 'Hifadhi kipengee hiki cha mafunzo? Hakitaonekana tena kwa hadhira.',
+  },
+  'Enter the payment reference.': {
+    am: 'የክፍያ ማጣቀሻውን ያስገቡ።', om: 'Wabii kaffaltii galchaa.', ti: 'መወከሲ ክፍሊት ኣእትዉ።', so: 'Geli tixraaca lacag-bixinta.', ar: 'أدخل مرجع الدفع.', sw: 'Weka rejeleo la malipo.',
+  },
+  'Enter a reason (at least 10 characters).': {
+    am: 'ምክንያት ያስገቡ (ቢያንስ 10 ቁምፊዎች)።', om: 'Sababa galchaa (qubee yoo xiqqaate 10).', ti: 'ምኽንያት ኣእትዉ (እንተወሓደ 10 ፊደላት)።', so: 'Geli sabab (ugu yaraan 10 xaraf).', ar: 'أدخل سببًا (10 أحرف على الأقل).', sw: 'Weka sababu (angalau herufi 10).',
+  },
+  'Enter why this pending receipt should be voided (at least 10 characters).': {
+    am: 'ይህ በመጠባበቅ ላይ ያለ ደረሰኝ ለምን መሰረዝ እንዳለበት ያስገቡ (ቢያንስ 10 ቁምፊዎች)።',
+    om: 'Nagaheen eegaa jiru kun maaliif haqamuu akka qabu galchaa (qubee yoo xiqqaate 10).',
+    ti: 'እዚ ዝጽበ ዘሎ ደረሰኝ ስለምንታይ ክስረዝ ከም ዘለዎ ኣእትዉ (እንተወሓደ 10 ፊደላት)።',
+    so: 'Sheeg sababta rasiidhkan sugaya loo burinayo (ugu yaraan 10 xaraf).',
+    ar: 'أدخل سبب إلغاء هذا الإيصال المعلّق (10 أحرف على الأقل).',
+    sw: 'Eleza kwa nini risiti hii inayosubiri inapaswa kufutwa (angalau herufi 10).',
+  },
+  'Enter the reason (at least 10 characters).': {
+    am: 'ምክንያቱን ያስገቡ (ቢያንስ 10 ቁምፊዎች)።', om: 'Sababa galchaa (qubee yoo xiqqaate 10).', ti: 'ምኽንያት ኣእትዉ (እንተወሓደ 10 ፊደላት)።', so: 'Geli sababta (ugu yaraan 10 xaraf).', ar: 'أدخل السبب (10 أحرف على الأقل).', sw: 'Weka sababu (angalau herufi 10).',
+  },
+  'Enter the execution reason (at least 10 characters).': {
+    am: 'የፈጻሚነት ምክንያቱን ያስገቡ (ቢያንስ 10 ቁምፊዎች)።', om: 'Sababa raawwii galchaa (qubee yoo xiqqaate 10).', ti: 'ምኽንያት ምፍጻም ኣእትዉ (እንተወሓደ 10 ፊደላት)።', so: 'Geli sababta fulinta (ugu yaraan 10 xaraf).', ar: 'أدخل سبب التنفيذ (10 أحرف على الأقل).', sw: 'Weka sababu ya utekelezaji (angalau herufi 10).',
+  },
+  'Enter the possession handover date (YYYY-MM-DD).': {
+    am: 'የይዞታ ርክክብ ቀን ያስገቡ (YYYY-MM-DD)።', om: 'Guyyaa dabarsa qabiyyee galchaa (YYYY-MM-DD).', ti: 'ዕለት ርክክብ ይዞታ ኣእትዉ (YYYY-MM-DD)።', so: 'Geli taariikhda wareejinta hantida (YYYY-MM-DD).', ar: 'أدخل تاريخ تسليم الحيازة (YYYY-MM-DD).', sw: 'Weka tarehe ya kukabidhi umiliki (YYYY-MM-DD).',
+  },
+  'Confirm that the move-in inspection is complete and the handover date is correct.': {
+    am: 'የመግቢያ ምርመራው መጠናቀቁንና የርክክብ ቀኑ ትክክል መሆኑን ያረጋግጡ።',
+    om: 'Sakattaʼiinsi seensaa xumuramuu fi guyyaan dabarsaa sirrii taʼuu mirkaneessaa.',
+    ti: 'ምርመራ ምእታው ምዝዛሙን ዕለት ርክክብ ቅኑዕ ምዃኑን ኣረጋግጹ።',
+    so: 'Xaqiiji in kormeerka gelitaanku dhammaaday iyo in taariikhda wareejintu sax tahay.',
+    ar: 'أكد اكتمال فحص الانتقال وصحة تاريخ التسليم.',
+    sw: 'Thibitisha kuwa ukaguzi wa kuhamia umekamilika na tarehe ya makabidhiano ni sahihi.',
+  },
+  'End this lease? Future rent charges will be waived.': {
+    am: 'ይህን የኪራይ ውል ያቋርጡ? የወደፊት የኪራይ ክፍያዎች ይሰረዛሉ።', om: 'Waliigaltee kiraa kana haa xumurnu? Kaffaltiin kiraa fuulduraa ni haqama.', ti: 'ነዚ ውዕሊ ክራይ ነቋርጾ? ክፍሊታት ክራይ መጻኢ ክስረዙ እዮም።', so: 'Ma joojinaysaa heshiiskan kirada? Kharashka kirada mustaqbalka waa laga dhaafi doonaa.', ar: 'هل تريد إنهاء عقد الإيجار؟ ستُعفى رسوم الإيجار المستقبلية.', sw: 'Unataka kusitisha upangaji huu? Ada za kodi za baadaye zitaondolewa.',
+  },
+  'Enter the deposit payment reference.': {
+    am: 'የተቀማጭ ክፍያ ማጣቀሻ ያስገቡ።', om: 'Wabii kaffaltii wabii galchaa.', ti: 'መወከሲ ክፍሊት ተቐማጢ ኣእትዉ።', so: 'Geli tixraaca lacagta deebaajiga.', ar: 'أدخل مرجع دفع الوديعة.', sw: 'Weka rejeleo la malipo ya amana.',
+  },
+  'Enter the deposit return amount in ETB.': {
+    am: 'የሚመለሰውን የተቀማጭ መጠን በETB ያስገቡ።', om: 'Hamma wabii deebiʼu ETB tiin galchaa.', ti: 'መጠን ተቐማጢ ዝምለስ ብETB ኣእትዉ።', so: 'Geli qadarka deebaajiga la celinayo oo ETB ah.', ar: 'أدخل مبلغ الوديعة المستردة بعملة ETB.', sw: 'Weka kiasi cha amana kinachorejeshwa kwa ETB.',
+  },
+  'Enter a reason for the deposit return.': {
+    am: 'ለተቀማጩ መመለስ ምክንያት ያስገቡ።', om: 'Sababa wabii deebisuu galchaa.', ti: 'ምኽንያት ምምላስ ተቐማጢ ኣእትዉ።', so: 'Geli sababta deebaajiga loo celinayo.', ar: 'أدخل سبب رد الوديعة.', sw: 'Weka sababu ya kurejesha amana.',
+  },
+  'Enter the payout reference.': {
+    am: 'የክፍያ ማጣቀሻ ያስገቡ።', om: 'Wabii kaffaltii galchaa.', ti: 'መወከሲ ክፍሊት ኣእትዉ።', so: 'Geli tixraaca bixinta.', ar: 'أدخل مرجع الصرف.', sw: 'Weka rejeleo la malipo.',
+  },
+  'Enter the rent payment reference.': {
+    am: 'የኪራይ ክፍያ ማጣቀሻ ያስገቡ።', om: 'Wabii kaffaltii kiraa galchaa.', ti: 'መወከሲ ክፍሊት ክራይ ኣእትዉ።', so: 'Geli tixraaca lacagta kirada.', ar: 'أدخل مرجع دفع الإيجار.', sw: 'Weka rejeleo la malipo ya kodi.',
+  },
+  'Charges and receipts': {
+    am: 'ክፍያዎችና ደረሰኞች', om: 'Kaffaltii fi nagahee', ti: 'ክፍሊታትን ደረሰኛታትን', so: 'Kharashyada iyo rasiidhada', ar: 'الرسوم والإيصالات', sw: 'Ada na risiti',
+  },
+  'Marketplace listing photo': {
+    am: 'የገበያ ዝርዝር ፎቶ', om: 'Suuraa tarree gabaa', ti: 'ስእሊ ዝርዝር ዕዳጋ', so: 'Sawirka liiska suuqa', ar: 'صورة قائمة السوق', sw: 'Picha ya tangazo la soko',
+  },
+  'Explain what the seller needs to change (at least 10 characters).': {
+    am: 'ሻጩ ምን መቀየር እንዳለበት ያብራሩ (ቢያንስ 10 ቁምፊዎች)።', om: 'Wanti gurguraan jijjiiruu qabu ibsaa (qubee yoo xiqqaate 10).', ti: 'እቲ ሻየጣይ እንታይ ክቕይር ከም ዘለዎ ግለጹ (እንተወሓደ 10 ፊደላት)።', so: 'Sharax waxa iibiyuhu u baahan yahay inuu beddelo (ugu yaraan 10 xaraf).', ar: 'اشرح ما يحتاج البائع إلى تغييره (10 أحرف على الأقل).', sw: 'Eleza kile ambacho muuzaji anapaswa kubadilisha (angalau herufi 10).',
+  },
+  'Explain what needs to change in this property listing (at least 10 characters).': {
+    am: 'በዚህ የንብረት ዝርዝር ምን መቀየር እንዳለበት ያብራሩ (ቢያንስ 10 ቁምፊዎች)።', om: 'Tarree qabeenyaa kana keessatti wanti jijjiiramuu qabu ibsaa (qubee yoo xiqqaate 10).', ti: 'ኣብዚ ዝርዝር ንብረት እንታይ ክቕየር ከም ዘለዎ ግለጹ (እንተወሓደ 10 ፊደላት)።', so: 'Sharax waxa ku jira liiska hantidan ee u baahan in la beddelo (ugu yaraan 10 xaraf).', ar: 'اشرح ما الذي يجب تغييره في قائمة العقار هذه (10 أحرف على الأقل).', sw: 'Eleza kinachohitaji kubadilishwa katika tangazo hili la mali (angalau herufi 10).',
+  },
+  'Enter the person or vendor assigned to this request.': {
+    am: 'ለዚህ ጥያቄ የተመደበውን ሰው ወይም አቅራቢ ያስገቡ።', om: 'Nama yookaan dhiyeessaa gaaffii kanaaf ramadame galchaa.', ti: 'ንዚ ሕቶ ዝተመደበ ሰብ ወይ ኣቕራቢ ኣእትዉ።', so: 'Geli qofka ama alaab-qeybiyaha loo qoondeeyey codsigan.', ar: 'أدخل الشخص أو المورّد المعيّن لهذا الطلب.', sw: 'Weka mtu au muuzaji aliyekabidhiwa ombi hili.',
+  },
+  'Describe the completed work (at least 5 characters).': {
+    am: 'የተጠናቀቀውን ሥራ ይግለጹ (ቢያንስ 5 ቁምፊዎች)።', om: 'Hojii xumurame ibsaa (qubee yoo xiqqaate 5).', ti: 'ስራሕ ዝተዛዘመ ግለጹ (እንተወሓደ 5 ፊደላት)።', so: 'Sharax shaqada la dhammeeyey (ugu yaraan 5 xaraf).', ar: 'صف العمل المنجز (5 أحرف على الأقل).', sw: 'Eleza kazi iliyokamilika (angalau herufi 5).',
+  },
+  'Optional cost estimate in ETB. Leave blank if unknown.': {
+    am: 'አማራጭ የወጪ ግምት በETB። ካላወቁት ባዶ ይተዉት።', om: 'Tilmaama baasii filannoo ETB tiin. Yoo hin beekne duwwaa dhiisaa.', ti: 'ግምት ወጻኢ ብETB ኣማራጺ እዩ። እንተዘይፈለጥኩም ባዶ ግደፍዎ።', so: 'Qiyaasta kharashka ee ETB waa ikhtiyaari. Madhan ka tag haddii aan la garanayn.', ar: 'تقدير التكلفة بعملة ETB اختياري. اتركه فارغًا إن لم تعرفه.', sw: 'Makadirio ya gharama kwa ETB ni hiari. Acha wazi ikiwa hujui.',
+  },
+  'Confirm you reviewed the engagement terms. Enter a reason (at least 10 characters).': {
+    am: 'የሥራ ተሳትፎ ውሎችን መገምገምዎን ያረጋግጡ። ምክንያት ያስገቡ (ቢያንስ 10 ቁምፊዎች)።',
+    om: 'Haalota bobbaʼinsa hojii gamaaggamuu keessan mirkaneessaa. Sababa galchaa (qubee yoo xiqqaate 10).',
+    ti: 'ውዕላት ተሳትፎ ስራሕ ምግምጋምኩም ኣረጋግጹ። ምኽንያት ኣእትዉ (እንተወሓደ 10 ፊደላት)።',
+    so: 'Xaqiiji inaad dib u eegtay shuruudaha hawlgelinta. Geli sabab (ugu yaraan 10 xaraf).',
+    ar: 'أكد مراجعتك لشروط الارتباط بالعمل. أدخل السبب (10 أحرف على الأقل).',
+    sw: 'Thibitisha kuwa umekagua masharti ya ushiriki wa kazi. Weka sababu (angalau herufi 10).',
+  },
+  'Explain what needs to be corrected in this document (at least 10 characters).': {
+    am: 'በዚህ ሰነድ ምን መታረም እንዳለበት ያብራሩ (ቢያንስ 10 ቁምፊዎች)።', om: 'Sanada kana keessatti wanti sirreeffamuu qabu ibsaa (qubee yoo xiqqaate 10).', ti: 'ኣብዚ ሰነድ እንታይ ክእረም ከም ዘለዎ ግለጹ (እንተወሓደ 10 ፊደላት)።', so: 'Sharax waxa dukumentigan laga saxayo (ugu yaraan 10 xaraf).', ar: 'اشرح ما الذي يجب تصحيحه في هذا المستند (10 أحرف على الأقل).', sw: 'Eleza kinachohitaji kusahihishwa katika hati hii (angalau herufi 10).',
+  },
+  'Enter the information response or closure reason (at least 10 characters).': {
+    am: 'የመረጃ ምላሹን ወይም የመዝጊያ ምክንያቱን ያስገቡ (ቢያንስ 10 ቁምፊዎች)።',
+    om: 'Deebii odeeffannoo yookaan sababa cufiinsaa galchaa (qubee yoo xiqqaate 10).',
+    ti: 'መልሲ ሓበሬታ ወይ ምኽንያት ምዕጻው ኣእትዉ (እንተወሓደ 10 ፊደላት)።',
+    so: 'Geli jawaabta macluumaadka ama sababta xidhitaanka (ugu yaraan 10 xaraf).',
+    ar: 'أدخل رد المعلومات أو سبب الإغلاق (10 أحرف على الأقل).',
+    sw: 'Weka jibu la maelezo au sababu ya kufunga (angalau herufi 10).',
+  },
+  'Withdraw permission for Agent follow-up? The Agent will immediately lose access to this referral.': {
+    am: 'ወኪሉ እንዲከታተል የተሰጠውን ፈቃድ ይነሱ? ወኪሉ ወዲያውኑ የዚህን ሪፈራል መዳረሻ ያጣል።',
+    om: 'Hayyama hordoffii bakka buʼaa ni haqtuu? Bakka buʼaan battalumatti seensa ergaa kana ni dhaba.',
+    ti: 'ፍቓድ ምክትታል ወኪል ክትስሕቡ? ወኪል ብኡንብኡ መእተዊ ናይዚ ምምራሕ ይስእን።',
+    so: 'Ma la noqonaysaa oggolaanshaha dabagalka wakiilka? Wakiilku isla markiiba wuxuu waayi doonaa gelitaanka gudbintan.',
+    ar: 'هل تريد سحب الإذن بمتابعة الوكيل؟ سيفقد الوكيل فورًا إمكانية الوصول إلى هذه الإحالة.',
+    sw: 'Unaondoa ruhusa ya ufuatiliaji wa wakala? Wakala atapoteza ufikiaji wa rufaa hii mara moja.',
+  },
+  'Run a fully synthetic training lifecycle? No real insurer, customer, policy, claim, or payment will be contacted or created.': {
+    am: 'ሙሉ በሙሉ ሰው ሠራሽ የሥልጠና ዑደት ያስኬዱ? እውነተኛ ኢንሹራንስ ድርጅት፣ ደንበኛ፣ ፖሊሲ፣ የካሳ ጥያቄ ወይም ክፍያ አይገናኝም ወይም አይፈጠርም።',
+    om: 'Marsaa leenjii guutummaatti nam-tolchee haa raawwannu? Dhaabbata inshuraansii, maamila, poolisii, gaafii beenyaa yookaan kaffaltii dhugaa hin qunnamnu yookaan hin uumamu.',
+    ti: 'ምሉእ ብምሉእ ሰብ ሰራሕ ዑደት ስልጠና ነካይድ? ናይ ሓቂ ኢንሹራንስ፣ ዓሚል፣ ፖሊሲ፣ ክሲ ወይ ክፍሊት ኣይምርካብን ወይ ኣይፍጠርን።',
+    so: 'Ma socodsiinaysaa tababar tijaabo oo gebi ahaan macmal ah? Lama xiriiri doono mana la abuuri doono caymis, macmiil, siyaasad, sheegasho ama lacag-bixin dhab ah.',
+    ar: 'هل تريد تشغيل دورة تدريبية اصطناعية بالكامل؟ لن يتم التواصل مع شركة تأمين أو عميل أو وثيقة أو مطالبة أو دفعة حقيقية أو إنشاؤها.',
+    sw: 'Uendeshe mzunguko wa mafunzo wa kubuni kabisa? Hakuna kampuni ya bima, mteja, sera, dai au malipo halisi yatakayowasiliana nayo au kuundwa.',
+  },
+  'Synthetic product comparison': {
+    am: 'የሰው ሠራሽ ምርት ንጽጽር', om: 'Walbira qabuu oomisha nam-tolchee', ti: 'ምንጽጻር ሰብ ሰራሕ ፍርያት', so: 'Isbarbardhigga badeeco macmal ah', ar: 'مقارنة المنتجات الاصطناعية', sw: 'Ulinganisho wa bidhaa ghushi',
+  },
+  'Record why this account is approved for activation (at least 10 characters).': {
+    am: 'ይህ መለያ ለመንቃት ለምን እንደጸደቀ ይመዝግቡ (ቢያንስ 10 ቁምፊዎች)።',
+    om: 'Herregni kun hojii irra ooluuf maaliif akka raggaʼe galmeessaa (qubee yoo xiqqaate 10).',
+    ti: 'እዚ ሕሳብ ንምንቃሕ ስለምንታይ ከም ዝጸደቐ መዝግቡ (እንተወሓደ 10 ፊደላት)።',
+    so: 'Diiwaangeli sababta akoonkan loogu ansixiyey hawlgelinta (ugu yaraan 10 xaraf).',
+    ar: 'سجّل سبب الموافقة على تفعيل هذا الحساب (10 أحرف على الأقل).',
+    sw: 'Rekodi sababu ya kuidhinisha akaunti hii iamilishwe (angalau herufi 10).',
+  },
+  'Search could not be completed. Check your connection and try again.': {
+    am: 'ፍለጋውን ማጠናቀቅ አልተቻለም። ግንኙነትዎን ያረጋግጡና እንደገና ይሞክሩ።',
+    om: 'Barbaaduun xumuramuu hin dandeenye. Walqunnamtii keessan mirkaneessaa, irra deebiʼaatii yaalaa.',
+    ti: 'ምድላይ ምዝዛም ኣይተኻእለን። ርክብኩም ኣረጋግጹን ደጊምኩም ፈትኑን።',
+    so: 'Raadinta lama dhammaystiri karin. Hubi isku-xirkaaga oo mar kale isku day.',
+    ar: 'تعذر إكمال البحث. تحقق من اتصالك وحاول مرة أخرى.',
+    sw: 'Imeshindwa kukamilisha utafutaji. Angalia muunganisho wako na ujaribu tena.',
+  },
+  'Case update saved.': {
+    am: 'የጉዳዩ ማሻሻያ ተቀምጧል።', om: 'Jijjiiramni dhimmaa olkaaʼameera.', ti: 'ምሕዳስ ጉዳይ ተዓቂቡ።', so: 'Cusboonaysiinta kiiska waa la kaydiyey.', ar: 'تم حفظ تحديث الحالة.', sw: 'Sasisho la kesi limehifadhiwa.',
+  },
+  'No public Edir registration applications have been received.': {
+    am: 'ምንም የእድር ይፋዊ ምዝገባ ማመልከቻ አልደረሰም።', om: 'Iyyanni galmee Edir ummataa hin geenye.', ti: 'ዝኾነ ህዝባዊ መመልከቲ ምዝገባ Edir ኣይበጽሐን።', so: 'Lama helin codsiyo diiwaangelin Edir oo dadweyne.', ar: 'لم تُستلم أي طلبات تسجيل عامة لإدير.', sw: 'Hakuna maombi ya umma ya usajili wa Edir yaliyopokelewa.',
+  },
+  'No affiliated independent Edirs are registered yet.': {
+    am: 'እስካሁን የተቆራኙ ገለልተኛ እድሮች አልተመዘገቡም።', om: 'Edirwwan bilisa walitti hidhatan ammaaf hin galmoofne.', ti: 'ክሳብ ሕጂ ዝተተሓሓዙ Edir bilisa ኣይተመዝገቡን።', so: 'Weli lama diiwaangelin Edirro madax-bannaan oo xiriir la leh.', ar: 'لم تُسجّل بعد أي إديرات مستقلة تابعة.', sw: 'Bado hakuna Edir huru zinazohusishwa zilizosajiliwa.',
+  },
+  'Consolidated operating totals (no member-level details)': {
+    am: 'የተጠቃለሉ የሥራ ድምሮች (የአባላት ዝርዝር የለም)', om: 'Idaʼama hojii waliigalaa (balʼina miseensaa malee)', ti: 'ጠቕላላ ድምር ስራሕ (ዝርዝር ኣባላት የለን)', so: 'Wadarta hawlgalka (faahfaahinta xubnaha kuma jirto)', ar: 'إجماليات التشغيل الموحّدة (دون تفاصيل الأعضاء)', sw: 'Jumla za shughuli zilizounganishwa (bila maelezo ya wanachama)',
+  },
+  'No independent Edir totals are available yet.': {
+    am: 'እስካሁን የገለልተኛ እድር ድምሮች አይገኙም።', om: 'Idaʼamni Edir bilisa ammaaf hin jiru.', ti: 'ጠቕላላ ድምር Edir bilisa ክሳብ ሕጂ ኣይርከብን።', so: 'Weli lama hayo wadarta Edir madax-bannaan.', ar: 'لا تتوفر إجماليات الإديرات المستقلة بعد.', sw: 'Jumla za Edir huru bado hazipatikani.',
+  },
+  'Umbrella Master Edir staff': {
+    am: 'የዋናው እድር ሠራተኞች', om: 'Hojjettoota Edir guddaa', ti: 'ሰራሕተኛታት ዋና Edir', so: 'Shaqaalaha Edir-ka dalladda', ar: 'موظفو إدير المظلة', sw: 'Wafanyakazi wa Edir mwavuli',
+  },
+  'Insurance administration is independently assigned. Each insurance organization has its own account and journal books; this view reports only aggregate counts and totals.': {
+    am: 'የኢንሹራንስ አስተዳደር ለየት ብሎ ይመደባል። እያንዳንዱ የኢንሹራንስ ድርጅት የራሱ ሂሳብና የመዝገብ መጻሕፍት አሉት፤ ይህ እይታ ጠቅላላ ቁጥሮችና ድምሮችን ብቻ ያሳያል።',
+    om: 'Bulchiinsi inshuraansii of dandaʼee ramadama. Dhaabbanni inshuraansii tokkoon tokkoo herregaa fi galmee mataa isaa qaba; ilaalchi kun lakkoofsaa fi idaʼama waliigalaa qofa gabaasa.',
+    ti: 'ምምሕዳር ውሕስነት ብፍሉይ ይምደብ። ነፍሲ ወከፍ ትካል ውሕስነት ናይ ገዛእ ርእሱ ሕሳብን መዝገባት ሒሳብን ኣለዎ፤ እዚ ርእይቶ ጠቕላላ ቁጽርን ድምርን ጥራይ የርኢ።',
+    so: 'Maamulka caymiska si madax-bannaan ayaa loo meeleeyaa. Urur kasta oo caymis ahi wuxuu leeyahay akoon iyo buugaag diiwaan oo u gaar ah; muuqaalkani wuxuu soo bandhigayaa tirooyinka iyo wadarta guud oo keliya.',
+    ar: 'يُعيّن مسؤول التأمين بشكل مستقل. لكل مؤسسة تأمين حساب ودفاتر قيود خاصة؛ ولا يعرض هذا القسم سوى الأعداد والإجماليات.',
+    sw: 'Usimamizi wa bima hugawiwa kwa uhuru. Kila shirika la bima lina akaunti na vitabu vyake; mwonekano huu huripoti hesabu na jumla pekee.',
+  },
+  'An EthioLife platform administrator must assign a separate Insurance Master Edir administrator before these books can be configured or aggregated.': {
+    am: 'እነዚህ መዝገቦች ከመዋቀራቸው ወይም ከመጠቃለላቸው በፊት የEthioLife መድረክ አስተዳዳሪ የተለየ የኢንሹራንስ ዋና እድር አስተዳዳሪ መመደብ አለበት።',
+    om: 'Galmeewwan kana qindeessuu yookaan idaʼuu dura bulchaan waltajjii EthioLife bulchaa Edir Inshuraansii adda taʼe ramaduu qaba.',
+    ti: 'እዞም መዝገባት ቅድሚ ምቕናዖም ወይ ምጥቕላሎም፣ ምምሕዳር መድረኽ EthioLife ፍሉይ ምምሕዳር Insurance Master Edir ከመድብ ኣለዎ።',
+    so: 'Maamulaha madasha EthioLife waa inuu magacaabaa maamule gooni ah oo Insurance Master Edir ka hor inta aan buugaagtan la dejin ama la isku geyn.',
+    ar: 'يجب أن يعيّن مسؤول منصة EthioLife مسؤولًا مستقلًا لـInsurance Master Edir قبل إعداد هذه الدفاتر أو تجميعها.',
+    sw: 'Msimamizi wa jukwaa la EthioLife lazima amkabidhi msimamizi tofauti wa Insurance Master Edir kabla vitabu hivi havijasanidiwa au kujumlishwa.',
+  },
+  'No Insurance ledger totals are available yet. An independently authorized Insurance Master Edir operator must connect and manage these books.': {
+    am: 'እስካሁን የኢንሹራንስ ደብተር ድምሮች አይገኙም። በገለልተኛ ሁኔታ ፈቃድ የተሰጠው የኢንሹራንስ ዋና እድር ኦፕሬተር እነዚህን መዝገቦች ማገናኘትና ማስተዳደር አለበት።',
+    om: 'Idaʼamni galmee inshuraansii ammaaf hin jiru. Ogeessi Edir Inshuraansii hayyama of dandaʼe qabu galmeewwan kana walqabsiisee bulchuu qaba.',
+    ti: 'ጠቕላላ መዝገብ ውሕስነት ክሳብ ሕጂ የለን። ብናጻ ፍቓድ ዝተዋህቦ ኦፐሬተር Insurance Master Edir ነዞም መዝገባት ከራኽብን ከመሓድርን ኣለዎ።',
+    so: 'Weli lama hayo wadarta buugga caymiska. Hawl-wadeen Insurance Master Edir oo si madax-bannaan loo oggolaaday waa inuu isku xiraa oo maamulaa buugaagtan.',
+    ar: 'لا تتوفر إجماليات دفتر التأمين بعد. يجب على مشغّل مستقل مخوّل لـInsurance Master Edir ربط هذه الدفاتر وإدارتها.',
+    sw: 'Jumla za daftari la bima bado hazipatikani. Mwendeshaji wa Insurance Master Edir aliyeidhinishwa kwa kujitegemea lazima aunganishe na kusimamia vitabu hivi.',
+  },
+  'Assign approved member': {
+    am: 'የጸደቀ አባል ይመድቡ', om: 'Miseensa raggaʼe ramadaa', ti: 'ኣባል ዝጸደቐ ምድቡ', so: 'Qoondee xubin la ansixiyey', ar: 'عيّن عضوًا معتمدًا', sw: 'Mkabidhi mwanachama aliyeidhinishwa',
+  },
+  'Recent Edir audit activity': {
+    am: 'የቅርብ ጊዜ የእድር ኦዲት እንቅስቃሴ', om: 'Sochii odiitii Edir dhiheenyaa', ti: 'ንጥፈት ኦዲት Edir ናይ ቀረባ ግዜ', so: 'Dhaqdhaqaaqa hanti-dhawrka Edir ee dhowaan', ar: 'أنشطة تدقيق إدير الأخيرة', sw: 'Shughuli za ukaguzi wa Edir za hivi karibuni',
+  },
+  'No Edir administrative actions are recorded.': {
+    am: 'ምንም የእድር አስተዳደራዊ ድርጊቶች አልተመዘገቡም።', om: 'Gochoonni bulchiinsa Edir hin galmoofne.', ti: 'ዝኾነ ተግባር ምምሕዳር Edir ኣይተመዝገበን።', so: 'Wax tallaabo maamul Edir ah lama diiwaangelin.', ar: 'لم تُسجّل أي إجراءات إدارية لإدير.', sw: 'Hakuna hatua za usimamizi wa Edir zilizorekodiwa.',
+  },
+  'Edir staff assignments': {
+    am: 'የእድር ሠራተኛ ምደባዎች', om: 'Ramaddii hojjettoota Edir', ti: 'ምደባታት ሰራሕተኛ Edir', so: 'Meelaynta shaqaalaha Edir', ar: 'تعيينات موظفي إدير', sw: 'Ugawaji wa wafanyakazi wa Edir',
+  },
+  'Establish separate Insurance Master Edir access': {
+    am: 'የተለየ የኢንሹራንስ ዋና እድር መዳረሻ ያዘጋጁ', om: 'Seensa Edir Inshuraansii adda qopheessaa', ti: 'መእተዊ Insurance Master Edir ፍሉይ ኣቑሙ', so: 'Samee gelitaan gaar ah oo Insurance Master Edir ah', ar: 'أنشئ وصولًا مستقلًا لـInsurance Master Edir', sw: 'Weka ufikiaji tofauti wa Insurance Master Edir',
+  },
+  'Edir savings, shares, and contributions': {
+    am: 'የእድር ቁጠባ፣ አክሲዮኖችና መዋጮዎች', om: 'Qusannoo, qooda fi gumaacha Edir', ti: 'ዕቋር፣ ኣክስዮንን ኣበርክቶን Edir', so: 'Kaydka, saamiyada iyo tabarucaadka Edir', ar: 'مدخرات إدير وأسهمه ومساهماته', sw: 'Akiba, hisa na michango ya Edir',
+  },
+  'Financial products': {
+    am: 'የፋይናንስ ምርቶች', om: 'Oomishaalee faayinaansii', ti: 'ፋይናንሳዊ ፍርያት', so: 'Badeecooyinka maaliyadeed', ar: 'المنتجات المالية', sw: 'Bidhaa za kifedha',
+  },
+  'Open a financial account': {
+    am: 'የፋይናንስ ሂሳብ ይክፈቱ', om: 'Herrega faayinaansii banuu', ti: 'ሕሳብ ፋይናንስ ክፈቱ', so: 'Fur akoon maaliyadeed', ar: 'افتح حسابًا ماليًا', sw: 'Fungua akaunti ya kifedha',
+  },
+  'Product': {
+    am: 'ምርት', om: 'Oomisha', ti: 'ፍርያት', so: 'Badeecad', ar: 'المنتج', sw: 'Bidhaa',
+  },
+  'Your financial accounts': {
+    am: 'የፋይናንስ ሂሳቦችዎ', om: 'Herrega faayinaansii keessan', ti: 'ሕሳባት ፋይናንስኩም', so: 'Akoonnadaada maaliyadeed', ar: 'حساباتك المالية', sw: 'Akaunti zako za kifedha',
+  },
+  'Record a deposit or contribution received': {
+    am: 'የተቀበሉትን ተቀማጭ ወይም መዋጮ ይመዝግቡ', om: 'Kuusaa yookaan gumaacha fudhatame galmeessaa', ti: 'ተቐማጢ ወይ ኣበርክቶ ዝተቐበልኩም መዝግቡ', so: 'Diiwaangeli deebaaji ama tabarucaad la helay', ar: 'سجّل الإيداع أو المساهمة المستلمة', sw: 'Rekodi amana au mchango uliopokelewa',
+  },
+  'Member account': {
+    am: 'የአባል ሂሳብ', om: 'Herrega miseensaa', ti: 'ሕሳብ ኣባል', so: 'Akoonka xubinta', ar: 'حساب العضو', sw: 'Akaunti ya mwanachama',
+  },
+  'Financial transaction review': {
+    am: 'የፋይናንስ ግብይት ግምገማ', om: 'Gamaaggama daldala faayinaansii', ti: 'ግምገማ ግብይት ፋይናንስ', so: 'Dib-u-eegista macaamilka maaliyadeed', ar: 'مراجعة المعاملات المالية', sw: 'Ukaguzi wa miamala ya kifedha',
+  },
+  'No Edir financial transactions are recorded.': {
+    am: 'ምንም የእድር የፋይናንስ ግብይት አልተመዘገበም።', om: 'Daldalli faayinaansii Edir hin galmoofne.', ti: 'ዝኾነ ግብይት ፋይናንስ Edir ኣይተመዝገበን።', so: 'Wax macaamil maaliyadeed Edir ah lama diiwaangelin.', ar: 'لم تُسجّل معاملات مالية لإدير.', sw: 'Hakuna miamala ya kifedha ya Edir iliyorekodiwa.',
+  },
+  'Propose a platform-wide daily cap': {
+    am: 'በመድረኩ ሁሉ የሚሠራ ዕለታዊ ገደብ ያቅርቡ', om: 'Daangaa guyyaa waltajjii guutuu dhiyeessaa', ti: 'ዕለታዊ ደረት ምሉእ መድረኽ ኣቕርቡ', so: 'Soo jeedi xad maalinle ah oo madasha oo dhan ah', ar: 'اقترح حدًا يوميًا على مستوى المنصة', sw: 'Pendekeza kikomo cha kila siku cha jukwaa lote',
+  },
+  'Document type': {
+    am: 'የሰነድ ዓይነት', om: 'Gosa sanadaa', ti: 'ዓይነት ሰነድ', so: 'Nooca dukumentiga', ar: 'نوع المستند', sw: 'Aina ya hati',
+  },
+  'Upload PDF/JPEG/PNG (max 10 MB)': {
+    am: 'PDF/JPEG/PNG ይጫኑ (ከፍተኛው 10 MB)', om: 'PDF/JPEG/PNG olkaaʼaa (hanga 10 MB)', ti: 'PDF/JPEG/PNG ጽዓኑ (ክሳብ 10 MB)', so: 'Soo geli PDF/JPEG/PNG (ugu badnaan 10 MB)', ar: 'ارفع PDF/JPEG/PNG (بحد أقصى 10 ميغابايت)', sw: 'Pakia PDF/JPEG/PNG (kiwango cha juu MB 10)',
+  },
+  'Savings account to receive proceeds': {
+    am: 'ገንዘቡ የሚገባበት የቁጠባ ሂሳብ', om: 'Herrega qusannoo maallaqni itti seenu', ti: 'ሕሳብ ዕቋር ገንዘብ ዝኣትዎ', so: 'Akoonka kaydka ee lacagta lagu shubayo', ar: 'حساب الادخار الذي سيستلم المبلغ', sw: 'Akaunti ya akiba itakayopokea fedha',
+  },
+  'Member KYC review queue': {
+    am: 'የአባላት KYC ግምገማ ወረፋ', om: 'Tarree gamaaggama KYC miseensotaa', ti: 'ረድፊ ግምገማ KYC ኣባላት', so: 'Safka dib-u-eegista KYC ee xubnaha', ar: 'قائمة مراجعة KYC للأعضاء', sw: 'Foleni ya ukaguzi wa KYC ya wanachama',
+  },
+  'No active memberships are awaiting KYC review.': {
+    am: 'ምንም ንቁ አባልነት የKYC ግምገማን አይጠብቅም።', om: 'Miseensummaan hojii irra jiru gamaaggama KYC hin eeggatu.', ti: 'ዝኾነ ንጡፍ ኣባልነት ግምገማ KYC ኣይጽበን።', so: 'Ma jiraan xubno firfircoon oo sugaya dib-u-eegista KYC.', ar: 'لا توجد عضويات نشطة تنتظر مراجعة KYC.', sw: 'Hakuna uanachama hai unaosubiri ukaguzi wa KYC.',
+  },
+  'Loan document review queue': {
+    am: 'የብድር ሰነድ ግምገማ ወረፋ', om: 'Tarree gamaaggama sanada liqaa', ti: 'ረድፊ ግምገማ ሰነድ ልቓሕ', so: 'Safka dib-u-eegista dukumentiyada amaahda', ar: 'قائمة مراجعة مستندات القروض', sw: 'Foleni ya ukaguzi wa hati za mikopo',
+  },
+  'No loan documents are awaiting review.': {
+    am: 'ምንም የብድር ሰነድ ግምገማን አይጠብቅም።', om: 'Sanadni liqaa gamaaggama hin eeggatu.', ti: 'ዝኾነ ሰነድ ልቓሕ ግምገማ ኣይጽበን።', so: 'Ma jiraan dukumentiyo amaah oo sugaya dib-u-eegis.', ar: 'لا توجد مستندات قروض تنتظر المراجعة.', sw: 'Hakuna hati za mkopo zinazosubiri ukaguzi.',
+  },
+  'Edir credit applications': {
+    am: 'የእድር ብድር ማመልከቻዎች', om: 'Iyyata liqaa Edir', ti: 'መመልከቲ ልቓሕ Edir', so: 'Codsiyada amaahda Edir', ar: 'طلبات ائتمان إدير', sw: 'Maombi ya mikopo ya Edir',
+  },
+  'No Edir credit applications are awaiting review.': {
+    am: 'ምንም የእድር ብድር ማመልከቻ ግምገማን አይጠብቅም።', om: 'Iyyanni liqaa Edir gamaaggama hin eeggatu.', ti: 'ዝኾነ መመልከቲ ልቓሕ Edir ግምገማ ኣይጽበን።', so: 'Ma jiraan codsiyo amaah Edir ah oo sugaya dib-u-eegis.', ar: 'لا توجد طلبات ائتمان لإدير تنتظر المراجعة.', sw: 'Hakuna maombi ya mkopo ya Edir yanayosubiri ukaguzi.',
+  },
+  'Your Edir loans and principal schedule': {
+    am: 'የእድር ብድሮችዎና የዋና ገንዘብ መርሃ ግብር', om: 'Liqiiwwan Edir keessan fi sagantaa maallaqa buʼuuraa', ti: 'ልቓሓት Edirኩምን መርሃ ግብር ዋና ገንዘብን', so: 'Amaahyadaada Edir iyo jadwalka raasamaalka', ar: 'قروض إدير الخاصة بك وجدول أصل المبلغ', sw: 'Mikopo yako ya Edir na ratiba ya mtaji',
+  },
+  'No accepted Edir loans.': {
+    am: 'የተቀበሉት የእድር ብድሮች የሉም።', om: 'Liqiin Edir fudhatame hin jiru.', ti: 'ዝተቐበልኩሞ ልቓሕ Edir የለን።', so: 'Ma jiraan amaah Edir oo la aqbalay.', ar: 'لا توجد قروض إدير مقبولة.', sw: 'Hakuna mikopo ya Edir iliyokubaliwa.',
+  },
+  'Member support and complaints': {
+    am: 'የአባል ድጋፍና ቅሬታዎች', om: 'Deeggarsa miseensaa fi komii', ti: 'ደገፍ ኣባልን ጥርዓንን', so: 'Taageerada xubnaha iyo cabashooyinka', ar: 'دعم الأعضاء والشكاوى', sw: 'Usaidizi wa wanachama na malalamiko',
+  },
+  'Submit a private complaint about service, credit decisions, repayments, fees, privacy, or suspected fraud. Edir staff will track the case and provide a resolution.': {
+    am: 'ስለ አገልግሎት፣ የብድር ውሳኔዎች፣ ክፍያ መመለስ፣ ክፍያዎች፣ ግላዊነት ወይም የተጠረጠረ ማጭበርበር የግል ቅሬታ ያቅርቡ። የእድር ሠራተኞች ጉዳዩን ይከታተሉና መፍትሔ ይሰጣሉ።',
+    om: 'Tajaajila, murtii liqaa, kaffaltii deebisuu, kaffaltiiwwan, dhuunfaa yookaan gowwoomsaa shakkame irratti komii iccitii dhiyeessaa. Hojjettoonni Edir dhimma hordofanii furmaata kennu.',
+    ti: 'ብዛዕባ ኣገልግሎት፣ ውሳነታት ልቓሕ፣ ምምላስ ክፍሊት፣ ክፍሊታት፣ ብሕታዊነት ወይ ዝተጠርጠረ ምትላል ምስጢራዊ ጥርዓን ኣቕርቡ። ሰራሕተኛታት Edir ጉዳዩ ተኸታቲሎም ፍታሕ ክህቡ እዮም።',
+    so: 'Gudbi cabasho gaar ah oo ku saabsan adeegga, go’aamada amaahda, dib-u-bixinta, khidmadaha, asturnaanta ama khiyaano laga shakiyey. Shaqaalaha Edir ayaa la socon doona kiiska oo xal ka bixin doona.',
+    ar: 'قدّم شكوى خاصة بشأن الخدمة أو قرارات الائتمان أو السداد أو الرسوم أو الخصوصية أو الاشتباه في الاحتيال. سيتابع موظفو إدير الحالة ويقدمون حلًا.',
+    sw: 'Wasilisha malalamiko ya faragha kuhusu huduma, maamuzi ya mkopo, marejesho, ada, faragha au tuhuma za udanganyifu. Wafanyakazi wa Edir watafuatilia kesi na kutoa suluhisho.',
+  },
+  'Complaint category': {
+    am: 'የቅሬታ ምድብ', om: 'Ramaddii komii', ti: 'ምድብ ጥርዓን', so: 'Qaybta cabashada', ar: 'فئة الشكوى', sw: 'Aina ya malalamiko',
+  },
+  'Describe the issue': {
+    am: 'ችግሩን ይግለጹ', om: 'Rakkoo ibsaa', ti: 'ጉዳይ ግለጹ', so: 'Sharax dhibaatada', ar: 'صف المشكلة', sw: 'Eleza tatizo',
+  },
+  'You have no submitted complaints.': {
+    am: 'ምንም ቅሬታ አላቀረቡም።', om: 'Komii hin dhiyeessine.', ti: 'ዝኾነ ጥርዓን ኣየቕረብኩምን።', so: 'Ma aadan gudbin wax cabasho ah.', ar: 'لم تقدم أي شكاوى.', sw: 'Hujawasilisha malalamiko yoyote.',
+  },
+  'Member complaint queue': {
+    am: 'የአባል ቅሬታ ወረፋ', om: 'Tarree komii miseensaa', ti: 'ረድፊ ጥርዓን ኣባል', so: 'Safka cabashooyinka xubnaha', ar: 'قائمة شكاوى الأعضاء', sw: 'Foleni ya malalamiko ya wanachama',
+  },
+  'No Edir member complaints are open.': {
+    am: 'ምንም ክፍት የእድር አባል ቅሬታ የለም።', om: 'Komii miseensaa Edir banaa hin jiru.', ti: 'ዝኾነ ክፉት ጥርዓን ኣባል Edir የለን።', so: 'Ma jiraan cabashooyin xubnaha Edir ah oo furan.', ar: 'لا توجد شكاوى مفتوحة لأعضاء إدير.', sw: 'Hakuna malalamiko ya wanachama wa Edir yaliyo wazi.',
+  },
+  'Update complaint status': {
+    am: 'የቅሬታውን ሁኔታ ያዘምኑ', om: 'Haala komii haaromsi', ti: 'ኩነታት ጥርዓን ኣሐድሱ', so: 'Cusboonaysii xaaladda cabashada', ar: 'حدّث حالة الشكوى', sw: 'Sasisha hali ya malalamiko',
+  },
+  'Priority': {
+    am: 'ቅድሚያ', om: 'Dursa', ti: 'ቀዳምነት', so: 'Mudnaanta', ar: 'الأولوية', sw: 'Kipaumbele',
+  },
+  'Resolution summary (required to close)': {
+    am: 'የመፍትሔ ማጠቃለያ (ለመዝጋት ያስፈልጋል)', om: 'Cuunfaa furmaataa (cufuuf barbaachisa)', ti: 'ሓፈሻዊ ፍታሕ (ንምዕጻው የድሊ)', so: 'Soo koobidda xallinta (waa in la xiraa)', ar: 'ملخص الحل (مطلوب للإغلاق)', sw: 'Muhtasari wa suluhisho (unahitajika kufunga)',
+  },
+  'Loan servicing and maker-checker queue': {
+    am: 'የብድር አስተዳደርና የአዘጋጅ-አጽዳቂ ወረፋ', om: 'Tajaajila liqaa fi tarree qopheessaa-raggaasisaa', ti: 'ምምሕዳር ልቓሕን ረድፊ ኣዳላው-ኣጽዳቒን', so: 'Maaraynta amaahda iyo safka diyaariye-hubiyaha', ar: 'خدمة القروض وقائمة الإعداد والمراجعة', sw: 'Huduma ya mikopo na foleni ya mtayarishaji-mkaguzi',
+  },
+  'No Edir loans are available for servicing.': {
+    am: 'ለአስተዳደር የሚቀርብ የእድር ብድር የለም።', om: 'Liqiin Edir tajaajilaaf jiru hin jiru.', ti: 'ልቓሕ Edir ንምምሕዳር ዝርከብ የለን።', so: 'Ma jiraan amaah Edir ah oo adeeg loo hayo.', ar: 'لا توجد قروض إدير متاحة للخدمة.', sw: 'Hakuna mikopo ya Edir inayopatikana kwa huduma.',
+  },
+  'ETHIOLIFE_EDIR · CENTRAL COMMUNITY': {
+    am: 'ETHIOLIFE_EDIR · ማዕከላዊ ማኅበረሰብ', om: 'ETHIOLIFE_EDIR · HAWAASA GIDDU-GALEESSAA', ti: 'ETHIOLIFE_EDIR · ማእከላይ ማሕበረሰብ', so: 'ETHIOLIFE_EDIR · BULSHADA DHEXE', ar: 'ETHIOLIFE_EDIR · المجتمع المركزي', sw: 'ETHIOLIFE_EDIR · JAMII KUU',
+  },
+  'EthioLife Edir': {
+    am: 'EthioLife እድር', om: 'Edir EthioLife', ti: 'Edir EthioLife', so: 'Ururka Edir ee EthioLife', ar: 'إدير EthioLife', sw: 'Jumuiya ya Edir ya EthioLife',
+  },
+  'One central Edir registry for EthioLife members, with member and administration workspaces.': {
+    am: 'ለEthioLife አባላት የተዘጋጀ አንድ ማዕከላዊ የእድር መዝገብ፣ የአባላትና የአስተዳደር የሥራ ቦታዎች ያሉት።',
+    om: 'Galmee Edir giddugaleessaa tokko miseensota EthioLife tiif, iddoowwan hojii miseensotaa fi bulchiinsaa wajjin.',
+    ti: 'ንኣባላት EthioLife ሓደ ማእከላይ መዝገብ Edir፣ ቦታታት ስራሕ ኣባላትን ምምሕዳርን ዘለዎ።',
+    so: 'Hal diiwaan Edir dhexe oo loogu talagalay xubnaha EthioLife, leh goobo shaqo oo xubnaha iyo maamulka ah.',
+    ar: 'سجل إدير مركزي واحد لأعضاء EthioLife، مع مساحات عمل للأعضاء والإدارة.',
+    sw: 'Sajili moja kuu ya Edir kwa wanachama wa EthioLife, yenye maeneo ya kazi ya wanachama na usimamizi.',
+  },
+  'Staged financial pilot: approved savings, share, and contribution products; member accounts; double-entry postings; and independent transaction approval. Lending, insurance, and benefit payouts require their own approved policies and controls.': {
+    am: 'በደረጃ የሚተገበር የፋይናንስ ሙከራ፦ የጸደቁ የቁጠባ፣ የአክሲዮንና የመዋጮ ምርቶች፤ የአባል ሂሳቦች፤ ድርብ-ግቤት መዝገብ፤ እና ገለልተኛ የግብይት ማጽደቅ። ብድር፣ ኢንሹራንስና የጥቅም ክፍያዎች የራሳቸውን የጸደቁ ፖሊሲዎችና ቁጥጥሮች ይፈልጋሉ።',
+    om: 'Pilootii faayinaansii sadarkaa sadarkaan deemuu: oomishaalee qusannoo, qooda fi gumaacha raggaʼan; herrega miseensaa; galmee herregaa galmee lamaan; fi raggaasisa daldalaa of dandaʼe. Liqiin, inshuraansiin fi kaffaltiin faayidaa imaammataa fi toʼannoo mataa isaanii barbaadu.',
+    ti: 'ፋይናንሳዊ ፓይሎት ብደረጃ፦ ዝተፈቕዱ ፍርያት ዕቋር፣ ኣክስዮንን ኣበርክቶን፤ ሕሳባት ኣባላት፤ ድርብ መዝገብ ሒሳብ፤ ናጻ ምጽዳቕ ግብይትን። ልቓሕ፣ ውሕስነትን ክፍሊት ጥቕምን ናይ ገዛእ ርእሶም ዝተፈቕዱ ፖሊሲታትን ቁጽጽራትን ይሓትቱ።',
+    so: 'Tijaabo maaliyadeed oo heerar leh: kayd, saamiyo iyo tabarucaad la ansixiyey; akoonno xubno; diiwaangelin xisaabeed laba-geesood ah; iyo ansixin macaamil oo madax-bannaan. Amaahda, caymiska iyo bixinta faa’iidooyinku waxay u baahan yihiin siyaasad iyo xakamayn iyaga u gaar ah oo la ansixiyey.',
+    ar: 'مرحلة تجريبية مالية على مراحل: منتجات ادخار وأسهم ومساهمات معتمدة؛ حسابات أعضاء؛ قيود محاسبية مزدوجة؛ وموافقة مستقلة على المعاملات. يتطلب الإقراض والتأمين وصرف المزايا سياسات وضوابط معتمدة خاصة بها.',
+    sw: 'Jaribio la kifedha la hatua: bidhaa za akiba, hisa na michango zilizoidhinishwa; akaunti za wanachama; maingizo ya hesabu za pande mbili; na idhini huru ya miamala. Mikopo, bima na malipo ya manufaa yanahitaji sera na udhibiti wake ulioidhinishwa.',
+  },
+  'Organization workspace': {
+    am: 'የድርጅት የሥራ ቦታ', om: 'Iddoo hojii dhaabbataa', ti: 'ቦታ ስራሕ ትካል', so: 'Goobta shaqada ururka', ar: 'مساحة عمل المؤسسة', sw: 'Eneo la kazi la shirika',
+  },
+  'Loading EthioLife Edir…': {
+    am: 'EthioLife እድርን በመጫን ላይ…', om: 'Edir EthioLife feʼaa jira…', ti: 'EthioLife Edir ይጽዓን ኣሎ…', so: 'Waxaa la soo rarayaa EthioLife Edir…', ar: 'جارٍ تحميل EthioLife Edir…', sw: 'Inapakia EthioLife Edir…',
+  },
+  'Edir staff workspace': {
+    am: 'የእድር ሠራተኛ የሥራ ቦታ', om: 'Iddoo hojii hojjettoota Edir', ti: 'ቦታ ስራሕ ሰራሕተኛታት Edir', so: 'Goobta shaqada shaqaalaha Edir', ar: 'مساحة عمل موظفي إدير', sw: 'Eneo la kazi la wafanyakazi wa Edir',
+  },
+  'This role has read-only group and membership visibility within the central Edir service.': {
+    am: 'ይህ ሚና በማዕከላዊው የእድር አገልግሎት ውስጥ ቡድኖችንና አባልነትን ማንበብ ብቻ ይችላል።',
+    om: 'Gaheen kun tajaajila Edir giddugaleessaa keessatti garee fi miseensummaa dubbisuu qofa argata.',
+    ti: 'እዚ ሚና ኣብ ማእከላይ ኣገልግሎት Edir ጉጅለን ኣባልነትን ንምንባብ ጥራይ ዝፈቅድ እዩ።',
+    so: 'Doorkani wuxuu adeegga Edir dhexe ka leeyahay aragti akhris-keliya ah oo ku saabsan kooxaha iyo xubinnimada.',
+    ar: 'يتيح هذا الدور عرض المجموعات والعضويات للقراءة فقط ضمن خدمة إدير المركزية.',
+    sw: 'Jukumu hili huruhusu kutazama vikundi na uanachama pekee katika huduma kuu ya Edir.',
+  },
+  'Edir service map': {
+    am: 'የእድር አገልግሎት ካርታ', om: 'Kaartaa tajaajila Edir', ti: 'ካርታ ኣገልግሎት Edir', so: 'Khariidadda adeegga Edir', ar: 'خريطة خدمات إدير', sw: 'Ramani ya huduma za Edir',
+  },
+  'Edir mini-apps': {
+    am: 'የእድር ሚኒ-መተግበሪያዎች', om: 'Mini-appoota Edir', ti: 'ሚኒ-ኣፕሊኬሽናት Edir', so: 'Barnaamijyada yaryar ee Edir', ar: 'تطبيقات إدير المصغّرة', sw: 'Programu ndogo za Edir',
+  },
+  'Jump directly to the service area you need.': {
+    am: 'ወደሚያስፈልግዎት የአገልግሎት ክፍል በቀጥታ ይሂዱ።', om: 'Kallattiin gara kutaa tajaajilaa isin barbaachisutti ceʼaa.', ti: 'ብቐጥታ ናብቲ ዘድልየኩም ክፍሊ ኣገልግሎት ኪዱ።', so: 'Si toos ah ugu gudub qaybta adeegga aad u baahan tahay.', ar: 'انتقل مباشرةً إلى قسم الخدمة الذي تحتاجه.', sw: 'Nenda moja kwa moja kwenye sehemu ya huduma unayohitaji.',
+  },
+  'Open service': {
+    am: 'አገልግሎቱን ይክፈቱ', om: 'Tajaajila bani', ti: 'ኣገልግሎት ክፈቱ', so: 'Fur adeegga', ar: 'افتح الخدمة', sw: 'Fungua huduma',
+  },
+  'Enter a document review reason (minimum 10 characters).': {
+    am: 'የሰነድ ግምገማ ምክንያት ያስገቡ (ቢያንስ 10 ቁምፊዎች)።',
+    om: 'Sababa gamaaggama sanadaa galchaa (qubee yoo xiqqaate 10).',
+    ti: 'ምኽንያት ግምገማ ሰነድ ኣእትዉ (እንተወሓደ 10 ፊደላት)።',
+    so: 'Geli sababta dib-u-eegista dukumentiga (ugu yaraan 10 xaraf).',
+    ar: 'أدخل سبب مراجعة المستند (10 أحرف على الأقل).',
+    sw: 'Weka sababu ya ukaguzi wa hati (angalau herufi 10).',
+  },
+  'Archive this Edir group? Members will keep their historical assignments.': {
+    am: 'ይህን የእድር ቡድን ወደ ማህደር ያስገቡ? አባላት የቀድሞ ምደባዎቻቸውን ይይዛሉ።',
+    om: 'Garee Edir kana kuusaa keessatti haa kaaʼuu? Miseensonni ramaddiiwwan seenaa isaanii ni tursu.',
+    ti: 'ነዚ ጉጅለ Edir ኣብ ማህደር ንኣእትዎ? ኣባላት ታሪኻዊ ምደባታቶም ክዕቅቡ እዮም።',
+    so: 'Ma kaydinaysaa kooxda Edir? Xubnuhu waxay hayn doonaan meelayntoodii hore.',
+    ar: 'هل تريد أرشفة مجموعة إدير؟ سيحتفظ الأعضاء بتعييناتهم السابقة.',
+    sw: 'Hifadhi kikundi hiki cha Edir? Wanachama wataendelea kuwa na ugawaji wao wa kihistoria.',
+  },
+  'Deactivate this Edir staff assignment?': {
+    am: 'ይህን የእድር ሠራተኛ ምደባ ያቦዝኑ?', om: 'Ramaddii hojjetaa Edir kana dhaabuu?', ti: 'ነዚ ምደባ ሰራሕተኛ Edir ንስናኽሎ?', so: 'Ma joojinaysaa meelayntan shaqaalaha Edir?', ar: 'هل تريد إلغاء تعيين موظف إدير هذا؟', sw: 'Unazima ugawaji huu wa mfanyakazi wa Edir?',
+  },
+  'Enter a reversal reason (at least 10 characters).': {
+    am: 'የመሰረዝ ምክንያት ያስገቡ (ቢያንስ 10 ቁምፊዎች)።', om: 'Sababa garagalchuu galchaa (qubee yoo xiqqaate 10).', ti: 'ምኽንያት ምምላስ ኣእትዉ (እንተወሓደ 10 ፊደላት)።', so: 'Geli sababta dib-u-celinta (ugu yaraan 10 xaraf).', ar: 'أدخل سبب العكس (10 أحرف على الأقل).', sw: 'Weka sababu ya kubatilisha (angalau herufi 10).',
+  },
+  'Enter a decision reason (at least 10 characters).': {
+    am: 'የውሳኔ ምክንያት ያስገቡ (ቢያንስ 10 ቁምፊዎች)።', om: 'Sababa murtii galchaa (qubee yoo xiqqaate 10).', ti: 'ምኽንያት ውሳነ ኣእትዉ (እንተወሓደ 10 ፊደላት)።', so: 'Geli sababta go’aanka (ugu yaraan 10 xaraf).', ar: 'أدخل سبب القرار (10 أحرف على الأقل).', sw: 'Weka sababu ya uamuzi (angalau herufi 10).',
+  },
   'Signed in as {{role}}. Your access is limited to your assigned role and territory.': {
     am: 'እንደ {{role}} ገብተዋል። መዳረሻዎ በተመደበልዎ ሚናና አካባቢ ብቻ የተገደበ ነው።', om: '{{role}} taatanii seentani. Seensaan keessan gahee fi naannoo isiniif kenname qofaan daangeffama.', ti: 'ከም {{role}} ኣቲኹም። መእተዊኹም ብሚናን ከባቢን ዝተመደበልኩም ጥራይ ይውሰን።', so: 'Waxaad ku gashay {{role}}. Gelitaankaagu wuxuu ku kooban yahay doorka iyo deegaanka laguu qoondeeyey.', ar: 'تم تسجيل الدخول بصفتك {{role}}. يقتصر وصولك على الدور والمنطقة المخصصين لك.', sw: 'Umeingia kama {{role}}. Ufikiaji wako una mipaka ya jukumu na eneo ulilopangiwa.',
   },
