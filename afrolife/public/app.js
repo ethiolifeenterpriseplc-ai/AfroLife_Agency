@@ -38,7 +38,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAppealQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
@@ -1350,7 +1350,11 @@ async function loadPanelData(panel) {
       ]);
       if (['global_admin','super_admin','compliance','corporate_business_manager'].includes(state.user.role)) {
         state.supportQueue = await safeGet('/support/cases/queue',[]);
+        state.supportAppealQueue = await safeGet('/support/appeals/queue',[]);
       } else state.supportQueue = [];
+      if (!['global_admin','super_admin','compliance','corporate_business_manager'].includes(state.user.role)) {
+        state.supportAppealQueue = [];
+      }
       state.supportAccessRequests = ['global_admin','super_admin','compliance'].includes(state.user.role)
         ? await safeGet('/support/access-requests',[]) : [];
       break;
@@ -4667,11 +4671,29 @@ function renderSupport() {
     card.append(node('h4',item.subject),node('p',`${item.category.replaceAll('_',' ')} · ${item.status} · ${item.priority}`, 'muted'));
     card.append(node('p',item.description));
     if (item.outcome) card.append(node('p',`Outcome: ${item.outcome}`),node('p',`Appeal route: ${item.appeal_route}`,'muted'));
+    if (item.appeal_review_outcome) {
+      card.append(node('p',`Independent appeal review: ${item.appeal_review_outcome}`));
+      card.append(node('p',item.appeal_review_rationale));
+    }
     if (item.status==='resolved') card.append(button('Appeal resolution','support-appeal','button button-outline',{id:item.id}));
     card.append(button('View case timeline','support-open-case','button button-outline',{id:item.id}));
     mine.append(card);
   }
   wrap.append(mine);
+
+  if (state.supportAppealQueue.length) {
+    const appeals = node('section',undefined,'panel');
+    appeals.append(node('h3','Independent appeal review queue'));
+    appeals.append(node('p','Reviewers must be different from the original resolver. Case details require approved, time-limited sensitive access.','muted'));
+    for (const item of state.supportAppealQueue) {
+      const card=node('article',undefined,'record-card');
+      card.append(node('h4',`Appealed ${new Date(item.updated_at).toLocaleString()}`));
+      card.append(node('p',`${item.category.replaceAll('_',' ')} · independent review pending`,'muted'));
+      card.append(button('Open appeal','support-open-case','button button-primary',{id:item.id}));
+      appeals.append(card);
+    }
+    wrap.append(appeals);
+  }
 
   if (state.supportQueue.length) {
     const queue = node('section',undefined,'panel');
@@ -4718,15 +4740,36 @@ function renderSupport() {
     }
     if (supportStaff&&sensitiveAccessActive) {
       if (!isCaseOwner) detail.append(node('p',`Approved access expires ${new Date(accessExpires).toLocaleTimeString()}.`,'muted'));
-      const advance=node('div',undefined,'inline-form');
-      advance.append(button('Mark in progress','support-case-status','button button-outline',{
-        id:state.supportCaseDetail.id,status:'in_progress',
-      }),button('Request customer information','support-case-status','button button-outline',{
-        id:state.supportCaseDetail.id,status:'pending_customer',
-      }),button('Escalate case','support-case-status','button button-outline',{
-        id:state.supportCaseDetail.id,status:'escalated',
-      }));
-      detail.append(advance);
+      if (state.supportCaseDetail.appeal_review_outcome) {
+        detail.append(node('h4',`Independent appeal review: ${state.supportCaseDetail.appeal_review_outcome}`));
+        detail.append(node('p',state.supportCaseDetail.appeal_review_rationale));
+      } else if (state.supportCaseDetail.status==='appealed') {
+        if (state.supportCaseDetail.is_original_resolver) {
+          detail.append(node('p','The original resolver cannot review this appeal.','muted'));
+        } else {
+          const appealReview=node('form',undefined,'form-grid');
+          appealReview.dataset.form='support-appeal-review';
+          appealReview.dataset.id=state.supportCaseDetail.id;
+          appealReview.append(node('h4','Independent appeal decision'));
+          const outcome=field('Review outcome','outcome','select',true);
+          outcome.input.append(new Option('Select an outcome',''),new Option('Uphold the original resolution','upheld'),new Option('Overturn the original resolution','overturned'));
+          appealReview.append(outcome.label);
+          appealReview.append(field('Review rationale','rationale','textarea',true,{maxLength:2000,rows:3}).label);
+          appealReview.append(button('Record appeal decision','submit','button button-primary'));
+          detail.append(appealReview);
+        }
+      }
+      if (!['resolved','appealed'].includes(state.supportCaseDetail.status)) {
+        const advance=node('div',undefined,'inline-form');
+        advance.append(button('Mark in progress','support-case-status','button button-outline',{
+          id:state.supportCaseDetail.id,status:'in_progress',
+        }),button('Request customer information','support-case-status','button button-outline',{
+          id:state.supportCaseDetail.id,status:'pending_customer',
+        }),button('Escalate case','support-case-status','button button-outline',{
+          id:state.supportCaseDetail.id,status:'escalated',
+        }));
+        detail.append(advance);
+      }
       if (!['resolved','appealed'].includes(state.supportCaseDetail.status)) {
         const resolution=node('form',undefined,'form-grid');
         resolution.dataset.form='support-case-resolve';
@@ -5008,6 +5051,18 @@ async function submitForm(form) {
     state.supportCaseDetail=null;
     await refresh();
     showAlert('Resolution recorded and the user was notified.');
+    return;
+  }
+  if (form.dataset.form === 'support-appeal-review') {
+    await api(`/support/cases/${encodeURIComponent(form.dataset.id)}/appeal-review`,{
+      method:'POST',body:JSON.stringify({
+        outcome:values.outcome,
+        rationale:values.rationale.trim(),
+      }),
+    });
+    state.supportCaseDetail=null;
+    await refresh();
+    showAlert('Independent appeal decision recorded and the user was notified.');
     return;
   }
   if (form.dataset.form === 'workforce-correction') {

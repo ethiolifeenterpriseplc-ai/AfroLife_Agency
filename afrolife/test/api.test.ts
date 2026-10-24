@@ -162,12 +162,44 @@ test('support complaints require independent sensitive access and structured res
   assert.equal((await call(learningCustomer,'POST',`/support/cases/${created.body.id}/appeal`,{
     reason:'I do not agree that the corrective action resolved my concern.',
   })).status,200);
+  const appealQueue = await call(compliance,'GET','/support/appeals/queue');
+  assert.equal(appealQueue.status,200);
+  const queuedAppeal = appealQueue.body.find((item:any)=>item.id===created.body.id);
+  assert.ok(queuedAppeal);
+  assert.equal('subject' in queuedAppeal,false);
+  assert.equal('user_id' in queuedAppeal,false);
+  assert.equal((await call(learningManager,'POST',`/support/cases/${created.body.id}/appeal-review`,{
+    outcome:'upheld',rationale:'The original resolver must not review this appeal.',
+  })).status,403);
+  assert.equal((await call(compliance,'POST',`/support/cases/${created.body.id}/appeal-review`,{
+    outcome:'overturned',rationale:'An active independent access approval is required before review.',
+  })).status,404);
+  const appealAccess = await call(compliance,'POST',`/support/cases/${created.body.id}/access-requests`,{
+    reason:'Need temporary access to independently review the appealed resolution.',
+  });
+  assert.equal(appealAccess.status,201,JSON.stringify(appealAccess.body));
+  assert.equal((await call(complianceAlt,'POST',`/support/access-requests/${appealAccess.body.id}/decision`,{
+    decision:'approve',reason:'Independent reviewer approved a time-limited appeal review window.',
+  })).status,200);
+  const appealReview = await call(compliance,'POST',`/support/cases/${created.body.id}/appeal-review`,{
+    outcome:'overturned',rationale:'The corrective action did not address the customer communication failure.',
+  });
+  assert.equal(appealReview.status,200,JSON.stringify(appealReview.body));
+  assert.equal(appealReview.body.outcome,'overturned');
+  assert.equal((await call(compliance,'POST',`/support/cases/${created.body.id}/appeal-review`,{
+    outcome:'upheld',rationale:'A second review cannot replace the immutable decision.',
+  })).status,409);
   assert.equal((await call(learningCustomer,'GET','/support/cases/mine')).body
     .find((item:any)=>item.id===created.body.id).status,'appealed');
+  const reviewedCase = (await call(learningCustomer,'GET','/support/cases/mine')).body
+    .find((item:any)=>item.id===created.body.id);
+  assert.equal(reviewedCase.appeal_review_outcome,'overturned');
+  assert.match(reviewedCase.appeal_review_rationale,/communication failure/);
   const timeline=await call(learningCustomer,'GET',`/support/cases/${created.body.id}/events`);
   assert.equal(timeline.status,200);
   assert.ok(timeline.body.some((item:any)=>item.event_type==='resolved'));
   assert.ok(timeline.body.some((item:any)=>item.event_type==='appealed'));
+  assert.ok(timeline.body.some((item:any)=>item.event_type==='appeal_reviewed'));
 });
 
 test('Insurance Agent referrals require opt-in and remain within the assigned Agent hierarchy', async () => {

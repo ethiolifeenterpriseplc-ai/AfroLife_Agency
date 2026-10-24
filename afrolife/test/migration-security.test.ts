@@ -34,6 +34,7 @@ const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
 const workforceWorkflows = readFileSync(new URL('../migrations/095_workforce_workflows.sql', import.meta.url), 'utf8');
 const sessionDeviceManagement = readFileSync(new URL('../migrations/096_session_device_management.sql', import.meta.url), 'utf8');
 const supportCases = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
+const supportAppealReview = readFileSync(new URL('../migrations/098_support_case_appeal_review.sql', import.meta.url), 'utf8');
 
 test('central Insurance ledger grants match service operations and identity sequences', () => {
   for (const revoke of [
@@ -357,4 +358,17 @@ test('support cases preserve urgent escalation, independent access approval, and
   assert.match(supportCases,/expires_at <= reviewed_at \+ interval '15 minutes'/);
   assert.match(supportCases,/formal_workflow_reference IS NOT NULL/);
   assert.match(supportCases,/Support case intake evidence is immutable/);
+});
+
+test('appeal review evidence is private, independently approved, and append-only', () => {
+  assert.match(supportAppealReview,/CREATE TABLE support_case_appeal_reviews/);
+  assert.match(supportAppealReview,/case_id uuid NOT NULL UNIQUE/);
+  assert.match(supportAppealReview,/Only appealed support cases can be reviewed/);
+  assert.match(supportAppealReview,/NEW\.reviewer_id=original_resolver/);
+  assert.match(supportAppealReview,/status='approved' AND expires_at>now\(\)/);
+  assert.match(supportAppealReview,/support_case_appeal_reviews_immutable/);
+  assert.match(supportAppealReview,/FORCE ROW LEVEL SECURITY/);
+  assert.match(supportAppealReview,/reviewer_id=app_user_id\(\)/);
+  assert.match(supportAppealReview,/GRANT SELECT,INSERT ON TABLE support_case_appeal_reviews TO "\{\{role\}\}"/);
+  assert.doesNotMatch(supportAppealReview,/GRANT .*UPDATE|GRANT .*DELETE/);
 });

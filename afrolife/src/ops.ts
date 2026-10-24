@@ -77,9 +77,13 @@ ops.get('/support/agents', h(async (req, res) => {
 
 ops.get('/support/cases/mine', h(async (req, res) => {
   res.json(await withUser(req.user!, async (client) => (await client.query(
-    `SELECT id,category,subject,description,priority,status,outcome,rationale,corrective_action,
-       refund_reference,formal_workflow_reference,appeal_route,created_at,updated_at,resolved_at
-     FROM support_cases WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,
+    `SELECT c.id,c.category,c.subject,c.description,c.priority,c.status,c.outcome,c.rationale,c.corrective_action,
+       c.refund_reference,c.formal_workflow_reference,c.appeal_route,c.created_at,c.updated_at,c.resolved_at,
+       ar.outcome AS appeal_review_outcome,ar.rationale AS appeal_review_rationale,
+       ar.created_at AS appeal_reviewed_at
+     FROM support_cases c
+     LEFT JOIN support_case_appeal_reviews ar ON ar.case_id=c.id
+     WHERE c.user_id=$1 ORDER BY c.created_at DESC LIMIT 100`,
     [req.user!.id],
   )).rows));
 }));
@@ -95,16 +99,34 @@ ops.get('/support/cases/queue', requireRole(...SUPPORT_STAFF), h(async (req, res
   )).rows));
 }));
 
+ops.get('/support/appeals/queue', requireRole(...SUPPORT_STAFF), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (client) => (await client.query(
+    `SELECT c.id,c.category,c.status,c.created_at,c.updated_at,c.resolved_at
+     FROM support_cases c
+     WHERE c.status='appealed' AND c.resolved_by<>$1
+       AND NOT EXISTS (
+         SELECT 1 FROM support_case_appeal_reviews r WHERE r.case_id=c.id
+       )
+     ORDER BY CASE c.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,c.updated_at
+     LIMIT 200`,
+    [req.user!.id],
+  )).rows));
+}));
+
 ops.get('/support/cases/:id', h(async (req, res) => {
   const id = z.string().uuid().parse(req.params.id);
   const row = await withUser(req.user!, async (client) => (await client.query(
     `SELECT c.id,c.user_id,c.category,c.subject_user_id,c.subject,c.description,c.priority,c.status,
        c.created_at,c.updated_at,c.outcome,c.rationale,c.corrective_action,c.refund_reference,
        c.formal_workflow_reference,c.appeal_route,c.resolved_at,
+       (c.resolved_by=$2) AS is_original_resolver,
+       ar.outcome AS appeal_review_outcome,ar.rationale AS appeal_review_rationale,
+       ar.created_at AS appeal_reviewed_at,
        (SELECT max(a.expires_at) FROM support_case_access_requests a
         WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now())
          AS sensitive_access_expires_at
      FROM support_cases c
+     LEFT JOIN support_case_appeal_reviews ar ON ar.case_id=c.id
      WHERE c.id=$1 AND (
        c.user_id=$2 OR EXISTS (
          SELECT 1 FROM support_case_access_requests a
@@ -297,6 +319,52 @@ ops.post('/support/cases/:id/appeal', h(async (req, res) => {
     return updated;
   });
   res.json(row);
+}));
+
+ops.post('/support/cases/:id/appeal-review', requireRole(...SUPPORT_STAFF), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({
+    outcome:z.enum(['upheld','overturned']),
+    rationale:z.string().trim().min(10).max(2000),
+  }).strict().parse(req.body);
+  const result = await withUser(req.user!, async (client) => {
+    const current = (await client.query(
+      `SELECT c.user_id,c.status,c.resolved_by
+       FROM support_cases c
+       WHERE c.id=$1 AND EXISTS (
+         SELECT 1 FROM support_case_access_requests a
+         WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now()
+       )
+       FOR UPDATE OF c`,
+      [id,req.user!.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404,'Support case not found or sensitive access is not approved');
+    if (current.status!=='appealed') throw new HttpError(409,'Only appealed cases can receive an independent review');
+    if (current.resolved_by===req.user!.id) throw new HttpError(403,'The original resolver cannot review their own case appeal');
+    const priorReview = (await client.query(
+      'SELECT 1 FROM support_case_appeal_reviews WHERE case_id=$1',
+      [id],
+    )).rowCount;
+    if (priorReview) throw new HttpError(409,'This appeal has already received an independent review');
+    const review = (await client.query(
+      `INSERT INTO support_case_appeal_reviews(case_id,reviewer_id,outcome,rationale)
+       VALUES($1,$2,$3,$4)
+       RETURNING outcome,rationale,created_at`,
+      [id,req.user!.id,body.outcome,body.rationale],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO support_case_events(case_id,actor_id,event_type,reason)
+       VALUES($1,$2,'appeal_reviewed',$3)`,
+      [id,req.user!.id,body.rationale],
+    );
+    await audit(client,req.user!.id,'support_case_appeal_reviewed','support_case',id,
+      {status:'appealed'},{outcome:body.outcome});
+    await notify(client,current.user_id,'support_case_appeal_reviewed',{
+      case_id:id,outcome:body.outcome,
+    });
+    return review;
+  });
+  res.json(result);
 }));
 
 ops.get('/accounting-event-outbox/status', requireRole('global_admin','finance','finance_manager'), h(async(req,res)=>{
