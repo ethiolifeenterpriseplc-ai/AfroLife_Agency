@@ -31,6 +31,9 @@ const insuranceRequests = readFileSync(new URL('../src/insurance-requests.ts', i
 const insuranceBrokerageSandboxRouter = readFileSync(new URL('../src/insurance-brokerage-sandbox.ts', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
+const workforceWorkflows = readFileSync(new URL('../migrations/095_workforce_workflows.sql', import.meta.url), 'utf8');
+const sessionDeviceManagement = readFileSync(new URL('../migrations/096_session_device_management.sql', import.meta.url), 'utf8');
+const supportCases = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
 
 test('central Insurance ledger grants match service operations and identity sequences', () => {
   for (const revoke of [
@@ -320,4 +323,38 @@ test('MFI loan write-offs require an independent authorized decision and a linke
   assert.match(mfiRouter, /loan_writeoff/);
   assert.match(mfiRouter, /post\('\/institutions\/:institutionId\/loans\/:loanId\/writeoffs'/);
   assert.match(mfiRouter, /post\('\/institutions\/:institutionId\/writeoffs\/:writeoffId\/decision'/);
+});
+
+test('WF-D attendance, reviewed corrections, and payroll payloads enforce separate RLS boundaries', () => {
+  assert.match(workforceWorkflows, /FORCE ROW LEVEL SECURITY/);
+  assert.match(workforceWorkflows, /workforce_clock_events_immutable/);
+  assert.match(workforceWorkflows, /NEW\.clock_in_at IS DISTINCT FROM source_clock_in/);
+  assert.match(workforceWorkflows, /NEW\.clock_out_at IS DISTINCT FROM source_clock_out/);
+  assert.match(workforceWorkflows, /workforce_reviewed_correction_immutable/);
+  assert.match(workforceWorkflows, /workforce_approved_policy_immutable/);
+  assert.match(workforceWorkflows, /workforce_exported_time_immutable/);
+  assert.match(workforceWorkflows, /CREATE TABLE workforce_payroll_export_payloads/);
+  assert.match(workforceWorkflows, /workforce_payroll_export_payloads_manager_all/);
+  assert.match(workforceWorkflows, /workforce_time_corrections_one_pending_per_shift_idx/);
+  assert.match(workforceWorkflows, /app_offboard_worker/);
+  assert.match(workforceWorkflows, /UPDATE auth_sessions SET revoked_at=now\(\)/);
+  assert.match(workforceWorkflows, /set_config\('app\.access_change_reason',trim\(reason\),true\)/);
+  assert.match(workforceWorkflows, /AND status='scheduled' AND starts_at>now\(\)/);
+});
+
+test('session device management records bounded browser metadata without storing network addresses', () => {
+  assert.match(sessionDeviceManagement, /ADD COLUMN user_agent text CHECK \(user_agent IS NULL OR length\(user_agent\) <= 512\)/);
+});
+
+test('support cases preserve urgent escalation, independent access approval, and append-only history', () => {
+  assert.match(supportCases,/category IN \('general','service','agent_complaint','financial','legal','privacy','safety','fraud'\)/);
+  assert.match(supportCases,/category NOT IN \('safety','fraud','privacy','legal'\) OR priority='urgent'/);
+  assert.match(supportCases,/support_case_events_immutable/);
+  assert.match(supportCases,/record_support_case_status_transition/);
+  assert.match(supportCases,/support_cases_owner_appeal/);
+  assert.match(supportCases,/Resolved support cases are immutable except for a user appeal/);
+  assert.match(supportCases,/reviewed_by<>requested_by/);
+  assert.match(supportCases,/expires_at <= reviewed_at \+ interval '15 minutes'/);
+  assert.match(supportCases,/formal_workflow_reference IS NOT NULL/);
+  assert.match(supportCases,/Support case intake evidence is immutable/);
 });

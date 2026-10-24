@@ -116,8 +116,37 @@ api.get('/subscriptions/catalog', (_req, res) => {
   res.json(getPublicSubscriptionCatalog());
 });
 
+const agencyDomainGateway = (
+  serviceName: string,
+  urlKey: string,
+  secretKey: string,
+  legacyUrlKey?: string,
+  legacySecretKey?: string,
+): RequestHandler => {
+  const baseUrl = process.env[urlKey] ?? (legacyUrlKey ? process.env[legacyUrlKey] : undefined);
+  if (baseUrl) {
+    return createServiceGateway({
+      baseUrl,
+      secret: process.env[secretKey] ?? (legacySecretKey ? process.env[legacySecretKey] : undefined) ?? '',
+      servicePath: '/api/v1',
+      serviceName,
+      includeBaseUrl: true,
+    });
+  }
+  return (_req, _res, next) => next();
+};
+
+const workerManagementGateway = agencyDomainGateway(
+  'Workforce Management service',
+  'WORKFORCE_MANAGEMENT_SERVICE_URL',
+  'WORKFORCE_MANAGEMENT_GATEWAY_SECRET',
+  'WORKER_MANAGEMENT_SERVICE_URL',
+  'WORKER_MANAGEMENT_GATEWAY_SECRET',
+);
+
 api.use(authenticate);
 api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
+api.use('/workforce', requireMiniAppAccess('workers'));
 api.use('/worker-support', requireMiniAppAccess('workers'));
 api.use(['/requests', '/matches'], requireMiniAppAccess('requests'));
 api.use('/staffing-engagements', (req, res, next) => {
@@ -287,39 +316,11 @@ api.get('/system/metrics', requireRole('global_admin'), h(async (req, res) => {
   await flushApiMetrics().catch((error) => console.error('API metrics flush before read failed', error instanceof Error ? error.message : error));
   res.json(await withUser(req.user!, readPersistedApiMetrics));
 }));
+api.use('/workforce', workerManagementGateway);
 api.use(adminRouter);
 api.use(privacy);
 api.use(ops);
 api.use(learningRouter);
-const agencyDomainGateway = (
-  serviceName: string,
-  urlKey: string,
-  secretKey: string,
-  legacyUrlKey?: string,
-  legacySecretKey?: string,
-): RequestHandler => {
-  const baseUrl = process.env[urlKey] ?? (legacyUrlKey ? process.env[legacyUrlKey] : undefined);
-  if (baseUrl) {
-    return createServiceGateway({
-      baseUrl,
-      secret: process.env[secretKey] ?? (legacySecretKey ? process.env[legacySecretKey] : undefined) ?? '',
-      servicePath: '/api/v1',
-      serviceName,
-      includeBaseUrl: true,
-    });
-  }
-  // An unset URL keeps this domain on the legacy router; configured services
-  // never fall back on request failure, so cutover remains explicit.
-  return (_req, _res, next) => next();
-};
-
-const workerManagementGateway = agencyDomainGateway(
-  'Workforce Management service',
-  'WORKFORCE_MANAGEMENT_SERVICE_URL',
-  'WORKFORCE_MANAGEMENT_GATEWAY_SECRET',
-  'WORKER_MANAGEMENT_SERVICE_URL',
-  'WORKER_MANAGEMENT_GATEWAY_SECRET',
-);
 const staffingGateway = agencyDomainGateway(
   'Staffing service', 'STAFFING_SERVICE_URL', 'STAFFING_GATEWAY_SECRET',
 );
@@ -428,6 +429,29 @@ api.post('/leads', requireRole(...AGENT), h(async (req, res) => {
 
 api.get('/leads', h(async (req, res) => {
   res.json(await withUser(req.user!, async (c) => (await c.query('SELECT * FROM leads ORDER BY created_at DESC LIMIT 200')).rows));
+}));
+
+api.patch('/leads/:id/status', requireRole(...AGENT), h(async (req, res) => {
+  const body = z.object({
+    status: z.enum(['qualified', 'lost']),
+    reason: z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
+  const lead = await withUser(req.user!, async (c) => {
+    const current = (await c.query('SELECT * FROM leads WHERE id=$1 FOR UPDATE', [req.params.id])).rows[0];
+    if (!current) throw new HttpError(404, 'Lead not found');
+    const allowed = current.status === 'new'
+      ? ['qualified', 'lost'].includes(body.status)
+      : current.status === 'qualified' && body.status === 'lost';
+    if (!allowed) throw new HttpError(409, `A ${current.status} lead cannot be changed to ${body.status}`);
+    const updated = (await c.query(
+      'UPDATE leads SET status=$2 WHERE id=$1 RETURNING *',
+      [current.id, body.status],
+    )).rows[0];
+    await audit(c, req.user!.id, 'lead_status_changed', 'lead', current.id,
+      { status: current.status }, { status: updated.status, reason: body.reason });
+    return updated;
+  });
+  res.json(lead);
 }));
 
 api.get('/leads/:id/attribution-history', h(async (req, res) => {

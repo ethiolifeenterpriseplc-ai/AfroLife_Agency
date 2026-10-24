@@ -23,12 +23,18 @@ export type RoleActivityDefinition = {
 };
 
 export const ROLE_ACTIVITIES: readonly RoleActivityDefinition[] = [
-  { key: 'workforce.workers.view', group: 'Workforce Management', label: 'View worker profiles', defaultRoles: ['global_admin', 'super_admin', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent'] },
+  { key: 'workforce.workers.view', group: 'Workforce Management', label: 'View worker profiles', defaultRoles: ['global_admin', 'super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent'] },
   { key: 'workforce.workers.register', group: 'Workforce Management', label: 'Register workers', defaultRoles: ['master_agent', 'field_agent'] },
   { key: 'workforce.documents.view', group: 'Workforce Management', label: 'View and download worker documents', defaultRoles: ['master_agent', 'field_agent', 'compliance', 'super_admin'] },
   { key: 'workforce.documents.upload', group: 'Workforce Management', label: 'Upload worker documents', defaultRoles: ['master_agent', 'field_agent', 'compliance', 'super_admin'] },
   { key: 'workforce.documents.review', group: 'Workforce Management', label: 'Review worker documents', defaultRoles: ['compliance'] },
   { key: 'workforce.workers.verify', group: 'Workforce Management', label: 'Verify workers', defaultRoles: ['compliance'] },
+  { key: 'workforce.shifts.manage', group: 'Workforce Management', label: 'Schedule and manage worker shifts', defaultRoles: ['global_admin', 'super_admin', 'corporate_business_manager', 'master_agent', 'field_agent'] },
+  { key: 'workforce.time.review', group: 'Workforce Management', label: 'Review and approve recorded worker time', defaultRoles: ['global_admin', 'super_admin', 'corporate_business_manager', 'finance_manager', 'master_agent', 'field_agent'], sensitive: true },
+  { key: 'workforce.leave.review', group: 'Workforce Management', label: 'Review worker leave and availability requests', defaultRoles: ['global_admin', 'super_admin', 'corporate_business_manager', 'master_agent', 'field_agent'] },
+  { key: 'workforce.payroll.export', group: 'Workforce Management', label: 'Calculate payable time and export payroll data', defaultRoles: ['global_admin', 'super_admin', 'finance_manager'], sensitive: true },
+  { key: 'workforce.policy.manage', group: 'Workforce Management', label: 'Manage effective-dated workforce policy versions', defaultRoles: ['global_admin', 'super_admin', 'compliance'], sensitive: true },
+  { key: 'workforce.workers.offboard', group: 'Workforce Management', label: 'Terminate worker assignments and revoke access', defaultRoles: ['global_admin', 'super_admin', 'corporate_business_manager', 'compliance'], sensitive: true },
   { key: 'staffing.requests.manage', group: 'Staffing', label: 'Manage staffing requests and matching', defaultRoles: ['master_agent', 'field_agent', 'super_admin'] },
   { key: 'property.listings.view', group: 'Property Management', label: 'View property listings and media', defaultRoles: ['global_admin', 'super_admin', 'corporate_business_manager', 'customer', 'master_agent', 'field_agent', 'property_owner'] },
   { key: 'property.listings.manage', group: 'Property Management', label: 'Create listings, units, and listing media', defaultRoles: ['master_agent', 'field_agent', 'property_owner', 'super_admin', 'corporate_business_manager'] },

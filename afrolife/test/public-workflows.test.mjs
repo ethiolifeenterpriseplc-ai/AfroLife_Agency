@@ -143,6 +143,65 @@ test('marketplace payloads omit rental periods unless the listing is a rental', 
   assert.equal(rental.rent_period, 'week');
 });
 
+test('worker portal exposes workforce self-service and ordered offline clock sync', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const i18n = readFileSync(new URL('../public/i18n.js', import.meta.url), 'utf8');
+  const api = readFileSync(new URL('../src/workforce-operations.ts', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../migrations/095_workforce_workflows.sql', import.meta.url), 'utf8');
+  const server = readFileSync(new URL('../src/server.ts', import.meta.url), 'utf8');
+  assert.match(app, /\/workforce\/shifts\/mine/);
+  assert.match(app, /\/workforce\/leave\/mine/);
+  assert.match(app, /workforce-clock-queue:/);
+  assert.match(app, /Clock-event sync stopped to preserve event order/);
+  assert.match(app, /body: JSON\.stringify\(\{\s*event_type: event\.event_type/);
+  assert.match(app, /My shifts and attendance/);
+  assert.match(app, /Leave and availability/);
+  assert.match(i18n, /'My shifts and attendance',\s*'[^']+',\s*'[^']+',\s*'[^']+'/);
+  assert.match(api, /workforceOperations\.post\('\/workforce\/shifts\/:id\/clock-events'/);
+  assert.match(migration, /UNIQUE \(recorded_by, client_event_id\)/);
+  assert.match(api, /workforceOperations\.post\('\/workforce\/shifts\/:id\/approve-time'/);
+  assert.match(migration, /CREATE TABLE workforce_payroll_export_payloads/);
+  assert.match(migration, /workforce_payroll_export_payloads_manager_all/);
+  assert.match(migration, /workforce_clock_events_immutable/);
+  const exportMetadata = migration.split('CREATE TABLE workforce_payroll_exports')[1]
+    .split('CREATE TABLE workforce_payroll_export_items')[0];
+  assert.doesNotMatch(exportMetadata, /encrypted_payload/);
+  assert.match(migration, /UPDATE workforce_shifts SET status='cancelled'[\s\S]*?UPDATE staffing_engagements SET status='completed'/);
+  assert.match(server, /api\.use\('\/workforce', requireMiniAppAccess\('workers'\)\)/);
+  assert.match(server, /api\.use\('\/workforce', workerManagementGateway\)/);
+});
+
+test('account security exposes session listing and session revocation', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
+  assert.match(app, /load\('authSessions', '\/auth\/sessions'\)/);
+  assert.match(app, /Signed-in sessions/);
+  assert.match(app, /data-action|revoke-session/);
+  assert.match(admin, /adminRouter\.get\('\/auth\/sessions'/);
+  assert.match(admin, /adminRouter\.delete\('\/auth\/sessions\/:sessionId'/);
+  assert.match(admin, /WHERE id=\$1 AND user_id=\$2 AND revoked_at IS NULL AND expires_at>now\(\)/);
+  assert.match(admin, /session_revoked/);
+});
+
+test('V11 support journey exposes case intake while protecting sensitive details with independent approval', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const ops = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
+  assert.match(html,/data-panel="support"/);
+  assert.match(app,/support-case-create/);
+  assert.match(app,/support-access-request/);
+  assert.match(app,/support-access-decision/);
+  assert.match(app,/support-case-resolve/);
+  assert.match(ops,/ops\.post\('\/support\/cases'/);
+  assert.match(ops,/ops\.post\('\/support\/cases\/:id\/access-requests'/);
+  assert.match(ops,/ops\.post\('\/support\/access-requests\/:id\/decision'/);
+  assert.match(ops,/agent complaint/i);
+  assert.match(ops,/Financial and legal corrections must reference their formal workflow/);
+  assert.match(migration,/support_cases_owner_read/);
+  assert.match(migration,/support_case_access_review/);
+});
+
 test('checkboxes and radios override full-width text-field sizing', () => {
   const styles = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.match(styles, /input\[type="checkbox"\][\s\S]*?width:\s*18px;[\s\S]*?height:\s*18px;[\s\S]*?min-height:\s*18px;[\s\S]*?padding:\s*0;/);
@@ -186,8 +245,11 @@ test('dynamically created labels retain their source text when the locale change
     assert.equal(textNode.nodeValue, 'ዝርዝር ይፍጠሩ');
     const accountingText = { nodeValue: 'Chart of accounts', parentElement: { tagName: 'H2' } };
     textNodes.push(accountingText);
+    const workerPaymentText = { nodeValue: 'Worker payment records', parentElement: { tagName: 'H2' } };
+    textNodes.push(workerPaymentText);
     translateContent(root);
     assert.equal(accountingText.nodeValue, 'የሂሳብ መዝገብ ዝርዝር');
+    assert.equal(workerPaymentText.nodeValue, 'የሠራተኛ ክፍያ መዝገቦች');
   } finally {
     for (const [key, descriptor] of descriptors) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);

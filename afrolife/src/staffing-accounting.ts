@@ -21,6 +21,8 @@ staffingAccounting.post('/staffing-engagements',requireRole('master_agent','fiel
     const match=(await c.query(`SELECT m.id AS match_id,m.request_id,m.worker_id,m.status AS match_status,r.lead_id,r.source_agent_id
       FROM matches m JOIN job_requests r ON r.id=m.request_id WHERE m.id=$1`,[b.match_id])).rows[0];
     if(!match)throw new HttpError(404,'Staffing match not found');if(match.match_status!=='accepted')throw new HttpError(409,'Only an accepted Staffing match can become an engagement');
+    const worker=(await c.query('SELECT employment_status FROM workers WHERE id=$1 FOR UPDATE',[match.worker_id])).rows[0];
+    if(!worker||worker.employment_status!=='active')throw new HttpError(409,'A terminated worker cannot be assigned to a new engagement');
     const e=(await c.query(`INSERT INTO staffing_engagements(match_id,request_id,worker_id,client_lead_id,source_agent_id,worker_type,billing_unit,client_rate,worker_rate,starts_on,ends_on,recorded_by)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[match.match_id,match.request_id,match.worker_id,match.lead_id,match.source_agent_id,b.worker_type,b.billing_unit,clientRate,workerRate,b.starts_on,b.ends_on??null,req.user!.id])).rows[0];
     await audit(c,req.user!.id,'staffing_engagement_terms_submitted','staffing_engagement',e.id,null,{worker_type:b.worker_type,billing_unit:b.billing_unit,client_rate:clientRate,worker_rate:workerRate,starts_on:b.starts_on,ends_on:b.ends_on??null,terms_status:'pending_approval'});return e;
@@ -89,6 +91,15 @@ staffingAccounting.get('/staffing-work-periods/pending',requireRole(...reviewers
     FROM staffing_work_periods p JOIN staffing_engagements e ON e.id=p.engagement_id
     JOIN leads l ON l.id=e.client_lead_id JOIN workers w ON w.id=e.worker_id
     WHERE p.status='submitted' ORDER BY p.created_at LIMIT 200`)).rows));
+}));
+
+staffingAccounting.get('/staffing-settlements/mine',requireRole('worker'),h(async(req,res)=>{
+  res.json(await withUser(req.user!,async c=>(await c.query(`SELECT s.id,s.engagement_id,s.amount::text,s.channel,s.reference,s.payment_date,
+      s.status,s.reason,s.reconciled_at,s.created_at
+    FROM staffing_settlements s JOIN staffing_engagements e ON e.id=s.engagement_id
+    JOIN workers w ON w.id=e.worker_id JOIN users u ON u.id=$1
+    WHERE w.phone=u.phone AND s.kind='worker_payment'
+    ORDER BY s.payment_date DESC,s.created_at DESC LIMIT 200`,[req.user!.id])).rows));
 }));
 
 const workerSupportStaff=['global_admin','super_admin','corporate_business_manager','master_agent'] as const;

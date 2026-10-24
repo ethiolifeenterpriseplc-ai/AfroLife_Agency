@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import type { Request, Response } from 'express';
 import { adminRouter } from '../src/admin.js';
+import { hasRoleActivityAccess } from '../src/role-activities.js';
 import {
   allowedMiniApps,
   hasMiniAppAccess,
@@ -61,6 +62,14 @@ test('worker self-service portal access follows worker identity and custom grant
   assert.equal(hasMiniAppAccess(user('worker', 'custom', ['workers']), 'workers'), true);
 });
 
+test('workforce activity roles include the manager portal and protect worker-only actions', () => {
+  assert.equal(hasRoleActivityAccess('corporate_business_manager', 'workforce.workers.view'), true);
+  assert.equal(hasRoleActivityAccess('corporate_business_manager', 'workforce.shifts.manage'), true);
+  assert.equal(hasRoleActivityAccess('finance_manager', 'workforce.payroll.export'), true);
+  assert.equal(hasRoleActivityAccess('worker', 'workforce.payroll.export'), false);
+  assert.equal(hasRoleActivityAccess('worker', 'workforce.workers.offboard'), false);
+});
+
 test('API middleware denies direct access when a custom assignment excludes the app', () => {
   const req = { user: user('finance', 'custom', []) } as Request;
   const res = {} as Response;
@@ -91,10 +100,14 @@ test('mini-app assignment storage is RLS-protected and its audit is append-only'
 
 test('worker self-service tables and participant access are protected by RLS', async () => {
   const migration = await readFile(new URL('../migrations/094_worker_self_service_portal.sql', import.meta.url), 'utf8');
+  const staffing = await readFile(new URL('../src/staffing-accounting.ts', import.meta.url), 'utf8');
   assert.match(migration, /workforce_worker_self_read/);
   assert.match(migration, /staffing_engagement_worker_client_read/);
   assert.match(migration, /staffing_work_period_worker_submit/);
+  assert.match(migration, /staffing_settlement_worker_read/);
   assert.match(migration, /worker_support_requests_owner_read/);
   assert.match(migration, /worker_support_requests_support_update/);
+  assert.match(staffing, /staffing-settlements\/mine/);
+  assert.match(staffing, /w\.phone=u\.phone AND s\.kind='worker_payment'/);
   assert.match(migration, /FORCE ROW LEVEL SECURITY/);
 });

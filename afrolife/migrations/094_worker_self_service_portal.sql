@@ -59,6 +59,19 @@ CREATE POLICY staffing_work_period_worker_submit ON staffing_work_periods
     )
   );
 
+CREATE POLICY staffing_settlement_worker_read ON staffing_settlements
+  FOR SELECT USING (
+    app_role() = 'worker'
+    AND kind = 'worker_payment'
+    AND EXISTS (
+      SELECT 1
+      FROM staffing_engagements e
+      JOIN workers w ON w.id = e.worker_id
+      JOIN users u ON u.id = app_user_id()
+      WHERE e.id = engagement_id AND w.phone = u.phone
+    )
+  );
+
 CREATE TABLE worker_support_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES users(id),
