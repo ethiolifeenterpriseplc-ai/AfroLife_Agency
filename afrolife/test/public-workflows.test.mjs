@@ -189,18 +189,25 @@ test('V11 support journey exposes case intake while protecting sensitive details
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   const ops = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
   const migration = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
+  const accessHardening = readFileSync(new URL('../migrations/098_support_case_access_hardening.sql', import.meta.url), 'utf8');
+  const appealReview = readFileSync(new URL('../migrations/099_support_case_appeal_review.sql', import.meta.url), 'utf8');
   assert.match(html,/data-panel="support"/);
   assert.match(app,/support-case-create/);
   assert.match(app,/support-access-request/);
   assert.match(app,/support-access-decision/);
   assert.match(app,/support-case-resolve/);
+  assert.match(app,/support-case-appeal-review/);
+  assert.match(app,/Appeal review queue/);
   assert.match(ops,/ops\.post\('\/support\/cases'/);
   assert.match(ops,/ops\.post\('\/support\/cases\/:id\/access-requests'/);
   assert.match(ops,/ops\.post\('\/support\/access-requests\/:id\/decision'/);
+  assert.match(ops,/ops\.post\('\/support\/cases\/:id\/appeal-review'/);
   assert.match(ops,/agent complaint/i);
   assert.match(ops,/Financial and legal corrections must reference their formal workflow/);
   assert.match(migration,/support_cases_owner_read/);
   assert.match(migration,/support_case_access_review/);
+  assert.match(accessHardening,/support_cases_authorized_read/);
+  assert.match(appealReview,/support_case_appeal_reviews_independent_insert/);
 });
 
 test('checkboxes and radios override full-width text-field sizing', () => {

@@ -137,8 +137,11 @@ test('support complaints require independent sensitive access and structured res
   assert.equal(queue.status,200);
   const queueCase = queue.body.find((item:any)=>item.id===created.body.id);
   assert.ok(queueCase);
+  assert.equal('subject' in queueCase,false);
+  assert.equal('user_id' in queueCase,false);
   assert.equal('description' in queueCase,false);
   assert.equal((await call(learningManager,'GET',`/support/cases/${created.body.id}`)).status,404);
+  assert.equal((await call(learningManager,'GET',`/support/cases/${created.body.id}/events`)).status,404);
 
   const access = await call(learningManager,'POST',`/support/cases/${created.body.id}/access-requests`,{
     reason:'Need case evidence to investigate and respond fairly.',
@@ -164,10 +167,46 @@ test('support complaints require independent sensitive access and structured res
   })).status,200);
   assert.equal((await call(learningCustomer,'GET','/support/cases/mine')).body
     .find((item:any)=>item.id===created.body.id).status,'appealed');
+  assert.equal((await call(learningManager,'POST',`/support/cases/${created.body.id}/access-requests`,{
+    reason:'Original resolver must not enter the independent appeal review.',
+  })).status,403);
+  const appealsQueue = await call(compliance,'GET','/support/cases/appeals/queue');
+  assert.equal(appealsQueue.status,200);
+  assert.ok(appealsQueue.body.some((item:any)=>item.id===created.body.id));
+  assert.equal('subject' in appealsQueue.body.find((item:any)=>item.id===created.body.id),false);
+  const appealAccess = await call(compliance,'POST',`/support/cases/${created.body.id}/access-requests`,{
+    reason:'Need approved evidence access to independently review this appeal.',
+  });
+  assert.equal(appealAccess.status,201);
+  assert.equal((await call(complianceAlt,'POST',`/support/access-requests/${appealAccess.body.id}/decision`,{
+    decision:'approve',reason:'Independent reviewer grants temporary access for appeal review.',
+  })).status,200);
+  const appealReview = await call(compliance,'POST',`/support/cases/${created.body.id}/appeal-review`,{
+    decision:'upheld',
+    rationale:'The initial resolution and documented corrective action were appropriate.',
+  });
+  assert.equal(appealReview.status,201,JSON.stringify(appealReview.body));
+  assert.equal(appealReview.body.decision,'upheld');
+  assert.equal((await call(compliance,'POST',`/support/cases/${created.body.id}/appeal-review`,{
+    decision:'overturned',
+    rationale:'A duplicate appeal review must not overwrite the immutable decision.',
+    corrective_action:'Issue a new corrective action and contact the customer.',
+  })).status,409);
+  const ownerCase = (await call(learningCustomer,'GET','/support/cases/mine')).body
+    .find((item:any)=>item.id===created.body.id);
+  assert.equal(ownerCase.appeal_decision,'upheld');
   const timeline=await call(learningCustomer,'GET',`/support/cases/${created.body.id}/events`);
   assert.equal(timeline.status,200);
   assert.ok(timeline.body.some((item:any)=>item.event_type==='resolved'));
   assert.ok(timeline.body.some((item:any)=>item.event_type==='appealed'));
+  assert.ok(timeline.body.some((item:any)=>item.event_type==='appeal_reviewed'));
+  await db.query(
+    `UPDATE support_case_access_requests SET expires_at=now()-interval '1 second'
+     WHERE case_id=$1 AND status='approved'`,
+    [created.body.id],
+  );
+  assert.equal((await call(learningManager,'GET',`/support/cases/${created.body.id}`)).status,404);
+  assert.equal((await call(learningManager,'GET',`/support/cases/${created.body.id}/events`)).status,404);
 });
 
 test('Insurance Agent referrals require opt-in and remain within the assigned Agent hierarchy', async () => {

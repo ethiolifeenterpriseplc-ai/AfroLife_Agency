@@ -77,21 +77,26 @@ ops.get('/support/agents', h(async (req, res) => {
 
 ops.get('/support/cases/mine', h(async (req, res) => {
   res.json(await withUser(req.user!, async (client) => (await client.query(
-    `SELECT id,category,subject,description,priority,status,outcome,rationale,corrective_action,
-       refund_reference,formal_workflow_reference,appeal_route,created_at,updated_at,resolved_at
-     FROM support_cases WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100`,
+    `SELECT c.id,c.category,c.subject,c.description,c.priority,c.status,c.outcome,c.rationale,c.corrective_action,
+       c.refund_reference,c.formal_workflow_reference,c.appeal_route,c.created_at,c.updated_at,c.resolved_at,
+       review.decision AS appeal_decision,review.rationale AS appeal_rationale,
+       review.corrective_action AS appeal_corrective_action,review.reviewed_at AS appeal_reviewed_at
+     FROM support_cases c
+     LEFT JOIN support_case_appeal_reviews review ON review.case_id=c.id
+     WHERE c.user_id=$1 ORDER BY c.created_at DESC LIMIT 100`,
     [req.user!.id],
   )).rows));
 }));
 
 ops.get('/support/cases/queue', requireRole(...SUPPORT_STAFF), h(async (req, res) => {
   res.json(await withUser(req.user!, async (client) => (await client.query(
-    `SELECT c.id,c.user_id,u.legal_name,c.category,c.subject_user_id,c.subject,c.priority,c.status,
-       c.created_at,c.updated_at
-     FROM support_cases c JOIN users u ON u.id=c.user_id
-     WHERE c.status<>'resolved'
-     ORDER BY CASE c.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,c.created_at
-     LIMIT 300`,
+    'SELECT * FROM app_support_case_queue()',
+  )).rows));
+}));
+
+ops.get('/support/cases/appeals/queue', requireRole('global_admin','super_admin','compliance'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (client) => (await client.query(
+    'SELECT * FROM app_support_appeal_queue()',
   )).rows));
 }));
 
@@ -100,11 +105,16 @@ ops.get('/support/cases/:id', h(async (req, res) => {
   const row = await withUser(req.user!, async (client) => (await client.query(
     `SELECT c.id,c.user_id,c.category,c.subject_user_id,c.subject,c.description,c.priority,c.status,
        c.created_at,c.updated_at,c.outcome,c.rationale,c.corrective_action,c.refund_reference,
-       c.formal_workflow_reference,c.appeal_route,c.resolved_at,
+       c.formal_workflow_reference,c.appeal_route,c.resolved_at,c.resolved_by,
        (SELECT max(a.expires_at) FROM support_case_access_requests a
         WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now())
-         AS sensitive_access_expires_at
+         AS sensitive_access_expires_at,
+       review.decision AS appeal_decision,review.rationale AS appeal_rationale,
+       review.corrective_action AS appeal_corrective_action,
+       review.formal_workflow_reference AS appeal_formal_workflow_reference,
+       review.reviewed_at AS appeal_reviewed_at
      FROM support_cases c
+     LEFT JOIN support_case_appeal_reviews review ON review.case_id=c.id
      WHERE c.id=$1 AND (
        c.user_id=$2 OR EXISTS (
          SELECT 1 FROM support_case_access_requests a
@@ -115,6 +125,63 @@ ops.get('/support/cases/:id', h(async (req, res) => {
   )).rows[0]);
   if (!row) throw new HttpError(404,'Support case not found or sensitive access is not approved');
   res.json(row);
+}));
+
+ops.post('/support/cases/:id/appeal-review', requireRole('global_admin','super_admin','compliance'), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({
+    decision:z.enum(['upheld','overturned']),
+    rationale:z.string().trim().min(10).max(2000),
+    corrective_action:z.string().trim().min(5).max(2000).optional(),
+    formal_workflow_reference:z.string().trim().min(3).max(200).optional(),
+  }).strict().parse(req.body);
+  if (body.decision==='overturned' && !body.corrective_action) {
+    throw new HttpError(422,'An overturned appeal must document the corrective action');
+  }
+  const row = await withUser(req.user!, async (client) => {
+    const current = (await client.query(
+      `SELECT c.user_id,c.category,c.status,c.resolved_by
+       FROM support_cases c
+       WHERE c.id=$1 AND EXISTS (
+         SELECT 1 FROM support_case_access_requests a
+         WHERE a.case_id=c.id AND a.requested_by=$2 AND a.status='approved' AND a.expires_at>now()
+       ) FOR UPDATE`,
+      [id,req.user!.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404,'Support case not found or sensitive access is not approved');
+    if (current.status!=='appealed') throw new HttpError(409,'Only an appealed case can receive an appeal review');
+    if (current.resolved_by===req.user!.id) throw new HttpError(403,'The original resolution author cannot review its appeal');
+    const priorReview = (await client.query(
+      'SELECT id FROM support_case_appeal_reviews WHERE case_id=$1',
+      [id],
+    )).rows[0];
+    if (priorReview) throw new HttpError(409,'This appeal has already received an independent review');
+    if (['financial','legal'].includes(current.category)
+      && body.decision==='overturned' && !body.formal_workflow_reference) {
+      throw new HttpError(422,'Overturned financial and legal appeals must reference their formal workflow');
+    }
+    const review = (await client.query(
+      `INSERT INTO support_case_appeal_reviews(
+         case_id,decision,rationale,corrective_action,formal_workflow_reference,reviewed_by
+       ) VALUES($1,$2,$3,$4,$5,$6)
+       RETURNING id,case_id,decision,rationale,corrective_action,formal_workflow_reference,reviewed_at`,
+      [id,body.decision,body.rationale,body.corrective_action ?? null,
+        body.formal_workflow_reference ?? null,req.user!.id],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO support_case_events(case_id,actor_id,event_type,reason)
+       VALUES($1,$2,'appeal_reviewed',$3)`,
+      [id,req.user!.id,body.rationale],
+    );
+    await audit(client,req.user!.id,'support_case_appeal_reviewed','support_case',id,null,{
+      decision:body.decision,review_id:review.id,
+    });
+    await notify(client,current.user_id,'support_case_appeal_reviewed',{
+      case_id:id,decision:body.decision,
+    });
+    return review;
+  });
+  res.status(201).json(row);
 }));
 
 ops.get('/support/cases/:id/events', h(async (req, res) => {
@@ -145,8 +212,13 @@ ops.post('/support/cases/:id/access-requests', requireRole(...SUPPORT_STAFF), h(
   const id = z.string().uuid().parse(req.params.id);
   const body = z.object({ reason:z.string().trim().min(10).max(1000) }).strict().parse(req.body);
   const request = await withUser(req.user!, async (client) => {
-    const exists = (await client.query('SELECT id FROM support_cases WHERE id=$1',[id])).rows[0];
-    if (!exists) throw new HttpError(404,'Support case not found');
+    const exists = (await client.query(
+      `SELECT app_support_case_exists_for_staff($1) AS exists,
+         app_support_case_can_request_access($1) AS allowed`,
+      [id],
+    )).rows[0];
+    if (!exists?.exists) throw new HttpError(404,'Support case not found');
+    if (!exists.allowed) throw new HttpError(403,'The original resolution author cannot request access to review this appeal');
     const pending = (await client.query(
       `SELECT id FROM support_case_access_requests
        WHERE case_id=$1 AND requested_by=$2 AND status='pending'`,

@@ -41,6 +41,7 @@ const MINI_APP_PANELS = new Set([
 const $ = (selector) => document.querySelector(selector);
 const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
+state.supportAppealQueue = [];
 let workspaceSearchSequence = 0;
 let deferredInstallPrompt = null;
 let supportAccessExpiryTimer = null;
@@ -1379,6 +1380,8 @@ async function loadPanelData(panel) {
       if (['global_admin','super_admin','compliance','corporate_business_manager'].includes(state.user.role)) {
         state.supportQueue = await safeGet('/support/cases/queue',[]);
       } else state.supportQueue = [];
+      state.supportAppealQueue = ['global_admin','super_admin','compliance'].includes(state.user.role)
+        ? await safeGet('/support/cases/appeals/queue',[]) : [];
       state.supportAccessRequests = ['global_admin','super_admin','compliance'].includes(state.user.role)
         ? await safeGet('/support/access-requests',[]) : [];
       break;
@@ -4858,6 +4861,11 @@ function renderSupport() {
     card.append(node('h4',item.subject),node('p',`${item.category.replaceAll('_',' ')} · ${item.status} · ${item.priority}`, 'muted'));
     card.append(node('p',item.description));
     if (item.outcome) card.append(node('p',`Outcome: ${item.outcome}`),node('p',`Appeal route: ${item.appeal_route}`,'muted'));
+    if (item.appeal_decision) {
+      card.append(node('p',`Appeal decision: ${item.appeal_decision}`),
+        node('p',`Appeal review: ${item.appeal_rationale}`,'muted'));
+      if (item.appeal_corrective_action) card.append(node('p',`Appeal corrective action: ${item.appeal_corrective_action}`));
+    }
     if (item.status==='resolved') card.append(button('Appeal resolution','support-appeal','button button-outline',{id:item.id}));
     card.append(button('View case timeline','support-open-case','button button-outline',{id:item.id}));
     mine.append(card);
@@ -4870,8 +4878,7 @@ function renderSupport() {
     queue.append(node('p','Case descriptions and sensitive details remain hidden until a different authorized reviewer approves a 15-minute access window.','muted'));
     for (const item of state.supportQueue) {
       const card = node('article',undefined,'record-card');
-      card.append(node('h4',item.subject),node('p',`${item.category.replaceAll('_',' ')} · ${item.status} · ${item.priority} · ${item.legal_name}`,'muted'));
-      card.append(node('p',item.category==='agent_complaint'?'Independent queue · no Agent assignment':'Unassigned support case','muted'));
+      card.append(node('h4',`Case ${item.id.slice(0,8)}`),node('p',`${item.category.replaceAll('_',' ')} · ${item.status} · ${item.priority}`,'muted'));
       card.append(
         button('Request sensitive access','support-access-request','button button-outline',{id:item.id}),
         button('Open approved case','support-open-case','button button-primary',{id:item.id}),
@@ -4879,6 +4886,23 @@ function renderSupport() {
       queue.append(card);
     }
     wrap.append(queue);
+  }
+
+  if (state.supportAppealQueue.length) {
+    const appeals=node('section',undefined,'panel');
+    appeals.append(node('h3','Appeal review queue'));
+    appeals.append(node('p','Appeals are reviewed by an authorized person other than the original resolution author. Case details require independent temporary approval.','muted'));
+    for (const item of state.supportAppealQueue) {
+      const card=node('article',undefined,'record-card');
+      card.append(node('h4',`Appealed case ${item.id.slice(0,8)}`),
+        node('p',`${item.category.replaceAll('_',' ')} · ${item.priority} · appealed ${new Date(item.appealed_at).toLocaleString()}`,'muted'));
+      card.append(
+        button('Request sensitive access','support-access-request','button button-outline',{id:item.id}),
+        button('Open appeal','support-open-case','button button-primary',{id:item.id}),
+      );
+      appeals.append(card);
+    }
+    wrap.append(appeals);
   }
 
   if (state.supportAccessRequests.length) {
@@ -4909,15 +4933,17 @@ function renderSupport() {
     }
     if (supportStaff&&sensitiveAccessActive) {
       if (!isCaseOwner) detail.append(node('p',`Approved access expires ${new Date(accessExpires).toLocaleTimeString()}.`,'muted'));
-      const advance=node('div',undefined,'inline-form');
-      advance.append(button('Mark in progress','support-case-status','button button-outline',{
-        id:state.supportCaseDetail.id,status:'in_progress',
-      }),button('Request customer information','support-case-status','button button-outline',{
-        id:state.supportCaseDetail.id,status:'pending_customer',
-      }),button('Escalate case','support-case-status','button button-outline',{
-        id:state.supportCaseDetail.id,status:'escalated',
-      }));
-      detail.append(advance);
+      if (!['resolved','appealed'].includes(state.supportCaseDetail.status)) {
+        const advance=node('div',undefined,'inline-form');
+        advance.append(button('Mark in progress','support-case-status','button button-outline',{
+          id:state.supportCaseDetail.id,status:'in_progress',
+        }),button('Request customer information','support-case-status','button button-outline',{
+          id:state.supportCaseDetail.id,status:'pending_customer',
+        }),button('Escalate case','support-case-status','button button-outline',{
+          id:state.supportCaseDetail.id,status:'escalated',
+        }));
+        detail.append(advance);
+      }
       if (!['resolved','appealed'].includes(state.supportCaseDetail.status)) {
         const resolution=node('form',undefined,'form-grid');
         resolution.dataset.form='support-case-resolve';
@@ -4931,6 +4957,25 @@ function renderSupport() {
         resolution.append(field('Appeal route','appeal_route','textarea',true,{maxLength:1000,rows:2}).label);
         resolution.append(button('Resolve case','submit','button button-primary'));
         detail.append(resolution);
+      }
+      if (['global_admin','super_admin','compliance'].includes(state.user.role)
+        && state.supportCaseDetail.status==='appealed'
+        && !state.supportCaseDetail.appeal_decision
+        && state.supportCaseDetail.resolved_by!==state.user.id) {
+        const review=node('form',undefined,'form-grid');
+        review.dataset.form='support-case-appeal-review';
+        review.dataset.id=state.supportCaseDetail.id;
+        review.append(node('h4','Independent appeal review'));
+        const decision=field('Appeal decision','decision','select');
+        for (const [value,label] of [['upheld','Uphold original resolution'],['overturned','Overturn and require corrective action']]) {
+          const option=node('option',label); option.value=value; decision.input.append(option);
+        }
+        review.append(decision.label);
+        review.append(field('Review rationale','rationale','textarea',true,{maxLength:2000,rows:3}).label);
+        review.append(field('Corrective action (required if overturned)','corrective_action','textarea',false,{maxLength:2000,rows:3}).label);
+        review.append(field('Formal financial/legal workflow reference (required if overturned, when applicable)','formal_workflow_reference','text',false,{maxLength:200}).label);
+        review.append(button('Record appeal decision','submit','button button-primary'));
+        detail.append(review);
       }
     }
     if (sensitiveAccessActive) {
@@ -5218,6 +5263,22 @@ async function submitForm(form) {
     state.supportCaseDetail=null;
     await refresh();
     showAlert('Resolution recorded and the user was notified.');
+    return;
+  }
+  if (form.dataset.form === 'support-case-appeal-review') {
+    const payload={
+      decision:values.decision,
+      rationale:values.rationale.trim(),
+      ...(values.corrective_action.trim()?{corrective_action:values.corrective_action.trim()}:{}),
+      ...(values.formal_workflow_reference.trim()
+        ?{formal_workflow_reference:values.formal_workflow_reference.trim()}:{}),
+    };
+    await api(`/support/cases/${encodeURIComponent(form.dataset.id)}/appeal-review`,{
+      method:'POST',body:JSON.stringify(payload),
+    });
+    state.supportCaseDetail=null;
+    await refresh();
+    showAlert('Independent appeal review recorded and the user was notified.');
     return;
   }
   if (form.dataset.form === 'workforce-correction') {

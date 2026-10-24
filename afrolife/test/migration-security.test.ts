@@ -35,6 +35,8 @@ const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
 const workforceWorkflows = readFileSync(new URL('../migrations/095_workforce_workflows.sql', import.meta.url), 'utf8');
 const sessionDeviceManagement = readFileSync(new URL('../migrations/096_session_device_management.sql', import.meta.url), 'utf8');
 const supportCases = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
+const supportCaseAccessHardening = readFileSync(new URL('../migrations/098_support_case_access_hardening.sql', import.meta.url), 'utf8');
+const supportCaseAppealReview = readFileSync(new URL('../migrations/099_support_case_appeal_review.sql', import.meta.url), 'utf8');
 const coreMigrator = readFileSync(new URL('../src/migrate.ts', import.meta.url), 'utf8');
 const accountingMigrator = readFileSync(new URL('../services/accounting/migrate.ts', import.meta.url), 'utf8');
 
@@ -411,4 +413,33 @@ test('support cases preserve urgent escalation, independent access approval, and
   assert.match(supportCases,/expires_at <= reviewed_at \+ interval '15 minutes'/);
   assert.match(supportCases,/formal_workflow_reference IS NOT NULL/);
   assert.match(supportCases,/Support case intake evidence is immutable/);
+});
+
+test('support case details and timelines require owner or active independent approval at the database boundary', () => {
+  assert.match(supportCaseAccessHardening,/CREATE OR REPLACE FUNCTION app_support_case_can_access\(target_case uuid\)/);
+  assert.match(supportCaseAccessHardening,/a\.status = 'approved'/);
+  assert.match(supportCaseAccessHardening,/a\.expires_at > now\(\)/);
+  assert.match(supportCaseAccessHardening,/CREATE POLICY support_cases_authorized_read ON support_cases/);
+  assert.match(supportCaseAccessHardening,/CREATE POLICY support_case_events_authorized_read ON support_case_events/);
+  assert.match(supportCaseAccessHardening,/CREATE OR REPLACE FUNCTION app_support_case_queue\(\)/);
+  assert.match(supportCaseAccessHardening,/c\.id, c\.category, c\.priority, c\.status, c\.created_at, c\.updated_at/);
+  assert.match(supportCaseAccessHardening,/app_role\(\) IN \('global_admin','super_admin','compliance','corporate_business_manager'\)/);
+  assert.match(supportCaseAccessHardening,/REVOKE UPDATE ON support_case_access_requests FROM "\{\{role\}\}"/);
+  assert.match(supportCaseAccessHardening,/GRANT UPDATE \(status, reviewed_by, review_reason, reviewed_at, expires_at\)/);
+});
+
+test('support case appeals have a private queue and independent append-only review outcomes', () => {
+  assert.match(supportCaseAppealReview,/CREATE TABLE support_case_appeal_reviews/);
+  assert.match(supportCaseAppealReview,/case_id uuid NOT NULL UNIQUE REFERENCES support_cases\(id\)/);
+  assert.match(supportCaseAppealReview,/decision text NOT NULL CHECK \(decision IN \('upheld','overturned'\)\)/);
+  assert.match(supportCaseAppealReview,/c\.resolved_by <> app_user_id\(\)/);
+  assert.match(supportCaseAppealReview,/app_support_case_can_access\(case_id\)/);
+  assert.match(supportCaseAppealReview,/app_support_case_can_request_access\(case_id\)/);
+  assert.match(supportCaseAppealReview,/c\.resolved_by <> app_user_id\(\)/);
+  assert.match(supportCaseAppealReview,/support_case_appeal_reviews_immutable/);
+  assert.match(supportCaseAppealReview,/CREATE OR REPLACE FUNCTION app_support_appeal_queue\(\)/);
+  assert.match(supportCaseAppealReview,/c\.status = 'appealed'/);
+  assert.match(supportCaseAppealReview,/NOT EXISTS \([\s\S]*support_case_appeal_reviews/);
+  assert.match(supportCaseAppealReview,/appeal_reviewed/);
+  assert.match(operations,/support\/cases\/:id\/appeal-review/);
 });
