@@ -35,7 +35,7 @@ const requirePlatformControlPlaneAdmin: RequestHandler = (req, _res, next) => {
   }
   return next();
 };
-const PROVISIONABLE_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner'] as const;
+const PROVISIONABLE_ROLES = ['super_admin', 'corporate_business_manager', 'compliance', 'finance', 'finance_manager', 'master_agent', 'field_agent', 'customer', 'worker', 'property_owner', 'property_vendor'] as const;
 const PLATFORM_SERVICE_KEYS = [
   'agency', 'workforce', 'staffing', 'property', 'marketplace', 'accounting', 'insurance',
   'sacco_mfi', 'edir', 'learning', 'privacy', 'operations', 'global_bi',
@@ -1750,12 +1750,22 @@ adminRouter.post('/users', requireRole('global_admin','super_admin','corporate_b
     role: z.enum(PROVISIONABLE_ROLES), territory_id: z.number().int().optional(), parent_agent_id: z.string().uuid().optional(),
     requested_plan: z.enum(['free','pro','enterprise']).optional(),
     service_specialization: z.enum(['financial_service', 'growth_partnership', 'workforce_property']).optional(),
+    vendor_id: z.string().uuid().optional(),
   }).parse(req.body);
   if (req.user!.role === 'corporate_business_manager' && !['master_agent','field_agent'].includes(b.role)) {
     throw new HttpError(403, 'Business Admins may onboard direct Master Agents and Field Agents only.');
   }
   if (req.user!.role === 'super_admin' && !['master_agent','field_agent'].includes(b.role)) {
     throw new HttpError(403, 'Super Admins may onboard Master Agents and Field Agents only.');
+  }
+  if (b.role === 'property_vendor' && req.user!.role !== 'global_admin') {
+    throw new HttpError(403, 'Only a Global Admin may provision a property-vendor account.');
+  }
+  if (b.role === 'property_vendor' && !b.vendor_id) {
+    throw new HttpError(422, 'Choose the property-vendor business for this portal account.');
+  }
+  if (b.role !== 'property_vendor' && b.vendor_id) {
+    throw new HttpError(422, 'A vendor business can only be selected for a property-vendor account.');
   }
   if (AGENT_ROLES.includes(b.role) && !b.territory_id) throw new HttpError(422, 'Agents need an area');
   if (b.role === 'field_agent' && !b.parent_agent_id) throw new HttpError(422, 'A field agent needs a master agent');
@@ -1773,6 +1783,13 @@ adminRouter.post('/users', requireRole('global_admin','super_admin','corporate_b
       )).rows[0];
       if (!parent) throw new HttpError(422, 'Choose an active Master Agent in the selected territory.');
     }
+    if (b.role === 'property_vendor') {
+      const vendor = (await c.query(
+        'SELECT id FROM property_vendors WHERE id=$1 AND active FOR UPDATE',
+        [b.vendor_id],
+      )).rows[0];
+      if (!vendor) throw new HttpError(422, 'Choose an active property-vendor business.');
+    }
     const r = await c.query(
       `INSERT INTO users (legal_name, phone, email, role, territory_id, password_hash, must_change_password, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,true,$7) RETURNING id, legal_name, phone, role, kyc_status, active`,
@@ -1785,6 +1802,14 @@ adminRouter.post('/users', requireRole('global_admin','super_admin','corporate_b
         [r.rows[0].id,b.requested_plan,b.requested_plan==='free'?'not_required':'not_configured',
           b.role==='master_agent'?'master':'field',b.territory_id,b.role==='field_agent'?b.parent_agent_id:null],
       );
+    } else if (b.role === 'property_vendor') {
+      await c.query(
+        `INSERT INTO user_signups(user_id,account_type,payment_status,vendor_id)
+         VALUES($1,'property_vendor','not_required',$2)`,
+        [r.rows[0].id,b.vendor_id],
+      );
+    }
+    if (AGENT_ROLES.includes(b.role) || b.role === 'property_vendor') {
       uploadToken = randomBytes(32).toString('base64url');
       await c.query(
         `INSERT INTO signup_upload_tokens(user_id,token_hash,expires_at)
@@ -1957,6 +1982,18 @@ adminRouter.post('/users/:id/activate', requireRole('global_admin'), h(async (re
          VALUES ($1,$2,$3,$4)
          ON CONFLICT (id) DO NOTHING`,
         [req.params.id, signup.agent_type, signup.parent_agent_id, signup.territory_id],
+      );
+    }
+    if (signup?.account_type === 'property_vendor') {
+      const vendor = (await c.query(
+        'SELECT id FROM property_vendors WHERE id=$1 AND active FOR UPDATE',
+        [signup.vendor_id],
+      )).rows[0];
+      if (!vendor) throw new HttpError(409, 'The property-vendor business is no longer active.');
+      await c.query(
+        `INSERT INTO property_vendor_memberships(vendor_id,user_id,created_by)
+         VALUES($1,$2,$3)`,
+        [vendor.id, req.params.id, req.user!.id],
       );
     }
     await c.query("SELECT set_config('app.access_change_reason',$1,true)", [reason]);

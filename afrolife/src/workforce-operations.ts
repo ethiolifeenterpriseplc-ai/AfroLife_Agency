@@ -819,6 +819,11 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
       `INSERT INTO workforce_payroll_export_payloads(export_id,encrypted_payload) VALUES($1,$2)`,
       [record.id, encrypted.payload],
     );
+    await client.query(
+      `INSERT INTO workforce_payroll_export_events(export_id,event_type,reason,actor_id)
+       VALUES($1,'generated',$2,$3)`,
+      [record.id, 'Encrypted payroll export generated. Provider filing and payment are not verified.', req.user!.id],
+    );
     for (const row of rows) {
       await client.query(
         'INSERT INTO workforce_payroll_export_items(export_id,time_entry_id) VALUES($1,$2)',
@@ -878,6 +883,22 @@ workforceOperations.get('/workforce/payroll-exports/:id/file', requireActivity('
   }).send(JSON.stringify(payload.encrypted_payload));
 }));
 
+workforceOperations.get('/workforce/payroll-exports/:id/events', requireActivity('workforce.payroll.export'), h(async (req, res) => {
+  const events = await withUser(req.user!, async (client) => {
+    const exportRecord = (await client.query(
+      'SELECT id FROM workforce_payroll_exports WHERE id=$1',
+      [req.params.id],
+    )).rows[0];
+    if (!exportRecord) throw new HttpError(404, 'Payroll export not found');
+    return (await client.query(
+      `SELECT id,event_type,reason,external_reference,actor_id,created_at
+       FROM workforce_payroll_export_events WHERE export_id=$1 ORDER BY created_at,id`,
+      [exportRecord.id],
+    )).rows;
+  });
+  res.json(events);
+}));
+
 workforceOperations.post('/workforce/payroll-exports/:id/handoff', requireActivity('workforce.payroll.export'), h(async (req, res) => {
   const body = z.object({
     result: z.enum(['handed_off','handoff_failed']),
@@ -898,6 +919,11 @@ workforceOperations.post('/workforce/payroll-exports/:id/handoff', requireActivi
        RETURNING id,status,handoff_reason,handoff_reference,handed_off_by,handed_off_at`,
       [record.id, body.result, body.reason, body.reference ?? null, req.user!.id],
     )).rows[0];
+    await client.query(
+      `INSERT INTO workforce_payroll_export_events(export_id,event_type,reason,external_reference,actor_id)
+       VALUES($1,$2,$3,$4,$5)`,
+      [record.id, body.result, body.reason, body.reference ?? null, req.user!.id],
+    );
     await audit(client, req.user!.id, `workforce_payroll_${body.result}`, 'workforce_payroll_export',
       record.id, { status: record.status }, { status: updated.status, reason: body.reason, reference: body.reference ?? null });
     return updated;

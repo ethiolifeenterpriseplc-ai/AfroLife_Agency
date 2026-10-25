@@ -10,6 +10,7 @@ export const ROLE_NAMES = [
   'customer',
   'worker',
   'property_owner',
+  'property_vendor',
 ] as const;
 
 export type RoleName = typeof ROLE_NAMES[number];

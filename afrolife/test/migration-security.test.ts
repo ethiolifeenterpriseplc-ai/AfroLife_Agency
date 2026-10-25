@@ -32,12 +32,19 @@ const insuranceRequests = readFileSync(new URL('../src/insurance-requests.ts', i
 const insuranceBrokerageSandboxRouter = readFileSync(new URL('../src/insurance-brokerage-sandbox.ts', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/ops.ts', import.meta.url), 'utf8');
 const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');
+const publicApp = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const workforceWorkflows = readFileSync(new URL('../migrations/095_workforce_workflows.sql', import.meta.url), 'utf8');
 const sessionDeviceManagement = readFileSync(new URL('../migrations/096_session_device_management.sql', import.meta.url), 'utf8');
 const supportCases = readFileSync(new URL('../migrations/097_support_cases.sql', import.meta.url), 'utf8');
 const supportCaseAccessHardening = readFileSync(new URL('../migrations/098_support_case_access_hardening.sql', import.meta.url), 'utf8');
 const supportCaseAppealReview = readFileSync(new URL('../migrations/099_support_case_appeal_review.sql', import.meta.url), 'utf8');
 const maintenanceCompletionReview = readFileSync(new URL('../migrations/100_maintenance_completion_review.sql', import.meta.url), 'utf8');
+const maintenanceVendorFulfillment = readFileSync(new URL('../migrations/101_maintenance_vendor_fulfillment.sql', import.meta.url), 'utf8');
+const notificationDeliveryRetries = readFileSync(new URL('../migrations/102_notification_delivery_retries.sql', import.meta.url), 'utf8');
+const payrollHandoffHistory = readFileSync(new URL('../migrations/103_workforce_payroll_handoff_history.sql', import.meta.url), 'utf8');
+const propertyVendorPortal = readFileSync(new URL('../src/property-vendor-portal.ts', import.meta.url), 'utf8');
+const notificationDispatcher = readFileSync(new URL('../src/dispatch.ts', import.meta.url), 'utf8');
+const workforceOperations = readFileSync(new URL('../src/workforce-operations.ts', import.meta.url), 'utf8');
 const coreMigrator = readFileSync(new URL('../src/migrate.ts', import.meta.url), 'utf8');
 const accountingMigrator = readFileSync(new URL('../services/accounting/migrate.ts', import.meta.url), 'utf8');
 
@@ -454,4 +461,44 @@ test('maintenance completion requires an independent authorized review', () => {
   assert.match(maintenanceCompletionReview,/Maintenance cancellation requires a reason/);
   assert.match(operations,/canTransitionMaintenance\(m\.status, b\.status\)/);
   assert.match(operations,/requiresMaintenanceReview\(b\.status\)/);
+});
+
+test('maintenance vendor access is assignment-scoped and invoice mismatches require a decision', () => {
+  assert.match(maintenanceVendorFulfillment,/CREATE TABLE property_vendor_memberships/);
+  assert.match(maintenanceVendorFulfillment,/user_signups_account_type_check/);
+  assert.match(maintenanceVendorFulfillment,/property_vendor.*national_id/s);
+  assert.match(maintenanceVendorFulfillment,/user_signups_vendor_account_check/);
+  assert.match(maintenanceVendorFulfillment,/UPDATE property_vendor_bills bill/);
+  assert.match(maintenanceVendorFulfillment,/assigned_vendor_id IS NULL/);
+  assert.match(admin,/INSERT INTO user_signups\(user_id,account_type,payment_status,vendor_id\)/);
+  assert.match(admin,/INSERT INTO property_vendor_memberships\(vendor_id,user_id,created_by\)/);
+  assert.match(operations,/!body\.assigned_to && !body\.assigned_vendor_id/);
+  assert.match(maintenanceVendorFulfillment,/CREATE POLICY maintenance_vendor_assigned_read/);
+  assert.match(maintenanceVendorFulfillment,/CREATE POLICY maintenance_vendor_assigned_update/);
+  assert.match(maintenanceVendorFulfillment,/enforce_maintenance_vendor_update_scope/);
+  assert.match(maintenanceVendorFulfillment,/completion_idempotency_key uuid UNIQUE/);
+  assert.match(maintenanceVendorFulfillment,/CREATE TABLE maintenance_evidence/);
+  assert.match(maintenanceVendorFulfillment,/CREATE TABLE maintenance_cost_change_requests/);
+  assert.match(maintenanceVendorFulfillment,/property_vendor_bills_vendor_insert/);
+  assert.match(maintenanceVendorFulfillment,/match_status IN \('unmatched','matched','mismatch','accepted_exception'\)/);
+  assert.match(maintenanceVendorFulfillment,/CREATE TABLE maintenance_sla_escalations/);
+  assert.match(propertyVendorPortal,/maintenance\/vendor\/:id\/complete/);
+  assert.match(operations,/maintenance\/sla\/overdue/);
+});
+
+test('notification delivery retries are bounded, idempotent, and operator-visible', () => {
+  assert.match(notificationDeliveryRetries,/total_attempt_count integer/);
+  assert.match(notificationDeliveryRetries,/status IN \('pending','sending','sent','read','dead'\)/);
+  assert.match(notificationDispatcher,/idempotency-key/);
+  assert.match(notificationDispatcher,/attempt_count >= 12/);
+  assert.match(publicApp,/Webhook notification delivery/);
+  assert.match(operations,/notifications\/:id\/retry/);
+});
+
+test('payroll handoff outcomes are retained as append-only evidence', () => {
+  assert.match(payrollHandoffHistory,/CREATE TABLE workforce_payroll_export_events/);
+  assert.match(payrollHandoffHistory,/BEFORE UPDATE OR DELETE/);
+  assert.match(payrollHandoffHistory,/app_has_permission\('workforce\.payroll\.export'\)/);
+  assert.match(workforceOperations,/INSERT INTO workforce_payroll_export_events/);
+  assert.match(workforceOperations,/workforce\/payroll-exports\/:id\/events/);
 });

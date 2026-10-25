@@ -1,7 +1,8 @@
 export const MAINTENANCE_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
   open: ['triaged', 'cancelled'],
   triaged: ['assigned', 'cancelled'],
-  assigned: ['in_progress', 'cancelled'],
+  assigned: ['accepted', 'in_progress', 'cancelled'],
+  accepted: ['in_progress', 'cancelled'],
   in_progress: ['awaiting_review', 'cancelled'],
   awaiting_review: ['completed', 'rework_required'],
   rework_required: ['in_progress', 'cancelled'],

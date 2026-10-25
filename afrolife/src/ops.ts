@@ -15,12 +15,14 @@ import { toCsv } from './csv.js';
 import { PROPERTY_CHART_OF_ACCOUNTS, propertyPeriodCloseCheck } from './property-accounting.js';
 import { enqueueAccountingEvent } from './accounting-outbox.js';
 import { propertyVendorAccounting } from './property-vendor-accounting.js';
+import { propertyVendorPortal } from './property-vendor-portal.js';
 import { staffingAccounting } from './staffing-accounting.js';
 import { workforceOperations } from './workforce-operations.js';
 import { canTransitionMaintenance, requiresMaintenanceReview } from './maintenance-workflow.js';
 
 export const ops = Router();
 ops.use(propertyVendorAccounting);
+ops.use(propertyVendorPortal);
 ops.use(staffingAccounting);
 ops.use(workforceOperations);
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => { fn(req, res).catch(next); };
@@ -1311,9 +1313,10 @@ ops.get('/rent-transactions/pending', requireAnyActivity('rent.transactions.view
 
 // ================= Maintenance =================
 ops.post('/maintenance', requireActivity('property.maintenance.manage'), h(async (req, res) => {
-  const b = z.object({ property_id: z.string().uuid(), unit_id: z.string().uuid().optional(), description: z.string().trim().min(5).max(2000), category: z.enum(['general','plumbing','electrical','appliance','structural','cleaning','safety','other']).default('general'), priority: z.enum(['low', 'normal', 'urgent']).default('normal'), idempotency_key: z.string().uuid().optional() }).parse(req.body);
+  const b = z.object({ property_id: z.string().uuid(), unit_id: z.string().uuid().optional(), description: z.string().trim().min(10).max(2000), category: z.enum(['general','plumbing','electrical','appliance','structural','cleaning','safety','other']).default('general'), priority: z.enum(['low', 'normal', 'urgent']).default('normal'), idempotency_key: z.string().uuid().optional() }).parse(req.body);
+  const priority = b.category === 'safety' ? 'urgent' : b.priority;
   const payloadHash = b.idempotency_key ? createHash('sha256').update(JSON.stringify({
-    property_id: b.property_id, unit_id: b.unit_id ?? null, description: b.description, category: b.category, priority: b.priority,
+    property_id: b.property_id, unit_id: b.unit_id ?? null, description: b.description, category: b.category, priority,
   })).digest('hex') : null;
   const result = await withUser(req.user!, async (c) => {
     if (b.idempotency_key) {
@@ -1335,7 +1338,7 @@ ops.post('/maintenance', requireActivity('property.maintenance.manage'), h(async
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (idempotency_user_id,idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
        RETURNING *`,
-      [b.property_id, b.unit_id ?? null, b.description, b.category, b.priority, p.source_agent_id,
+      [b.property_id, b.unit_id ?? null, b.description, b.category, priority, p.source_agent_id,
         b.idempotency_key ? req.user!.id : null, b.idempotency_key ?? null, payloadHash],
     );
     if (!r.rowCount && b.idempotency_key) {
@@ -1347,7 +1350,7 @@ ops.post('/maintenance', requireActivity('property.maintenance.manage'), h(async
       return { row: existing, replayed: true };
     }
     await c.query("INSERT INTO maintenance_request_events (maintenance_request_id,actor_id,event_type,to_status,note) VALUES ($1,$2,'opened','open',$3)", [r.rows[0].id, req.user!.id, b.description]);
-    await audit(c, req.user!.id, 'maintenance_opened', 'maintenance', r.rows[0].id, null, { priority: b.priority, category: b.category });
+    await audit(c, req.user!.id, 'maintenance_opened', 'maintenance', r.rows[0].id, null, { priority, category: b.category });
     return { row: r.rows[0], replayed: false };
   });
   res.status(result.replayed ? 200 : 201).json({ ...result.row, replayed: result.replayed });
@@ -1356,16 +1359,20 @@ ops.post('/maintenance', requireActivity('property.maintenance.manage'), h(async
 ops.get('/maintenance', requireActivity('property.maintenance.manage'), h(async (req, res) => {
   const offset = z.coerce.number().int().min(0).max(100000).parse(req.query.offset ?? 0);
   res.json(await withUser(req.user!, async (c) => (await c.query(
-    `SELECT m.*, p.address, u.unit_no,
+    `SELECT m.*, p.address, u.unit_no,vendor.name AS vendor_name,
        extract(epoch FROM (COALESCE(m.completed_at,now())-m.created_at))/3600 AS age_hours,
        latest.event_type AS latest_event_type, latest.note AS latest_event_note,
-       latest.created_at AS latest_event_at
+       latest.created_at AS latest_event_at,
+       (SELECT count(*)::int FROM maintenance_evidence e
+        WHERE e.maintenance_request_id=m.id AND e.scan_status='clean') AS evidence_count
      FROM maintenance_requests m JOIN properties p ON p.id = m.property_id LEFT JOIN property_units u ON u.id=m.unit_id
+     LEFT JOIN property_vendors vendor ON vendor.id=m.assigned_vendor_id
      LEFT JOIN LATERAL (
        SELECT e.event_type,e.note,e.created_at FROM maintenance_request_events e
        WHERE e.maintenance_request_id=m.id ORDER BY e.created_at DESC,e.id DESC LIMIT 1
      ) latest ON true
-     ORDER BY (m.status IN ('completed','done','cancelled')), m.priority = 'urgent' DESC, m.created_at DESC, m.id DESC LIMIT 201 OFFSET $1`, [offset])).rows));
+     ORDER BY (m.status IN ('completed','done','cancelled')), m.sla_due_at NULLS LAST,
+       m.priority = 'urgent' DESC, m.created_at DESC, m.id DESC LIMIT 201 OFFSET $1`, [offset])).rows));
 }));
 
 ops.get('/maintenance/metrics', requireActivity('property.maintenance.manage'), h(async (req, res) => {
@@ -1373,8 +1380,23 @@ ops.get('/maintenance/metrics', requireActivity('property.maintenance.manage'), 
     `SELECT count(*) FILTER (WHERE status IN ('open','triaged','assigned','in_progress','awaiting_review','rework_required'))::int AS open_count,
        count(*) FILTER (WHERE status='open' AND priority='urgent')::int AS urgent_open_count,
        count(*) FILTER (WHERE status IN ('completed','done') AND completed_at >= now()-interval '30 days')::int AS completed_last_30_days,
+       count(*) FILTER (WHERE status NOT IN ('completed','done','cancelled') AND sla_due_at < now())::int AS overdue_count,
        round(avg(extract(epoch FROM (completed_at-created_at))/3600) FILTER (WHERE status IN ('completed','done') AND completed_at >= now()-interval '30 days'),1) AS avg_resolution_hours_30d
      FROM maintenance_requests`)).rows[0]));
+}));
+
+ops.get('/maintenance/sla/overdue', requireRole('corporate_business_manager','super_admin','global_admin'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT m.id,m.property_id,p.address,u.unit_no,m.category,m.priority,m.status,
+       m.sla_due_at,extract(epoch FROM (now()-m.sla_due_at))/3600 AS overdue_hours,
+       m.assigned_to,vendor.name AS vendor_name
+     FROM maintenance_requests m
+     JOIN properties p ON p.id=m.property_id
+     LEFT JOIN property_units u ON u.id=m.unit_id
+     LEFT JOIN property_vendors vendor ON vendor.id=m.assigned_vendor_id
+     WHERE m.sla_due_at < now() AND m.status NOT IN ('completed','done','cancelled')
+     ORDER BY m.sla_due_at,m.id LIMIT 200`,
+  )).rows));
 }));
 
 ops.get('/maintenance/:id/events', requireActivity('property.maintenance.manage'), h(async (req, res) => {
@@ -1388,14 +1410,22 @@ ops.post('/maintenance/:id/update', requireActivity('property.maintenance.manage
   const b = z.object({
     status: z.enum(['triaged', 'assigned', 'in_progress', 'awaiting_review', 'completed', 'rework_required', 'cancelled']),
     assigned_to: z.string().trim().min(2).max(200).optional(),
+    assigned_vendor_id: z.string().uuid().optional(),
+    sla_hours: z.number().int().min(1).max(720).optional(),
     cost: z.number().nonnegative().finite().optional(),
     resolution_note: z.string().trim().min(5).max(1000).optional(),
     review_note: z.string().trim().min(5).max(1000).optional(),
   }).strict().superRefine((body, context) => {
+    if (body.status === 'triaged' && body.sla_hours === undefined) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['sla_hours'], message: 'Set an SLA deadline from 1 to 720 hours' });
+    }
+    if (body.status === 'assigned' && !body.assigned_to && !body.assigned_vendor_id) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['assigned_to'], message: 'Assign an internal technician or external vendor' });
+    }
     if (body.status === 'triaged' && !body.resolution_note) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['resolution_note'], message: 'Add triage notes before routing this request' });
     }
-    if (body.status === 'assigned' && !body.assigned_to) {
+    if (body.status === 'assigned' && !body.assigned_to && !body.assigned_vendor_id) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['assigned_to'], message: 'Choose the assigned person or vendor' });
     }
     if (body.status === 'awaiting_review' && !body.resolution_note) {
@@ -1415,11 +1445,27 @@ ops.post('/maintenance/:id/update', requireActivity('property.maintenance.manage
   res.json(await withUser(req.user!, async (c) => {
     const m = (await c.query('SELECT * FROM maintenance_requests WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
     if (!m) throw new HttpError(404, 'Request not found');
+    if (b.assigned_vendor_id) {
+      if (!['corporate_business_manager','super_admin','global_admin'].includes(req.user!.role)) {
+        throw new HttpError(403, 'Only a maintenance supervisor can assign an external vendor');
+      }
+      const vendor = (await c.query(
+        'SELECT id FROM property_vendors WHERE id=$1 AND active=true',
+        [b.assigned_vendor_id],
+      )).rows[0];
+      if (!vendor) throw new HttpError(422, 'Choose an active property vendor');
+    }
     if (!canTransitionMaintenance(m.status, b.status)) throw new HttpError(409, `A ${m.status.replace('_', ' ')} request cannot move to ${b.status.replace('_', ' ')}`);
     if (requiresMaintenanceReview(b.status) && (!m.completion_submitted_by || m.completion_submitted_by === req.user!.id)) {
       throw new HttpError(409, 'Completion review must be performed by someone other than the person who submitted the work');
     }
+    if (b.status === 'in_progress' && m.assigned_vendor_id) {
+      throw new HttpError(409, 'Assigned vendors must accept the work in their portal before it can start');
+    }
+    const assignee = b.assigned_vendor_id ? null : b.assigned_to ?? null;
     const r = await c.query(`UPDATE maintenance_requests SET status=$2, assigned_to=COALESCE($3,assigned_to),
+      assigned_vendor_id=COALESCE($8,assigned_vendor_id),
+      sla_due_at=CASE WHEN $2='triaged' THEN now()+make_interval(hours=>$9) ELSE sla_due_at END,
       cost=COALESCE($4,cost), resolution_note=COALESCE($5,resolution_note),
       review_note=CASE WHEN $2='awaiting_review' THEN NULL ELSE COALESCE($6,review_note) END,
       completion_submitted_by=CASE WHEN $2='awaiting_review' THEN $7 ELSE completion_submitted_by END,
@@ -1428,8 +1474,9 @@ ops.post('/maintenance/:id/update', requireActivity('property.maintenance.manage
       reviewed_at=CASE WHEN $2='awaiting_review' THEN NULL WHEN $2 IN ('completed','rework_required') THEN now() ELSE reviewed_at END,
       completed_at=CASE WHEN $2='completed' THEN now() ELSE completed_at END, updated_at=now()
       WHERE id=$1 RETURNING *`, [m.id, b.status, b.assigned_to ?? null, b.cost ?? null,
-      b.resolution_note ?? null, b.review_note ?? null, req.user!.id]);
-    const eventNote = b.review_note ?? b.resolution_note ?? b.assigned_to ?? null;
+      b.resolution_note ?? null, b.review_note ?? null, req.user!.id,
+      b.assigned_vendor_id ?? null, b.sla_hours ?? null]);
+    const eventNote = b.review_note ?? b.resolution_note ?? b.assigned_to ?? b.assigned_vendor_id ?? null;
     await c.query('INSERT INTO maintenance_request_events (maintenance_request_id,actor_id,event_type,from_status,to_status,note) VALUES ($1,$2,$3,$4,$5,$6)', [m.id, req.user!.id, b.status, m.status, b.status, eventNote]);
     await audit(c, req.user!.id, 'maintenance_' + b.status, 'maintenance', m.id, { status: m.status }, { status: b.status, cost: b.cost ?? null });
     return r.rows[0];
@@ -1444,4 +1491,36 @@ ops.get('/notifications', h(async (req, res) => {
 ops.post('/notifications/read', h(async (req, res) => {
   await pool.query("UPDATE notifications SET status = 'read' WHERE user_id = $1 AND channel = 'inapp' AND status = 'sent'", [req.user!.id]);
   res.json({ ok: true });
+}));
+
+ops.get('/notifications/delivery-status', requireRole('global_admin'), h(async (_req, res) => {
+  res.json(await withUser(_req.user!, async (c) => (await c.query(
+    `SELECT id,template,status,attempt_count,total_attempt_count,retry_generation,
+        next_attempt_at,claimed_at,last_error,created_at,sent_at
+     FROM notifications WHERE channel='webhook'
+     ORDER BY created_at DESC,id DESC LIMIT 200`,
+  )).rows));
+}));
+
+ops.post('/notifications/:id/retry', requireRole('global_admin'), h(async (req, res) => {
+  const id = z.string().regex(/^[1-9]\d{0,18}$/).parse(req.params.id);
+  const { reason } = z.object({
+    reason: z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
+  const result = await withUser(req.user!, async (c) => {
+    const event = (await c.query(
+      `UPDATE notifications
+       SET status='pending',attempt_count=0,retry_generation=retry_generation+1,
+           next_attempt_at=now(),claimed_at=NULL
+       WHERE id=$1 AND channel='webhook' AND status='dead'
+       RETURNING id,total_attempt_count,retry_generation,last_error`,
+      [id],
+    )).rows[0];
+    if (!event) throw new HttpError(409, 'Only a dead-lettered webhook notification can be manually retried.');
+    await audit(c, req.user!.id, 'notification_delivery_requeued', 'notification', event.id,
+      { status: 'dead', total_attempt_count: event.total_attempt_count, last_error: event.last_error },
+      { status: 'pending', retry_generation: event.retry_generation, reason });
+    return event;
+  });
+  res.json(result);
 }));

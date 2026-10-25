@@ -63,6 +63,14 @@ test('worker self-service portal access follows worker identity and custom grant
   assert.equal(hasMiniAppAccess(user('worker', 'custom', ['workers']), 'workers'), true);
 });
 
+test('property-vendor accounts are restricted to the properties mini-app', () => {
+  assert.deepEqual(allowedMiniApps(user('property_vendor')), ['properties']);
+  assert.equal(hasMiniAppAccess(user('property_vendor'), 'properties'), true);
+  assert.equal(hasMiniAppAccess(user('property_vendor', 'custom', []), 'properties'), false);
+  assert.equal(hasMiniAppAccess(user('property_vendor', 'custom', ['properties']), 'properties'), true);
+  assert.equal(hasMiniAppAccess(user('property_vendor', 'custom', ['workers']), 'workers'), false);
+});
+
 test('workforce activity roles include the manager portal and protect worker-only actions', () => {
   assert.equal(hasRoleActivityAccess('corporate_business_manager', 'workforce.workers.view'), true);
   assert.equal(hasRoleActivityAccess('corporate_business_manager', 'workforce.shifts.manage'), true);

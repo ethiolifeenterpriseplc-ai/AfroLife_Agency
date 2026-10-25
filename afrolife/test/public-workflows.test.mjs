@@ -183,6 +183,27 @@ test('maintenance workflow surfaces independent completion review', () => {
   assert.match(api, /Completion review must be performed by someone other than the person who submitted the work/);
 });
 
+test('property vendor portal exposes assigned work only and requires scanned evidence', () => {
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const portal = readFileSync(new URL('../src/property-vendor-portal.ts', import.meta.url), 'utf8');
+  const accounting = readFileSync(new URL('../src/property-vendor-accounting.ts', import.meta.url), 'utf8');
+  const scanner = readFileSync(new URL('../src/clamav.ts', import.meta.url), 'utf8');
+  const server = readFileSync(new URL('../src/server.ts', import.meta.url), 'utf8');
+  assert.match(app,/Vendor maintenance workspace/);
+  assert.match(app,/maintenance-vendor-accept/);
+  assert.match(app,/maintenance-vendor-complete/);
+  assert.match(app,/Vendor additional-cost and invoice review/);
+  assert.match(app,/maintenance-invoice-mismatch/);
+  assert.match(app,/Overdue maintenance SLA queue/);
+  assert.match(app,/Webhook notification delivery/);
+  assert.match(app,/View handoff history/);
+  assert.match(portal,/membership\.user_id=\$2 AND membership\.active/);
+  assert.match(portal,/Upload at least one malware-scanned completion photo/);
+  assert.match(accounting,/Resolve the invoice-to-work mismatch/);
+  assert.match(scanner,/zINSTREAM/);
+  assert.match(server,/api\.post\('\/maintenance\/vendor\/:id\/evidence', express\.raw/);
+});
+
 test('account security exposes session listing and session revocation', () => {
   const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   const admin = readFileSync(new URL('../src/admin.ts', import.meta.url), 'utf8');

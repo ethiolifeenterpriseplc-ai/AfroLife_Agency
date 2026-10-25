@@ -42,12 +42,20 @@ propertyVendorAccounting.post('/maintenance/:id/vendor-bills',requireRole(...fin
   const b=z.object({vendor_id:z.string().uuid(),invoice_reference:z.string().trim().min(1).max(160),amount:z.number().positive().finite(),invoice_date:z.string().date(),due_date:z.string().date()}).strict().parse(req.body);
   const amount=cents(b.amount);if(b.due_date<b.invoice_date)throw new HttpError(422,'Bill due date must be on or after invoice date');
   const row=await withUser(req.user!,async c=>{
-    const maintenance=(await c.query('SELECT id,status FROM maintenance_requests WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
+    const maintenance=(await c.query(`SELECT id,status,COALESCE(cost,0)::numeric(14,2)::text AS approved_amount
+      FROM maintenance_requests WHERE id=$1 FOR UPDATE`,[req.params.id])).rows[0];
     if(!maintenance)throw new HttpError(404,'Maintenance request not found');
     if(!['in_progress','awaiting_review','completed','done'].includes(maintenance.status))throw new HttpError(409,'Maintenance must be in progress or submitted for review before recording a vendor bill');
-    const bill=(await c.query(`INSERT INTO property_vendor_bills(maintenance_request_id,vendor_id,invoice_reference,amount,invoice_date,due_date,recorded_by)
-      SELECT $1,vendor.id,$3,$4,$5,$6,$7 FROM property_vendors vendor WHERE vendor.id=$2 AND vendor.active RETURNING *`,
-      [maintenance.id,b.vendor_id,b.invoice_reference,amount,b.invoice_date,b.due_date,req.user!.id])).rows[0];
+    const amountCents=Math.round(Number(amount)*100);
+    const expectedCents=Math.round(Number(maintenance.approved_amount)*100);
+    const matchStatus=amountCents===expectedCents?'matched':'mismatch';
+    const bill=(await c.query(`INSERT INTO property_vendor_bills
+      (maintenance_request_id,vendor_id,invoice_reference,amount,invoice_date,due_date,recorded_by,
+       expected_amount,match_status,match_variance)
+      SELECT $1,vendor.id,$3,$4,$5,$6,$7,$8,$9,$10
+      FROM property_vendors vendor WHERE vendor.id=$2 AND vendor.active RETURNING *`,
+      [maintenance.id,b.vendor_id,b.invoice_reference,amount,b.invoice_date,b.due_date,req.user!.id,
+        maintenance.approved_amount,matchStatus,((amountCents-expectedCents)/100).toFixed(2)])).rows[0];
     if(!bill)throw new HttpError(404,'Active vendor not found');
     await audit(c,req.user!.id,'property_vendor_bill_recorded','property_vendor_bill',bill.id,null,{vendor_id:bill.vendor_id,invoice_reference:bill.invoice_reference,amount:bill.amount});
     return bill;
@@ -57,7 +65,8 @@ propertyVendorAccounting.post('/maintenance/:id/vendor-bills',requireRole(...fin
 propertyVendorAccounting.get('/property-vendor-bills/pending',requireRole(...reviewers),h(async(req,res)=>{
   res.json(await withUser(req.user!,async c=>(await c.query(`SELECT bill.*,vendor.name AS vendor_name,maintenance.property_id FROM property_vendor_bills bill
     JOIN property_vendors vendor ON vendor.id=bill.vendor_id JOIN maintenance_requests maintenance ON maintenance.id=bill.maintenance_request_id
-    WHERE bill.status='pending_approval' ORDER BY bill.created_at LIMIT 200`)).rows));
+    WHERE bill.status='pending_approval' AND bill.match_status IN ('matched','accepted_exception')
+    ORDER BY bill.created_at LIMIT 200`)).rows));
 }));
 
 propertyVendorAccounting.post('/property-vendor-bills/:id/decision',requireRole(...reviewers),h(async(req,res)=>{
@@ -68,6 +77,7 @@ propertyVendorAccounting.post('/property-vendor-bills/:id/decision',requireRole(
       WHERE bill.id=$1 FOR UPDATE OF bill`,[req.params.id])).rows[0];
     if(!bill)throw new HttpError(404,'Vendor bill not found');
     if(bill.status!=='pending_approval')throw new HttpError(409,'Vendor bill is not awaiting approval');
+    if(!['matched','accepted_exception'].includes(bill.match_status))throw new HttpError(409,'Resolve the invoice-to-work mismatch before invoice approval');
     if(bill.recorded_by===req.user!.id)throw new HttpError(403,'A different Finance Manager must approve or reject this vendor bill');
     const status=b.decision==='approve'?'approved':'rejected';
     if(status==='approved'){

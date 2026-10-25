@@ -235,6 +235,9 @@ const workerManagementGateway = agencyDomainGateway(
 );
 
 api.use(authenticate);
+api.post('/maintenance/:id/evidence', express.raw({ type: () => true, limit: '10mb' }));
+api.post('/maintenance/vendor/:id/evidence', express.raw({ type: () => true, limit: '10mb' }));
+api.post('/maintenance/vendor/:id/invoice', express.raw({ type: () => true, limit: '10mb' }));
 api.use(['/workers', '/documents'], requireMiniAppAccess('workers'));
 api.use('/workforce', requireMiniAppAccess('workers'));
 api.use('/worker-support', requireMiniAppAccess('workers'));

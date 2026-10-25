@@ -39,7 +39,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceVendors: [], maintenanceMetrics: null, maintenanceOverdue: [], maintenanceCostQueue: [], maintenanceInvoiceMismatchQueue: [], maintenanceInvoiceApprovalQueue: [], maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, notificationDeliveryStatus: [], learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
 state.supportAppealQueue = [];
 state.overviewDataErrors = [];
@@ -82,6 +82,7 @@ function roleLabel(role) {
     customer: 'Buyer / customer',
     worker: 'Worker',
     property_owner: 'Property owner / landlord',
+    property_vendor: 'Property vendor',
   };
   return t(labels[role] ?? role.replaceAll('_', ' '));
 }
@@ -985,8 +986,8 @@ function signOut({ revoke = true, message = '' } = {}) {
   workspaceSearchSequence += 1;
   loadedPanels.clear();
   Object.assign(state, {
-    leads: [], workers: [], workerDocumentExpiry: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceMetrics: null, maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [],
-    commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [],
+    leads: [], workers: [], workerDocumentExpiry: [], requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], maintenanceRequests: [], maintenanceVendors: [], maintenanceMetrics: null, maintenanceOverdue: [], maintenanceCostQueue: [], maintenanceInvoiceMismatchQueue: [], maintenanceInvoiceApprovalQueue: [], maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [],
+    commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], notificationDeliveryStatus: [],
     roleAccess: null, learningContent: [], contracts: [], leases: [], tenants: [], pendingRent: [],
     platformServices: [], platformServicePackages: [], platformTenants: [], platformSuperAdmins: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [],
     marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [],
@@ -1068,7 +1069,8 @@ async function loadWorkspace() {
   const workerTab = document.querySelector('.tab[data-panel="workers"]');
   if (workerTab) setLocalizedText(workerTab, state.user.role === 'worker' ? 'Worker portal' : 'Workers');
   const propertyTab = document.querySelector('.tab[data-panel="properties"]');
-  if (propertyTab) setLocalizedText(propertyTab, state.user.role === 'property_owner' ? 'Landlord portal' : 'Properties');
+  if (propertyTab) setLocalizedText(propertyTab, state.user.role === 'property_owner'
+    ? 'Landlord portal' : state.user.role === 'property_vendor' ? 'Vendor maintenance' : 'Properties');
   const workersTab = document.querySelector('.tab[data-panel="workers"]');
   if (workersTab) setLocalizedText(workersTab, state.user.role === 'worker' ? 'Worker portal' : 'Workers');
   $('#page-subtitle').textContent = t('Signed in as {{role}}. Your access is limited to your assigned role and territory.', { role: roleLabel(state.user.role) });
@@ -1081,7 +1083,7 @@ async function loadWorkspace() {
   });
   $('#admin-tab').hidden = !['global_admin', 'super_admin', 'compliance', 'corporate_business_manager'].includes(state.user.role);
   $('#learning-tab').hidden = !hasActivity('learning.content.view') && !hasActivity('learning.content.manage');
-  const canUseListings = hasActivity('property.listings.view');
+  const canUseListings = state.user.role === 'property_vendor' || hasActivity('property.listings.view');
   $('#properties-tab').hidden = !canUseListings;
   $('#marketplace-tab').hidden = false;
   if (!canUseListings && state.panel === 'properties') state.panel = 'overview';
@@ -1285,6 +1287,13 @@ async function loadPanelData(panel) {
         ? await safeGet('/learning/content', []) : [];
       break;
     case 'properties':
+      if (state.user.role === 'property_vendor') {
+        state.maintenanceRequests = await safeGet('/maintenance/vendor/assigned', []);
+        break;
+      }
+      state.maintenanceVendors = ['corporate_business_manager','super_admin','global_admin'].includes(state.user.role)
+        && hasActivity('property.maintenance.manage')
+        ? await safeGet('/maintenance/vendors', []) : [];
       [state.marketplaceConfig, state.territories] = await Promise.all([
         safeGet('/marketplace/config', {}), safeGet('/territories', []),
       ]);
@@ -1299,6 +1308,8 @@ async function loadPanelData(panel) {
         state.maintenanceRequests = firstPage.slice(0, 200);
         state.maintenanceMetrics = metrics;
       }
+      state.maintenanceOverdue = ['corporate_business_manager','super_admin','global_admin'].includes(state.user.role)
+        ? await safeGet('/maintenance/sla/overdue', []) : [];
       state.ownerStatements = state.user.role === 'property_owner'
         ? (await safeGet('/owner/statements', { statements: [] })).statements ?? [] : [];
       break;
@@ -1328,6 +1339,13 @@ async function loadPanelData(panel) {
         hasActivity('property.listings.view') ? safeGet('/properties', []) : [],
         safeGet('/tenants', []), safeGet('/rent-transactions/pending', []), safeGet('/leases', []),
       ]);
+      if (['global_admin','super_admin','finance_manager'].includes(state.user.role)) {
+        [state.maintenanceCostQueue, state.maintenanceInvoiceMismatchQueue, state.maintenanceInvoiceApprovalQueue] = await Promise.all([
+          safeGet('/maintenance/vendor/additional-cost/pending', []),
+          safeGet('/maintenance/vendor/invoices/mismatches', []),
+          safeGet('/property-vendor-bills/pending', []),
+        ]);
+      }
       break;
     case 'insurance':
       [state.insuranceRequests, state.insuranceStaffRequests, state.insuranceAgentReferrals, state.insuranceEligibleAgents] = await Promise.all([
@@ -1360,6 +1378,8 @@ async function loadPanelData(panel) {
     case 'admin':
       state.users = ['global_admin', 'compliance','corporate_business_manager','super_admin'].includes(state.user.role)
         ? await safeGet('/users', []) : [];
+      state.maintenanceVendors = state.user.role === 'global_admin'
+        ? await safeGet('/maintenance/vendors', []) : [];
       [state.territories, state.serviceIdentities, state.readinessEvidence, state.globalAdminPromotions] = await Promise.all([
         safeGet('/territories', []),
         state.user.role === 'global_admin' ? safeGet('/service-identities', []) : [],
@@ -1368,6 +1388,8 @@ async function loadPanelData(panel) {
       ]);
       state.businessRules = state.user.role === 'global_admin' ? await safeGet('/business-rules', []) : [];
       state.roleAccess = state.user.role === 'global_admin' ? await safeGet('/role-access', null) : null;
+      state.notificationDeliveryStatus = state.user.role === 'global_admin'
+        ? await safeGet('/notifications/delivery-status', []) : [];
       state.summary = ['global_admin', 'finance', 'finance_manager'].includes(state.user.role)
         ? await safeGet('/reports/summary', null) : null;
       if (['global_admin', 'super_admin', 'finance', 'finance_manager'].includes(state.user.role)) {
@@ -2463,6 +2485,19 @@ function renderAppDashboard({ title, description, source, metrics, statusTitle, 
     summary.append(item);
   }
   section.append(summary);
+  if (state.maintenanceOverdue.length) {
+    const overdue = node('section', undefined, 'panel form-card');
+    overdue.append(node('h3', 'Overdue maintenance SLA queue'));
+    for (const request of state.maintenanceOverdue) {
+      const item = card(`${request.address}${request.unit_no ? ` · ${request.unit_no}` : ''}`,
+        `${request.category} · ${request.priority} priority · due ${new Date(request.sla_due_at).toLocaleString(document.documentElement.lang)}`,
+        request.status);
+      item.append(node('p', request.description));
+      if (request.vendor_name) item.append(node('p', `Assigned vendor: ${request.vendor_name}`));
+      overdue.append(item);
+    }
+    section.append(overdue);
+  }
   if (!metrics.total && !metrics.totalListings) {
     section.append(node('p', emptyMessage, 'muted app-dashboard-empty'));
   }
@@ -2996,7 +3031,9 @@ function renderWorkforceOperations() {
         `Control hash ${record.control_hash} · key ${record.encryption_key_id}${record.handoff_reason ? ` · ${record.handoff_reason}` : ''}${record.handoff_reference ? ` · reference ${record.handoff_reference}` : ''}`,
         record.status,
       );
+      item.dataset.payrollExport = record.id;
       item.append(button('Download encrypted payload', 'workforce-payroll-download', 'button button-outline', { id: record.id }));
+      item.append(button('View handoff history', 'workforce-payroll-events', 'button button-outline', { id: record.id }));
       if (record.status !== 'handed_off') item.append(button('Record handoff status', 'workforce-payroll-handoff', 'button button-primary', { id: record.id }));
       list.append(item);
     }
@@ -3322,6 +3359,7 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
 }
 
 function renderProperties() {
+  if (state.user.role === 'property_vendor') return renderVendorMaintenancePortal();
   const wrap = node('div');
   const buyer = state.user.role === 'customer';
   const owner = state.user.role === 'property_owner';
@@ -3423,6 +3461,51 @@ function renderProperties() {
   return wrap;
 }
 
+function renderVendorMaintenancePortal() {
+  const wrap = node('div');
+  wrap.append(sectionHeading(
+    'Vendor maintenance workspace',
+    'Review only work orders assigned to your vendor account. Accept work, record progress, attach scanned evidence, and submit invoices for completed work.',
+  ));
+  const summary = node('section', undefined, 'panel');
+  summary.append(node('h3', 'Assigned work orders'));
+  summary.append(node('p', `${state.maintenanceRequests.length} assigned work orders are currently available to this account.`, 'muted'));
+  wrap.append(summary);
+  if (!state.maintenanceRequests.length) {
+    wrap.append(empty('No maintenance work has been assigned to this vendor account.'));
+    return wrap;
+  }
+  for (const request of state.maintenanceRequests) {
+    const item = node('article', undefined, 'record-card');
+    item.dataset.maintenance = request.id;
+    item.append(
+      node('h3', `${request.address}${request.unit_no ? ` · ${request.unit_no}` : ''}`),
+      node('p', `${request.category} · ${request.priority} priority · ${request.status.replaceAll('_', ' ')}`, 'muted'),
+      node('p', request.description),
+    );
+    if (request.sla_due_at) {
+      const due = new Date(request.sla_due_at);
+      const overdue = due.getTime() < Date.now() && !['completed','done','cancelled'].includes(request.status);
+      item.append(node('p', `${overdue ? 'SLA overdue since' : 'SLA deadline'} ${due.toLocaleString(document.documentElement.lang)}`, overdue ? 'notice notice-warning' : 'muted'));
+    }
+    item.append(node('p', `${request.evidence_count} scanned evidence item(s)`, 'muted'));
+    const actions = node('div', undefined, 'property-actions');
+    if (request.status === 'assigned') actions.append(button('Accept assignment', 'maintenance-vendor-accept', 'button button-primary', { id: request.id }));
+    if (['accepted','rework_required'].includes(request.status)) actions.append(button('Start work', 'maintenance-vendor-start', 'button button-outline', { id: request.id }));
+    if (['accepted','in_progress','rework_required'].includes(request.status)) {
+      actions.append(
+        button('Upload evidence', 'maintenance-vendor-evidence', 'button button-outline', { id: request.id }),
+        button('Request additional cost', 'maintenance-vendor-cost', 'button button-outline', { id: request.id }),
+      );
+    }
+    if (request.status === 'in_progress') actions.append(button('Submit completed work', 'maintenance-vendor-complete', 'button button-primary', { id: request.id }));
+    if (['completed','done'].includes(request.status)) actions.append(button('Submit invoice', 'maintenance-vendor-invoice', 'button button-outline', { id: request.id }));
+    item.append(actions);
+    wrap.append(item);
+  }
+  return wrap;
+}
+
 function renderMaintenanceOperations() {
   const section = node('section', undefined, 'panel');
   section.append(sectionHeading('Maintenance operations', 'Track requests from intake through assigned work and documented completion. Cost entered here is an estimate only; vendor invoices use the separate Finance approval and reconciliation workflow.'));
@@ -3430,6 +3513,7 @@ function renderMaintenanceOperations() {
   const summary = node('div', undefined, 'maintenance-metrics');
   for (const [label, value] of [
     ['Open requests', metrics.open_count ?? 0], ['Urgent open', metrics.urgent_open_count ?? 0],
+    ['Overdue SLA', metrics.overdue_count ?? 0],
     ['Completed in 30 days', metrics.completed_last_30_days ?? 0],
     ['Average resolution hours (30d)', metrics.avg_resolution_hours_30d ?? '—'],
   ]) {
@@ -3457,13 +3541,13 @@ function renderMaintenanceOperations() {
   for (const [value, label] of [['general','General'],['plumbing','Plumbing'],['electrical','Electrical'],['appliance','Appliance'],['structural','Structural'],['cleaning','Cleaning'],['safety','Safety'],['other','Other']]) { const option = node('option', label); option.value = value; category.input.append(option); }
   const priority = field('Priority', 'priority', 'select');
   for (const [value, label] of [['normal','Normal'],['low','Low'],['urgent','Urgent']]) { const option = node('option', label); option.value = value; priority.input.append(option); }
-  form.append(category.label, priority.label, field('Describe the issue', 'description', 'textarea', true, { minlength: 5, maxlength: 2000, rows: 3 }).label, button('Submit request', 'submit', 'button button-primary'));
+  form.append(category.label, priority.label, field('Describe the issue', 'description', 'textarea', true, { minlength: 10, maxlength: 2000, rows: 3 }).label, button('Submit request', 'submit', 'button button-primary'));
   section.append(form);
   const filters = node('div', undefined, 'maintenance-filters');
   const search = field('Search requests', 'maintenance_search', 'search', false, { placeholder: 'Property, unit, or issue' });
   search.input.setAttribute('aria-label', 'Search maintenance requests by property, unit, or issue');
   const statusFilter = field('Status', 'maintenance_status', 'select', false);
-  for (const [value, label] of [['','All statuses'],['open','Open'],['triaged','Triaged'],['assigned','Assigned'],['in_progress','In progress'],['awaiting_review','Awaiting review'],['rework_required','Rework required'],['completed','Completed'],['done','Completed (legacy)'],['cancelled','Cancelled']]) {
+  for (const [value, label] of [['','All statuses'],['open','Open'],['triaged','Triaged'],['assigned','Assigned'],['accepted','Accepted'],['in_progress','In progress'],['awaiting_review','Awaiting review'],['rework_required','Rework required'],['completed','Completed'],['done','Completed (legacy)'],['cancelled','Cancelled']]) {
     const option = node('option', label); option.value = value; statusFilter.input.append(option);
   }
   const priorityFilter = field('Priority', 'maintenance_priority', 'select', false);
@@ -3510,14 +3594,26 @@ function renderMaintenanceOperations() {
         item.append(node('p', `Last update: ${String(request.latest_event_type ?? 'updated').replaceAll('_', ' ')} · ${updatedAt}${shortNote ? ` · ${shortNote}` : ''}`, 'maintenance-latest-update'));
       }
       if (request.assigned_to) item.append(node('p', `Assigned to: ${request.assigned_to}`));
+      if (request.vendor_name) item.append(node('p', `Assigned vendor: ${request.vendor_name}`));
+      if (request.sla_due_at) {
+        const overdue = new Date(request.sla_due_at).getTime() < Date.now() && !['completed','done','cancelled'].includes(request.status);
+        item.append(node('p', `${overdue ? 'SLA overdue since' : 'SLA deadline'} ${new Date(request.sla_due_at).toLocaleString(document.documentElement.lang)}`, overdue ? 'notice notice-warning' : 'muted'));
+      }
       if (request.resolution_note) item.append(node('p', `Triage / work notes: ${request.resolution_note}`));
       if (request.review_note) item.append(node('p', `Review decision: ${request.review_note}`));
       if (request.cost != null) item.append(node('p', `Cost estimate: ETB ${Number(request.cost).toLocaleString(document.documentElement.lang)} (not an approved invoice)`));
       const actions = node('div', undefined, 'property-actions');
       actions.append(button('History', 'maintenance-events', 'button button-outline', { id: request.id }));
+      if (request.evidence_count) actions.append(button(`Evidence (${request.evidence_count})`, 'maintenance-evidence', 'button button-outline', { id: request.id }));
+      if (['open','triaged','assigned','in_progress'].includes(request.status)) {
+        actions.append(button('Add request photo', 'maintenance-evidence-upload', 'button button-outline', { id: request.id }));
+      }
       if (mayUpdate && request.status === 'open') actions.append(button('Triage', 'maintenance-update', 'button button-outline', { id: request.id, status: 'triaged' }));
-      if (mayUpdate && request.status === 'triaged') actions.append(button('Assign', 'maintenance-update', 'button button-outline', { id: request.id, status: 'assigned' }));
-      if (mayUpdate && request.status === 'assigned') actions.append(button('Start work', 'maintenance-update', 'button button-outline', { id: request.id, status: 'in_progress' }));
+      if (mayUpdate && request.status === 'triaged') {
+        actions.append(button('Assign technician', 'maintenance-update', 'button button-outline', { id: request.id, status: 'assigned' }));
+        if (mayAssignVendor) actions.append(button('Assign external vendor', 'maintenance-assign-vendor', 'button button-outline', { id: request.id }));
+      }
+      if (mayUpdate && request.status === 'assigned' && !request.assigned_vendor_id) actions.append(button('Start work', 'maintenance-update', 'button button-outline', { id: request.id, status: 'in_progress' }));
       if (mayUpdate && request.status === 'in_progress') actions.append(button('Submit for review', 'maintenance-update', 'button button-primary', { id: request.id, status: 'awaiting_review' }));
       if (mayReviewMaintenance && request.status === 'awaiting_review') {
         actions.append(button('Approve completion', 'maintenance-update', 'button button-primary', { id: request.id, status: 'completed' }));
@@ -3533,13 +3629,82 @@ function renderMaintenanceOperations() {
       list.append(loadMore);
     }
   };
-  const mayUpdate = ['master_agent','field_agent','super_admin','global_admin'].includes(state.user.role);
+  const mayUpdate = ['master_agent','field_agent','corporate_business_manager','super_admin','global_admin'].includes(state.user.role);
   const mayReviewMaintenance = ['corporate_business_manager','super_admin','global_admin'].includes(state.user.role);
+  const mayAssignVendor = mayReviewMaintenance;
   search.input.addEventListener('input', renderRequests);
   for (const input of [statusFilter.input, priorityFilter.input, propertyFilter.input]) input.addEventListener('change', renderRequests);
   renderRequests();
   section.append(list);
   return section;
+}
+
+function renderMaintenanceFinanceQueue() {
+  if (!['global_admin','super_admin','finance_manager'].includes(state.user.role)) return null;
+  const section = node('section', undefined, 'panel form-card');
+  section.append(node('h3', 'Vendor additional-cost and invoice review'));
+  section.append(node('p', 'Additional costs and invoices remain separate Finance decisions. Invoice mismatches must be explicitly resolved before invoice approval.'));
+
+  const addReasonForm = (item, formName, actionLabel, choices) => {
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = formName;
+    form.dataset.id = item.id;
+    const decision = field('Decision', 'decision', 'select');
+    for (const [value, label] of choices) {
+      const option = node('option', label); option.value = value; decision.input.append(option);
+    }
+    form.append(decision.label, field('Reason (minimum 10 characters)', 'reason', 'textarea', true, { minlength: 10, maxlength: 1000, rows: 2 }).label,
+      button(actionLabel, 'submit', 'button button-primary'));
+    return form;
+  };
+
+  const costs = node('div', undefined, 'list');
+  costs.append(node('h4', 'Additional-cost requests'));
+  if (!state.maintenanceCostQueue.length) costs.append(empty('No additional-cost requests are awaiting review.'));
+  for (const request of state.maintenanceCostQueue) {
+    const item = card(request.vendor_name, `ETB ${Number(request.amount).toLocaleString(document.documentElement.lang)} · ${new Date(request.created_at).toLocaleDateString(document.documentElement.lang)}`, 'pending');
+    item.append(node('p', request.rationale), renderMaintenanceRequestLink(request.maintenance_request_id));
+    item.append(addReasonForm(request, 'maintenance-cost-decision', 'Record decision', [['approve','Approve additional cost'],['reject','Reject request']]));
+    costs.append(item);
+  }
+  section.append(costs);
+
+  const mismatches = node('div', undefined, 'list');
+  mismatches.append(node('h4', 'Invoice amount mismatches'));
+  if (!state.maintenanceInvoiceMismatchQueue.length) mismatches.append(empty('No invoice mismatches are awaiting resolution.'));
+  for (const bill of state.maintenanceInvoiceMismatchQueue) {
+    const item = card(`${bill.vendor_name} · ${bill.invoice_reference}`,
+      `Invoice ETB ${Number(bill.amount).toLocaleString(document.documentElement.lang)} · approved work ETB ${Number(bill.expected_amount).toLocaleString(document.documentElement.lang)} · variance ETB ${Number(bill.match_variance).toLocaleString(document.documentElement.lang)}`,
+      bill.match_status);
+    item.append(renderMaintenanceRequestLink(bill.maintenance_request_id));
+    const form = node('form', undefined, 'inline-form');
+    form.dataset.form = 'maintenance-invoice-mismatch';
+    form.dataset.id = bill.id;
+    form.append(field('Exception rationale (minimum 10 characters)', 'reason', 'textarea', true, { minlength: 10, maxlength: 1000, rows: 2 }).label,
+      button('Accept documented exception', 'submit', 'button button-primary'));
+    item.append(form);
+    mismatches.append(item);
+  }
+  section.append(mismatches);
+
+  const invoices = node('div', undefined, 'list');
+  invoices.append(node('h4', 'Matched invoices awaiting approval'));
+  if (!state.maintenanceInvoiceApprovalQueue.length) invoices.append(empty('No matched invoices are awaiting approval.'));
+  for (const bill of state.maintenanceInvoiceApprovalQueue) {
+    const item = card(`${bill.vendor_name} · ${bill.invoice_reference}`,
+      `ETB ${Number(bill.amount).toLocaleString(document.documentElement.lang)} · ${bill.match_status}`,
+      bill.status);
+    item.append(renderMaintenanceRequestLink(bill.maintenance_request_id));
+    item.append(addReasonForm(bill, 'maintenance-invoice-decision', 'Record invoice decision', [['approve','Approve invoice'],['reject','Reject invoice']]));
+    invoices.append(item);
+  }
+  section.append(invoices);
+  return section;
+}
+
+function renderMaintenanceRequestLink(id) {
+  const link = node('p', `Maintenance request ${id}`);
+  return link;
 }
 
 function renderMarketplace() {
@@ -3847,6 +4012,7 @@ function renderMarketplaceConfig() {
     const types=cfg.users?.account_types??[];for(const item of types){const label=node('label',item.label);const input=document.createElement('input');input.type='checkbox';input.name=`account:${item.key}`;input.checked=item.enabled;label.prepend(input);users.append(label);}
     users.append(node('h4','Required registration documents'));
     for(const role of ['worker','customer','agent','property_owner']) for(const doc of ['national_id','police_clearance']){const label=node('label',`${roleLabel(role)} · ${doc==='national_id'?'National ID':'Police clearance'}`);const input=document.createElement('input');input.type='checkbox';input.name=`kyc:${role}:${doc}`;input.checked=(cfg.users?.kyc_requirements?.[role]??[]).includes(doc);if(role==='worker')input.disabled=true;label.prepend(input);users.append(label);}
+    users.append(node('p','Property-vendor accounts are provisioned by Global Admin and require the contact person’s National ID before independent activation. Business registration checks are not represented by this document requirement.'));
     form.append(users);
   }
   form.append(button('Save configuration','submit','button button-primary span-2'));panel.append(form);return panel;
@@ -3979,6 +4145,8 @@ function renderAgents() {
 function renderRent() {
   const wrap = node('div');
   wrap.append(sectionHeading('Rent & deposits', 'Record payments first. A different finance officer reconciles them into the ledger.'));
+  const maintenanceFinanceQueue = renderMaintenanceFinanceQueue();
+  if (maintenanceFinanceQueue) wrap.append(maintenanceFinanceQueue);
   if (['global_admin','super_admin','finance','finance_manager'].includes(state.user.role)) {
     const close = node('section', undefined, 'panel form-card');
     close.append(node('h3', 'Property period-close checks'));
@@ -4783,6 +4951,28 @@ function renderAdmin() {
   const isBusinessManager=state.user.role==='corporate_business_manager';
   const canProvisionAgents = isGlobalAdmin || state.user.role === 'super_admin' || isBusinessManager;
   wrap.append(sectionHeading(isAdmin ? isGlobalAdmin ? 'Global System Administration' : 'Super Admin · Assigned entity management' : isBusinessManager ? 'Business manager workspace' : 'Compliance review', isAdmin ? isGlobalAdmin ? 'Configure platform services, packages, tenant boundaries, global identity, access, and operations.' : 'Manage only assigned business entities and the modules approved for them by the Global System Admin.' : isBusinessManager ? 'Manage business operations and review marketplace submissions.' : 'Review account verification before activation.'));
+  if (isGlobalAdmin) {
+    const delivery = node('section', undefined, 'panel form-card');
+    delivery.append(node('h3', 'Webhook notification delivery'));
+    delivery.append(node('p', 'Delivery retries use bounded backoff. Manual retries are audited and keep the original notification ID as the downstream idempotency key.'));
+    if (!state.notificationDeliveryStatus.length) delivery.append(empty('No webhook notifications are in the delivery history.'));
+    for (const notification of state.notificationDeliveryStatus) {
+      const item = card(notification.template,
+        `Attempts ${notification.total_attempt_count} · retry generation ${notification.retry_generation} · ${new Date(notification.created_at).toLocaleString(document.documentElement.lang)}`,
+        notification.status);
+      if (notification.last_error) item.append(node('p', `Last delivery error: ${notification.last_error}`));
+      if (notification.status === 'dead') {
+        const form = node('form', undefined, 'inline-form');
+        form.dataset.form = 'notification-retry';
+        form.dataset.id = notification.id;
+        form.append(field('Manual retry reason (minimum 10 characters)', 'reason', 'textarea', true, { minlength: 10, maxlength: 1000, rows: 2 }).label,
+          button('Requeue notification', 'submit', 'button button-outline'));
+        item.append(form);
+      }
+      delivery.append(item);
+    }
+    wrap.append(delivery);
+  }
   if (isNativeApp && canChangeServer(state.user.role)) {
     const serverTools = node('section', undefined, 'panel form-card admin-server-tools');
     serverTools.append(node('h3', 'Connection settings'));
@@ -4864,12 +5054,18 @@ function renderAdmin() {
     form.append(field('Legal name', 'legal_name').label, field('Phone', 'phone', 'tel', true, { placeholder: '0911 234 567' }).label);
     const role = field('Role', 'role', 'select');
     const accountRoles = isGlobalAdmin
-      ? [['super_admin','Super Admin'],['corporate_business_manager','Business Admin'],['master_agent','Master agent'],['field_agent','Field agent'],['compliance','Compliance'],['finance','Finance'],['finance_manager','Finance manager'],['customer','Customer'],['worker','Worker'],['property_owner','Property owner']]
+      ? [['super_admin','Super Admin'],['corporate_business_manager','Business Admin'],['master_agent','Master agent'],['field_agent','Field agent'],['compliance','Compliance'],['finance','Finance'],['finance_manager','Finance manager'],['customer','Customer'],['worker','Worker'],['property_owner','Property owner'],['property_vendor','Property vendor']]
       : [['master_agent','Master agent'],['field_agent','Field agent']];
     for (const [value, label] of accountRoles) {
       const option = node('option', label); option.value = value; role.input.append(option);
     }
     form.append(role.label);
+    if (isGlobalAdmin) {
+      const vendor = field('Property-vendor business (required for vendor portal accounts)', 'vendor_id', 'select', false);
+      const vendorEmpty = node('option', 'Choose property-vendor business'); vendorEmpty.value = ''; vendor.input.append(vendorEmpty);
+      for (const item of state.maintenanceVendors ?? []) { const option = node('option', item.name); option.value = item.id; vendor.input.append(option); }
+      form.append(vendor.label);
+    }
     const specialization = field('Profile focus (optional; does not limit agent services)', 'service_specialization', 'select', false);
     for (const [value, label] of [['', 'General agent'], ['financial_service', 'Financial services focus'], ['growth_partnership', 'Growth & partnerships focus'], ['workforce_property', 'Workforce & property focus']]) {
       const option = node('option', label); option.value = value; specialization.input.append(option);
@@ -6032,18 +6228,39 @@ async function submitForm(form) {
     if (!payload.territory_id) delete payload.territory_id;
     else payload.territory_id = number(payload.territory_id);
     if (!payload.parent_agent_id) delete payload.parent_agent_id;
+    if (!payload.vendor_id) delete payload.vendor_id;
     if (!payload.email) delete payload.email;
     if (!payload.service_specialization) delete payload.service_specialization;
     if (!['master_agent','field_agent'].includes(payload.role)) delete payload.requested_plan;
     const result = await api('/users', { method: 'POST', body: JSON.stringify(payload) });
     form.reset();
     await refresh();
-    showAlert('Account created for {{name}}. Temporary password (shown once): {{password}}. KYC upload token (valid 24 hours): {{upload_token}}. The agent stays inactive until KYC review and independent activation are complete.', false, {
+    showAlert('Account created for {{name}}. Temporary password (shown once): {{password}}. KYC upload token (valid 24 hours): {{upload_token}}. Vendor portal access is assigned after KYC review and independent activation.', false, {
       name: result.user.legal_name,
       password: result.temp_password,
       upload_token: result.signup_upload_token ?? 'not required for this account',
     });
     return;
+  } else if (form.dataset.form === 'notification-retry') {
+    await api(`/notifications/${encodeURIComponent(form.dataset.id)}/retry`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: values.reason }),
+    });
+  } else if (form.dataset.form === 'maintenance-cost-decision') {
+    await api(`/maintenance/vendor/additional-cost/${encodeURIComponent(form.dataset.id)}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: values.decision, reason: values.reason }),
+    });
+  } else if (form.dataset.form === 'maintenance-invoice-mismatch') {
+    await api(`/maintenance/vendor/invoices/${encodeURIComponent(form.dataset.id)}/resolve-mismatch`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: values.reason }),
+    });
+  } else if (form.dataset.form === 'maintenance-invoice-decision') {
+    await api(`/property-vendor-bills/${encodeURIComponent(form.dataset.id)}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: values.decision, reason: values.reason }),
+    });
   } else if (form.dataset.form === 'global-admin-promotion') {
     await api('/global-admin-promotions', {
       method: 'POST',
@@ -6613,6 +6830,26 @@ document.addEventListener('click', async (event) => {
     } catch (error) { showAlert(error.message, true); }
     return;
   }
+  if (name === 'workforce-payroll-events') {
+    try {
+      const events = await api(`/workforce/payroll-exports/${encodeURIComponent(id)}/events`);
+      const item = document.querySelector(`[data-payroll-export="${CSS.escape(id)}"]`);
+      if (!item) return;
+      item.querySelector('[data-payroll-event-history]')?.remove();
+      const history = node('div', undefined, 'list');
+      history.dataset.payrollEventHistory = 'true';
+      history.append(node('h4', 'Handoff history'));
+      if (!events.length) history.append(empty('No handoff events are recorded for this export.'));
+      for (const entry of events) {
+        history.append(card(entry.event_type.replaceAll('_', ' '),
+          `${new Date(entry.created_at).toLocaleString(document.documentElement.lang)} · actor ${entry.actor_id}${entry.external_reference ? ` · reference ${entry.external_reference}` : ''}`,
+          entry.event_type));
+        history.lastElementChild.append(node('p', entry.reason));
+      }
+      item.append(history);
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
   if (name === 'workforce-payroll-handoff') {
     const result = window.prompt(t('Enter handed_off or handoff_failed. This records handoff status only.'), 'handed_off');
     if (!['handed_off','handoff_failed'].includes(result)) return;
@@ -6878,7 +7115,7 @@ document.addEventListener('click', async (event) => {
       valuesToSave.push({scope:'system',key:'max_media_per_listing',value:number(form.elements.namedItem('max_media_per_listing').value)});
       const account_types=(state.marketplaceConfig.users?.account_types??[]).map((account)=>({...account,enabled:form.elements.namedItem(`account:${account.key}`).checked}));
       valuesToSave.push({scope:'users',key:'account_types',value:account_types});
-      const kyc_requirements={};for(const role of ['worker','customer','agent','property_owner'])kyc_requirements[role]=['national_id','police_clearance'].filter((doc)=>form.elements.namedItem(`kyc:${role}:${doc}`).checked);
+      const kyc_requirements={};for(const role of ['worker','customer','agent','property_owner'])kyc_requirements[role]=['national_id','police_clearance'].filter((doc)=>form.elements.namedItem(`kyc:${role}:${doc}`).checked);kyc_requirements.property_vendor=['national_id'];
       valuesToSave.push({scope:'users',key:'kyc_requirements',value:kyc_requirements});
     }
     if(!enabled.length) throw new Error('Enable at least one marketplace domain.');
@@ -7090,11 +7327,134 @@ document.addEventListener('click', async (event) => {
     }
     return;
   }
+  if (name === 'maintenance-assign-vendor') {
+    if (!state.maintenanceVendors.length) {
+      showAlert('No active property vendors are available for assignment.', true);
+      return;
+    }
+    const choices = state.maintenanceVendors.map((vendor, index) => `${index + 1}. ${vendor.name} (${vendor.id})`).join('\n');
+    const selected = window.prompt(`Choose the vendor number:\n${choices}`);
+    const index = Number(selected) - 1;
+    const vendor = Number.isInteger(index) ? state.maintenanceVendors[index] : null;
+    if (!vendor) return;
+    try {
+      await api(`/maintenance/${encodeURIComponent(id)}/update`, {
+        method: 'POST',
+        body: JSON.stringify({ status: 'assigned', assigned_vendor_id: vendor.id }),
+      });
+      await refresh();
+      showAlert(`Work assigned to ${vendor.name}.`);
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'maintenance-vendor-accept' || name === 'maintenance-vendor-start') {
+    const note = window.prompt(name === 'maintenance-vendor-accept'
+      ? t('Confirm you can take this work order and add a note.')
+      : t('Add a progress note before starting the work.'));
+    if (!note || note.trim().length < 5) return;
+    const endpoint = name === 'maintenance-vendor-accept' ? 'accept' : 'start';
+    try {
+      await api(`/maintenance/vendor/${encodeURIComponent(id)}/${endpoint}`, {
+        method: 'POST', body: JSON.stringify({ note: note.trim() }),
+      });
+      await refresh();
+      showAlert(name === 'maintenance-vendor-accept' ? 'Assignment accepted.' : 'Work started.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'maintenance-vendor-evidence' || name === 'maintenance-evidence-upload') {
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/jpeg,image/png';
+    picker.addEventListener('change', async () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      try {
+        const evidencePath = name === 'maintenance-vendor-evidence'
+          ? `/maintenance/vendor/${encodeURIComponent(id)}/evidence`
+          : `/maintenance/${encodeURIComponent(id)}/evidence`;
+        await api(evidencePath, { method: 'POST', body: file });
+        await refresh();
+        showAlert('Malware-scanned evidence uploaded.');
+      } catch (error) { showAlert(error.message, true); }
+    }, { once: true });
+    picker.click();
+    return;
+  }
+  if (name === 'maintenance-vendor-complete') {
+    const resolution_note = window.prompt(t('Describe the completed work (at least 5 characters).'));
+    if (!resolution_note || resolution_note.trim().length < 5) return;
+    try {
+      await api(`/maintenance/vendor/${encodeURIComponent(id)}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ idempotency_key: crypto.randomUUID(), resolution_note: resolution_note.trim() }),
+      });
+      await refresh();
+      showAlert('Work submitted for independent review.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'maintenance-vendor-cost') {
+    const amount = Number(window.prompt(t('Enter the additional cost requested in ETB.')));
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const rationale = window.prompt(t('Explain why the additional cost is required (at least 10 characters).'));
+    if (!rationale || rationale.trim().length < 10) return;
+    try {
+      await api(`/maintenance/vendor/${encodeURIComponent(id)}/additional-cost`, {
+        method: 'POST', body: JSON.stringify({ amount, rationale: rationale.trim() }),
+      });
+      showAlert('Additional-cost request sent for separate approval.');
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'maintenance-vendor-invoice') {
+    const invoice_reference = window.prompt(t('Enter the vendor invoice reference.'));
+    const amount = Number(window.prompt(t('Enter the invoice amount in ETB.')));
+    const invoice_date = window.prompt(t('Enter the invoice date (YYYY-MM-DD).'));
+    const due_date = window.prompt(t('Enter the due date (YYYY-MM-DD).'));
+    if (!invoice_reference?.trim() || !Number.isFinite(amount) || amount <= 0 || !invoice_date || !due_date) return;
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'application/pdf,image/jpeg,image/png';
+    picker.addEventListener('change', async () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      const query = new URLSearchParams({
+        invoice_reference: invoice_reference.trim(), amount: String(amount), invoice_date, due_date,
+      });
+      try {
+        const bill = await api(`/maintenance/vendor/${encodeURIComponent(id)}/invoice?${query}`, { method: 'POST', body: file });
+        await refresh();
+        showAlert(bill.match_status === 'matched'
+          ? 'Invoice submitted and matched to the approved work amount.'
+          : 'Invoice submitted to the mismatch exception queue; it will not be auto-approved.');
+      } catch (error) { showAlert(error.message, true); }
+    }, { once: true });
+    picker.click();
+    return;
+  }
+  if (name === 'maintenance-evidence') {
+    try {
+      const evidence = await api(`/maintenance/${encodeURIComponent(id)}/evidence`);
+      if (!evidence.length) { showAlert('No scanned evidence is available.'); return; }
+      showAlert(`Downloading ${evidence.length} malware-scanned evidence file(s).`);
+      for (const item of evidence) {
+        await downloadAuthenticatedFile(`/maintenance/evidence/${encodeURIComponent(item.id)}/file`, `maintenance-evidence-${item.id}`);
+      }
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
   if (name === 'maintenance-update') {
-    let assigned_to; let resolution_note; let review_note; let cost;
+    let assigned_to; let resolution_note; let review_note; let cost; let sla_hours;
     if (action.dataset.status === 'triaged') {
       resolution_note = window.prompt(t('Add triage notes (at least 5 characters).'));
       if (!resolution_note || resolution_note.trim().length < 5) return;
+      const selectedHours = window.prompt(t('Set the SLA target in hours (1-720).'));
+      if (selectedHours === null || !/^\d+$/.test(selectedHours) || Number(selectedHours) < 1 || Number(selectedHours) > 720) {
+        showAlert('Enter an SLA target between 1 and 720 hours.', true);
+        return;
+      }
+      sla_hours = Number(selectedHours);
     }
     if (action.dataset.status === 'assigned') {
       assigned_to = window.prompt(t('Enter the person or vendor assigned to this request.'));
@@ -7121,6 +7481,7 @@ document.addEventListener('click', async (event) => {
     try {
       await api(`/maintenance/${encodeURIComponent(id)}/update`, { method: 'POST', body: JSON.stringify({
         status: action.dataset.status, ...(assigned_to ? { assigned_to: assigned_to.trim() } : {}),
+        ...(sla_hours ? { sla_hours } : {}),
         ...(resolution_note ? { resolution_note: resolution_note.trim() } : {}),
         ...(review_note ? { review_note: review_note.trim() } : {}),
         ...(cost !== undefined ? { cost } : {}),

@@ -40,6 +40,7 @@ function hasAnyActivity(user: AuthUser, activities: string[]): boolean {
 }
 
 export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
+  if (user.role === 'property_vendor') return module === 'properties';
   switch (module) {
     case 'workers':
       return user.role === 'worker' || user.role === 'corporate_business_manager'
@@ -47,7 +48,7 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
     case 'requests':
       return hasAnyActivity(user, ['staffing.requests.manage']);
     case 'properties':
-      return hasAnyActivity(user, ['property.listings.view']);
+      return user.role === 'property_vendor' || hasAnyActivity(user, ['property.listings.view']);
     case 'learning':
       return hasAnyActivity(user, ['learning.content.view', 'learning.content.manage']);
     case 'rent':
@@ -81,7 +82,7 @@ export function roleCanUseMiniApp(user: AuthUser, module: MiniAppKey): boolean {
       return ['global_admin', 'super_admin', 'master_agent'].includes(user.role);
     case 'leads':
     case 'contracts':
-      return !['customer', 'worker', 'property_owner'].includes(user.role);
+      return !['customer', 'worker', 'property_owner', 'property_vendor'].includes(user.role);
     case 'global-bi':
       return user.role === 'global_admin';
     default:
