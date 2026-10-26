@@ -289,6 +289,7 @@ api.use(
   requireAnyMiniAppAccess('properties', 'rent'),
 );
 api.use(['/maintenance'], requireAnyMiniAppAccess('properties', 'accounting'));
+api.use(['/resident'], requireMiniAppAccess('properties'));
 api.use((req, _res, next) => {
   const organizationId = req.get('x-afrolife-edir-id');
   if (organizationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) {

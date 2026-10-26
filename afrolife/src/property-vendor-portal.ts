@@ -15,6 +15,7 @@ const portal = Router();
 const vendorOnly = [requireRole('property_vendor'), requireMiniAppAccess('properties')];
 const evidenceAccess: RequestHandler = (req, res, next) => {
   if (req.user?.role === 'property_vendor') return requireMiniAppAccess('properties')(req, res, next);
+  if (req.user?.role === 'customer') return requireMiniAppAccess('properties')(req, res, next);
   return requireActivity('property.maintenance.manage')(req, res, next);
 };
 const vendorManagement = requireRole('finance','finance_manager','super_admin','global_admin');

@@ -8,6 +8,7 @@ import {
 } from '../src/workforce-payroll-batch.js';
 
 const workforceOperations = readFileSync(new URL('../src/workforce-operations.ts', import.meta.url), 'utf8');
+const publicApp = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 
 test('payroll batch boundary distinguishes complete and truncated batches', () => {
   assert.equal(exceedsWorkforcePayrollBatchLimit(0, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS), false);
@@ -26,4 +27,12 @@ test('payable-time calculation and payroll export reject a lookahead row before 
   const firstExportWrite = workforceOperations.indexOf('INSERT INTO workforce_payroll_exports');
   assert.ok(calculationGuard >= 0 && calculationGuard < firstCalculationWrite);
   assert.ok(exportGuard >= 0 && exportGuard < firstExportWrite);
+});
+
+test('shift schedule exposes engagement rates and estimates direct labor cost only for hourly billing', () => {
+  assert.match(workforceOperations, /e\.billing_unit,e\.worker_rate::text/);
+  assert.match(workforceOperations, /CASE WHEN e\.billing_unit='hour'[\s\S]*?scheduled_labor_cost_estimate/);
+  assert.match(workforceOperations, /round\(e\.worker_rate \* extract\(epoch FROM \(s\.ends_at-s\.starts_at\)\)\/3600,2\)/);
+  assert.match(publicApp, /schedule estimate, not approved or payable time/);
+  assert.match(publicApp, /Scheduled cost is not estimated for this billing unit/);
 });

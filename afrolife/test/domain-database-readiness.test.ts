@@ -45,8 +45,18 @@ const completeSchemas: Record<AgencyDomain, { tables: string[]; rls: string[] }>
     rls: ['agents', 'documents', 'job_requests', 'leads', 'matches', 'workers'],
   },
   'property-management': {
-    tables: ['agents', 'audit_logs', 'leads', 'marketplace_configuration', 'maintenance_requests', 'notifications', 'properties', 'property_photos', 'property_units', 'rent_charges', 'tenants', 'territories', 'users', 'user_signups', 'leases'],
-    rls: ['agents', 'marketplace_configuration', 'maintenance_requests', 'properties', 'property_photos', 'property_units', 'rent_charges', 'leases'],
+    tables: [
+      'agents', 'audit_logs', 'leads', 'marketplace_configuration', 'maintenance_requests',
+      'notifications', 'properties', 'property_photos', 'property_units', 'rent_charges',
+      'tenants', 'territories', 'users', 'user_signups', 'leases',
+      'property_tenant_access_invitations', 'property_tenant_account_links',
+      'property_authority_evidence', 'property_authority_review_events',
+    ],
+    rls: [
+      'agents', 'marketplace_configuration', 'maintenance_requests', 'properties', 'property_photos',
+      'property_units', 'rent_charges', 'leases', 'property_tenant_access_invitations',
+      'property_tenant_account_links', 'property_authority_evidence', 'property_authority_review_events',
+    ],
   },
   marketplace: {
     tables: ['agents', 'audit_logs', 'marketplace_configuration', 'marketplace_listings', 'marketplace_media', 'notifications', 'territories', 'users', 'user_signups'],

@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { pool, withUser, requireRole, HttpError, isPlatformAdminRole } from '../../src/core.js';
+import { pool, withUser, requireActivity, requireRole, HttpError, isPlatformAdminRole } from '../../src/core.js';
 import { sniff, sniffListingMedia } from '../../src/files.js';
 import { getFile, putFile } from '../../src/storage.js';
 import { notify } from '../../src/notify.js';
@@ -11,6 +11,7 @@ import { Phone } from '../../src/validators.js';
 import { h, AGENT, num, requireListingPlan } from '../../src/supply-common.js';
 import { ConfigScope, validateMarketplaceConfig, loadMarketplaceConfig } from '../../src/marketplace-config.js';
 import { nonProductionMockEnabled } from '../../src/mock-provider-config.js';
+import { isClamAvConfigured, scanWithClamAv } from '../../src/clamav.js';
 
 export const router = Router();
 router.get('/marketplace/config', h(async (req, res) => {
@@ -74,6 +75,232 @@ router.get('/marketplace/listings', h(async (req, res) => {
      ORDER BY CASE WHEN l.status='published' THEN 0 ELSE 1 END,l.created_at DESC LIMIT 300`,
   )).rows);
   res.json(rows);
+}));
+
+const RentalApplicationIn = z.object({
+  property_id: z.string().uuid(),
+  unit_id: z.string().uuid().optional(),
+  applicant_message: z.string().trim().min(10).max(2000),
+  contact_consent: z.literal(true),
+}).strict();
+
+router.post('/marketplace/rental-applications', requireRole('customer'), h(async (req, res) => {
+  const body = RentalApplicationIn.parse(req.body);
+  const idempotencyKey = z.string().uuid().parse(req.get('Idempotency-Key'));
+  const payloadHash = createHash('sha256').update(JSON.stringify({
+    property_id: body.property_id,
+    unit_id: body.unit_id ?? null,
+    applicant_message: body.applicant_message,
+    contact_consent: body.contact_consent,
+  })).digest('hex');
+  const propertyId = body.property_id;
+  const application = await withUser(req.user!, async (c) => {
+    const prior = (await c.query(
+      `SELECT id,property_id,unit_id,payload_hash,status,created_at
+       FROM property_rental_applications
+       WHERE applicant_user_id=$1 AND idempotency_key=$2`,
+      [req.user!.id, idempotencyKey],
+    )).rows[0];
+    if (prior) {
+      if (prior.property_id !== propertyId || prior.unit_id !== (body.unit_id ?? null)
+        || prior.payload_hash !== payloadHash) {
+        throw new HttpError(409, 'Idempotency-Key was already used for a different rental application.');
+      }
+      return { ...prior, replayed: true };
+    }
+
+    const property = (await c.query(
+      `SELECT p.id,p.source_agent_id,p.owner_user_id,p.listing_mode,p.status,p.listing_review_status,
+          (SELECT count(*)::int FROM property_units u WHERE u.property_id=p.id) AS unit_count
+       FROM properties p WHERE p.id=$1 FOR SHARE`,
+      [propertyId],
+    )).rows[0];
+    if (!property || property.status !== 'available' || property.listing_review_status !== 'approved'
+      || !['rent', 'sale_or_rent'].includes(property.listing_mode)) {
+      throw new HttpError(404, 'Available verified rental listing not found.');
+    }
+    if (Number(property.unit_count) > 0 && !body.unit_id) {
+      throw new HttpError(422, 'Choose an available unit before applying.');
+    }
+    if (body.unit_id) {
+      const unit = (await c.query(
+        `SELECT id FROM property_units
+         WHERE id=$1 AND property_id=$2 AND occupancy='vacant' FOR SHARE`,
+        [body.unit_id, propertyId],
+      )).rows[0];
+      if (!unit) throw new HttpError(422, 'Choose an available unit in this property.');
+    }
+    const inserted = (await c.query(
+      `INSERT INTO property_rental_applications(
+         property_id,unit_id,applicant_user_id,applicant_message,contact_consent,idempotency_key,payload_hash
+       ) VALUES($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT DO NOTHING
+       RETURNING id,property_id,unit_id,status,created_at`,
+      [propertyId, body.unit_id ?? null, req.user!.id, body.applicant_message,
+        body.contact_consent, idempotencyKey, payloadHash],
+    )).rows[0];
+    if (!inserted) {
+      const replay = (await c.query(
+        `SELECT id,property_id,unit_id,payload_hash,status,created_at
+         FROM property_rental_applications WHERE applicant_user_id=$1 AND idempotency_key=$2`,
+        [req.user!.id, idempotencyKey],
+      )).rows[0];
+      if (replay) {
+        if (replay.property_id !== propertyId || replay.unit_id !== (body.unit_id ?? null)
+          || replay.payload_hash !== payloadHash) {
+          throw new HttpError(409, 'Idempotency-Key was already used for a different rental application.');
+        }
+        return { ...replay, replayed: true };
+      }
+      throw new HttpError(409, 'You already have an open application for this property.');
+    }
+    await c.query(
+      `INSERT INTO property_rental_application_events(
+         application_id,actor_id,event_type,from_status,to_status,reason
+       ) VALUES($1,$2,'submitted',NULL,'submitted','Rental application submitted by applicant.')`,
+      [inserted.id, req.user!.id],
+    );
+    await audit(c, req.user!.id, 'property_rental_application_submitted',
+      'property_rental_application', inserted.id, null, {
+        property_id: propertyId, unit_id: body.unit_id ?? null,
+      });
+    const reviewerId = property.owner_user_id ?? property.source_agent_id;
+    if (reviewerId) {
+      await notify(c, reviewerId, 'property_rental_application_submitted', {
+        application_id: inserted.id, property_id: propertyId,
+      });
+    }
+    return { ...inserted, replayed: false };
+  });
+  res.status(application.replayed ? 200 : 201).json(application);
+}));
+
+router.get('/marketplace/rental-applications/mine', requireRole('customer'), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT a.id,a.property_id,p.address,a.unit_id,u.unit_no,a.applicant_message,a.applicant_response,
+      a.status,a.review_reason,a.created_at,a.updated_at,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'event_type',e.event_type,'from_status',e.from_status,'to_status',e.to_status,
+        'reason',e.reason,'created_at',e.created_at
+      ) ORDER BY e.created_at,e.id) FROM property_rental_application_events e
+      WHERE e.application_id=a.id),'[]'::jsonb) AS events
+     FROM property_rental_applications a
+     LEFT JOIN properties p ON p.id=a.property_id
+     LEFT JOIN property_units u ON u.id=a.unit_id
+     WHERE a.applicant_user_id=$1
+     ORDER BY a.created_at DESC LIMIT 100`,
+    [req.user!.id],
+  )).rows));
+}));
+
+const rentalApplicationReviewRoles = [
+  'property_owner', 'master_agent', 'field_agent', 'global_admin', 'super_admin',
+  'corporate_business_manager',
+] as const;
+
+router.get('/marketplace/rental-applications', requireActivity('property.listings.manage'),
+  requireRole(...rentalApplicationReviewRoles), h(async (req, res) => {
+  res.json(await withUser(req.user!, async (c) => (await c.query(
+    `SELECT a.id,a.property_id,p.address,a.unit_id,u.unit_no,a.applicant_user_id,
+        applicant.legal_name AS applicant_name,a.applicant_message,a.applicant_response,
+        a.status,a.reviewed_by,a.reviewed_at,a.review_reason,a.created_at,a.updated_at,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'event_type',e.event_type,'from_status',e.from_status,'to_status',e.to_status,
+          'reason',e.reason,'created_at',e.created_at
+        ) ORDER BY e.created_at,e.id) FROM property_rental_application_events e
+        WHERE e.application_id=a.id),'[]'::jsonb) AS events
+     FROM property_rental_applications a
+     JOIN properties p ON p.id=a.property_id
+     JOIN users applicant ON applicant.id=a.applicant_user_id
+     LEFT JOIN property_units u ON u.id=a.unit_id
+     ORDER BY CASE WHEN a.status IN ('submitted','needs_info') THEN 0 ELSE 1 END,
+       a.created_at DESC LIMIT 300`,
+  )).rows));
+}));
+
+router.post('/marketplace/rental-applications/:id/respond', requireRole('customer'), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const { response } = z.object({ response: z.string().trim().min(10).max(2000) }).strict().parse(req.body);
+  const application = await withUser(req.user!, async (c) => {
+    const current = (await c.query(
+      `SELECT id,property_id,status FROM property_rental_applications
+       WHERE id=$1 AND applicant_user_id=$2 FOR UPDATE`,
+      [id, req.user!.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404, 'Rental application not found.');
+    if (current.status !== 'needs_info') throw new HttpError(409, 'Only an application requesting more information can receive a response.');
+    const updated = (await c.query(
+      `UPDATE property_rental_applications
+       SET applicant_response=$2,status='submitted',updated_at=now()
+       WHERE id=$1
+       RETURNING id,property_id,unit_id,status,applicant_response,updated_at`,
+      [id, response],
+    )).rows[0];
+    await c.query(
+      `INSERT INTO property_rental_application_events(
+         application_id,actor_id,event_type,from_status,to_status,reason
+       ) VALUES($1,$2,'responded','needs_info','submitted',$3)`,
+      [id, req.user!.id, response],
+    );
+    await audit(c, req.user!.id, 'property_rental_application_responded',
+      'property_rental_application', id, { status: current.status }, { status: updated.status });
+    const property = (await c.query(
+      'SELECT owner_user_id,source_agent_id FROM properties WHERE id=$1',
+      [current.property_id],
+    )).rows[0];
+    const reviewerId = property?.owner_user_id ?? property?.source_agent_id;
+    if (reviewerId) {
+      await notify(c, reviewerId, 'property_rental_application_responded', { application_id: id });
+    }
+    return updated;
+  });
+  res.json(application);
+}));
+
+router.post('/marketplace/rental-applications/:id/review', requireActivity('property.listings.manage'),
+  requireRole(...rentalApplicationReviewRoles), h(async (req, res) => {
+  const id = z.string().uuid().parse(req.params.id);
+  const body = z.object({
+    decision: z.enum(['needs_info', 'accept', 'reject']),
+    reason: z.string().trim().min(3).max(1000),
+  }).strict().parse(req.body);
+  if (body.decision !== 'accept' && body.reason.length < 10) {
+    throw new HttpError(422, 'Provide a reason of at least 10 characters for a rejection or information request.');
+  }
+  const application = await withUser(req.user!, async (c) => {
+    const current = (await c.query(
+      `SELECT id,property_id,applicant_user_id,status
+       FROM property_rental_applications WHERE id=$1 FOR UPDATE`,
+      [id],
+    )).rows[0];
+    if (!current) throw new HttpError(404, 'Rental application not found.');
+    if (current.applicant_user_id === req.user!.id) throw new HttpError(403, 'Applicants cannot review their own applications.');
+    if (!['submitted', 'needs_info'].includes(current.status)) {
+      throw new HttpError(409, 'Only a submitted application can be reviewed.');
+    }
+    const status = body.decision === 'accept' ? 'accepted'
+      : body.decision === 'reject' ? 'rejected' : 'needs_info';
+    const updated = (await c.query(
+      `UPDATE property_rental_applications
+       SET status=$2,reviewed_by=$3,reviewed_at=now(),review_reason=$4,updated_at=now()
+       WHERE id=$1
+       RETURNING id,property_id,unit_id,applicant_user_id,status,reviewed_by,reviewed_at,review_reason,updated_at`,
+      [id, status, req.user!.id, body.reason],
+    )).rows[0];
+    await c.query(
+      `INSERT INTO property_rental_application_events(
+         application_id,actor_id,event_type,from_status,to_status,reason
+       ) VALUES($1,$2,$3,$4,$5,$6)`,
+      [id, req.user!.id, status, current.status, status, body.reason],
+    );
+    await audit(c, req.user!.id, `property_rental_application_${status}`,
+      'property_rental_application', id, { status: current.status }, { status, reason: body.reason });
+    await notify(c, current.applicant_user_id, `property_rental_application_${status}`, {
+      application_id: id, status,
+    });
+    return updated;
+  });
+  res.json(application);
 }));
 
 const sandboxPaymentsEnabled = () => nonProductionMockEnabled(process.env,'MARKETPLACE_PAYMENT_MODE');
@@ -152,6 +379,15 @@ router.post('/marketplace/listings/:id/media/upload', requireRole(...AGENT,'prop
     const config = await loadMarketplaceConfig(c);
     const limit = Number(mime.startsWith('image/') ? config.system.image_max_bytes : config.system.video_max_bytes);
     if (file.length>limit) throw new HttpError(413,`This file exceeds the configured ${mime.startsWith('image/')?'image':'video'} size limit.`);
+    if (!isClamAvConfigured()) throw new HttpError(503,'Marketplace media upload is unavailable until the malware scanner is configured.');
+    let scanResult: 'clean' | 'infected';
+    try {
+      scanResult = await scanWithClamAv(file);
+    } catch (error) {
+      console.error('Marketplace listing media malware scan failed', error instanceof Error ? error.message : error);
+      throw new HttpError(503,'Marketplace media upload is unavailable because the malware scan could not be completed.');
+    }
+    if (scanResult !== 'clean') throw new HttpError(422,'The marketplace media file was rejected by the malware scanner.');
     const count = Number((await c.query('SELECT count(*)::int AS count FROM marketplace_media WHERE listing_id=$1',[listing.id])).rows[0].count);
     if (count>=Number(config.system.max_media_per_listing)) throw new HttpError(409,'This listing has reached its configured media limit.');
     const key = randomUUID();

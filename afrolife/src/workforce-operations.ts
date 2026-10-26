@@ -107,7 +107,7 @@ function encryptPayrollExport(csv: string, key: Buffer, keyId: string) {
 
 workforceOperations.get('/workforce/engagements', requireActivity('workforce.shifts.manage'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (client) => (await client.query(
-    `SELECT e.id,e.worker_type,e.billing_unit,e.starts_on,e.ends_on,w.name AS worker_name,
+    `SELECT e.id,e.worker_type,e.billing_unit,e.worker_rate::text,e.starts_on,e.ends_on,w.name AS worker_name,
         l.name AS employer_client,e.status
      FROM staffing_engagements e JOIN workers w ON w.id=e.worker_id
      LEFT JOIN leads l ON l.id=e.client_lead_id
@@ -120,7 +120,11 @@ workforceOperations.get('/workforce/engagements', requireActivity('workforce.shi
 workforceOperations.get('/workforce/shifts', requireActivity('workforce.shifts.manage'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (client) => (await client.query(
     `SELECT s.id,s.engagement_id,s.starts_at,s.ends_at,s.status,s.worker_response,
-        e.worker_type,e.billing_unit,w.id AS worker_id,w.name AS worker_name,l.name AS employer_client,
+        e.worker_type,e.billing_unit,e.worker_rate::text,
+        CASE WHEN e.billing_unit='hour'
+          THEN round(e.worker_rate * extract(epoch FROM (s.ends_at-s.starts_at))/3600,2)::text
+          ELSE NULL END AS scheduled_labor_cost_estimate,
+        w.id AS worker_id,w.name AS worker_name,l.name AS employer_client,
         t.id AS time_entry_id,t.status AS time_status,t.clock_in_at,t.clock_out_at,t.exception_reason
      FROM workforce_shifts s
      JOIN staffing_engagements e ON e.id=s.engagement_id

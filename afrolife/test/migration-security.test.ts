@@ -42,6 +42,11 @@ const maintenanceCompletionReview = readFileSync(new URL('../migrations/100_main
 const maintenanceVendorFulfillment = readFileSync(new URL('../migrations/101_maintenance_vendor_fulfillment.sql', import.meta.url), 'utf8');
 const notificationDeliveryRetries = readFileSync(new URL('../migrations/102_notification_delivery_retries.sql', import.meta.url), 'utf8');
 const payrollHandoffHistory = readFileSync(new URL('../migrations/103_workforce_payroll_handoff_history.sql', import.meta.url), 'utf8');
+const propertyRentalApplications = readFileSync(new URL('../migrations/104_property_rental_applications.sql', import.meta.url), 'utf8');
+const propertyTenantSelfService = readFileSync(new URL('../migrations/105_property_tenant_self_service.sql', import.meta.url), 'utf8');
+const propertyOwnerAuthorityReview = readFileSync(new URL('../migrations/106_property_owner_authority_review.sql', import.meta.url), 'utf8');
+const marketplaceRouter = readFileSync(new URL('../services/marketplace/router.ts', import.meta.url), 'utf8');
+const propertyManagementRouter = readFileSync(new URL('../services/property-management/router.ts', import.meta.url), 'utf8');
 const propertyVendorPortal = readFileSync(new URL('../src/property-vendor-portal.ts', import.meta.url), 'utf8');
 const notificationDispatcher = readFileSync(new URL('../src/dispatch.ts', import.meta.url), 'utf8');
 const workforceOperations = readFileSync(new URL('../src/workforce-operations.ts', import.meta.url), 'utf8');
@@ -484,6 +489,84 @@ test('maintenance vendor access is assignment-scoped and invoice mismatches requ
   assert.match(maintenanceVendorFulfillment,/CREATE TABLE maintenance_sla_escalations/);
   assert.match(propertyVendorPortal,/maintenance\/vendor\/:id\/complete/);
   assert.match(operations,/maintenance\/sla\/overdue/);
+});
+
+test('V11 rental applications require an approved vacant listing, explicit consent, human review, and private append-only history', () => {
+  assert.match(propertyRentalApplications,/applicant_user_id uuid NOT NULL REFERENCES users\(id\)/);
+  assert.match(propertyRentalApplications,/contact_consent boolean NOT NULL CHECK \(contact_consent\)/);
+  assert.match(propertyRentalApplications,/CREATE UNIQUE INDEX property_rental_applications_one_open_idx/);
+  assert.match(propertyRentalApplications,/p\.status='available'/);
+  assert.match(propertyRentalApplications,/p\.listing_review_status='approved'/);
+  assert.match(propertyRentalApplications,/p\.listing_mode IN \('rent','sale_or_rent'\)/);
+  assert.match(propertyRentalApplications,/u\.occupancy='vacant'/);
+  assert.match(propertyRentalApplications,/FORCE ROW LEVEL SECURITY/);
+  assert.match(propertyRentalApplications,/applicant_user_id=app_user_id\(\) OR app_can_manage_rental_application\(property_id\)/);
+  assert.match(propertyRentalApplications,/Only an authorized independent property reviewer may decide an application/);
+  assert.match(propertyRentalApplications,/A reason is required for an adverse rental application decision/);
+  assert.match(propertyRentalApplications,/Rental application history is append-only/);
+  assert.match(marketplaceRouter,/Idempotency-Key was already used for a different rental application/);
+  assert.match(marketplaceRouter,/Only an application requesting more information can receive a response/);
+  assert.match(marketplaceRouter,/Only a submitted application can be reviewed/);
+  assert.match(marketplaceRouter,/property_rental_application_events/);
+  assert.match(marketplaceRouter,/scanWithClamAv\(file\)/);
+  assert.match(marketplaceRouter,/Marketplace media upload is unavailable until the malware scanner is configured/);
+  assert.match(propertyManagementRouter,/scanWithClamAv\(file\)/);
+  assert.match(propertyManagementRouter,/Property media upload is unavailable until the malware scanner is configured/);
+  assert.match(publicApp,/form\.dataset\.form === 'rental-application'/);
+  assert.match(publicApp,/I agree to share my account name and this message/);
+  assert.match(publicApp,/AfroLife does not run automated tenant screening/);
+  assert.match(publicApp,/rental-application-review/);
+});
+
+test('resident lease self-service requires a one-time claim and scopes property, payment, document, and maintenance access', () => {
+  assert.match(propertyTenantSelfService,/CREATE TABLE property_tenant_access_invitations/);
+  assert.match(propertyTenantSelfService,/token_hash text NOT NULL UNIQUE/);
+  assert.match(propertyTenantSelfService,/CREATE UNIQUE INDEX property_tenant_access_invitation_open_lease_idx/);
+  assert.match(propertyTenantSelfService,/CREATE TABLE property_tenant_account_links/);
+  assert.match(propertyTenantSelfService,/NEW\.user_id IS DISTINCT FROM actor OR app_role\(\)<>'customer'/);
+  assert.match(propertyTenantSelfService,/account\.phone=tenant\.phone/);
+  assert.match(propertyTenantSelfService,/FORCE ROW LEVEL SECURITY/);
+  assert.match(propertyTenantSelfService,/token_hash=current_setting\('app\.property_tenant_invite_hash',true\)/);
+  assert.match(propertyTenantSelfService,/CREATE POLICY leases_linked_resident_read/);
+  assert.match(propertyTenantSelfService,/CREATE POLICY rent_charges_linked_resident_read/);
+  assert.match(propertyTenantSelfService,/CREATE POLICY rent_transactions_linked_resident_read/);
+  assert.match(propertyTenantSelfService,/CREATE POLICY lease_documents_linked_resident_read/);
+  assert.match(propertyTenantSelfService,/CREATE POLICY maintenance_linked_resident_insert/);
+  assert.match(operations,/ops\.post\('\/resident\/access\/claim', requireRole\('customer'\)/);
+  assert.match(operations,/ops\.get\('\/resident\/property-workspace', requireRole\('customer'\)/);
+  assert.match(operations,/ops\.post\('\/resident\/maintenance', requireRole\('customer'\)/);
+  assert.match(operations,/randomBytes\(32\)\.toString\('hex'\)/);
+  assert.match(operations,/createHash\('sha256'\)\.update\(claimCode\.toLowerCase\(\)\)/);
+  assert.match(operations,/tenant access invitation is invalid, expired, or already used/i);
+  assert.match(server,/api\.use\(\['\/resident'\], requireMiniAppAccess\('properties'\)\)/);
+  assert.match(propertyVendorPortal,/req\.user\?\.role === 'customer'\) return requireMiniAppAccess\('properties'\)/);
+  assert.match(publicApp,/Resident self-service/);
+  assert.match(publicApp,/resident-access-claim/);
+  assert.match(publicApp,/resident-maintenance/);
+  assert.match(publicApp,/Issue one-time resident access code/);
+});
+
+test('property publication requires independent owner-authority review and scanned evidence', () => {
+  assert.match(propertyOwnerAuthorityReview,/authority_review_status text NOT NULL DEFAULT 'pending_review'/);
+  assert.match(propertyOwnerAuthorityReview,/CREATE TABLE property_authority_evidence/);
+  assert.match(propertyOwnerAuthorityReview,/scan_status text NOT NULL CHECK \(scan_status = 'clean'\)/);
+  assert.match(propertyOwnerAuthorityReview,/CREATE TRIGGER property_authority_evidence_immutable/);
+  assert.match(propertyOwnerAuthorityReview,/CREATE TRIGGER property_authority_review_events_insert_guard/);
+  assert.match(propertyOwnerAuthorityReview,/CREATE TRIGGER properties_authority_review_guard/);
+  assert.match(propertyOwnerAuthorityReview,/Only an independent reviewer may decide a pending property authority review/);
+  assert.match(propertyOwnerAuthorityReview,/Property authority approval requires malware-scanned evidence/);
+  assert.match(propertyOwnerAuthorityReview,/subject\.active = true AND subject\.kyc_status = 'verified'/);
+  assert.match(propertyOwnerAuthorityReview,/p\.listing_review_status = 'approved' AND p\.authority_review_status = 'approved'/);
+  assert.match(propertyManagementRouter,/scanWithClamAv\(file\)/);
+  assert.match(propertyManagementRouter,/authority-evidence/);
+  assert.match(propertyManagementRouter,/authority-resubmit/);
+  assert.match(propertyManagementRouter,/authority-review/);
+  assert.match(propertyManagementRouter,/A different reviewer must decide this property authority review/);
+  assert.match(propertyManagementRouter,/kyc_status='verified'/);
+  assert.match(publicApp,/Submit ownership or delegated-authority evidence/);
+  assert.match(publicApp,/property-authority-review/);
+  assert.match(publicApp,/property-authority-file/);
+  assert.match(publicApp,/Owner-authority review queue/);
 });
 
 test('notification delivery retries are bounded, idempotent, and operator-visible', () => {

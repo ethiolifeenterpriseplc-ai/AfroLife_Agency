@@ -1,5 +1,5 @@
 import express, { Router, Request, Response, RequestHandler } from 'express';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { pool, withUser, requireActivity, requireAnyActivity, requireRole, HttpError, isPlatformAdminRole } from './core.js';
 import { audit, post } from './domain.js';
@@ -515,6 +515,306 @@ ops.get('/tenants', requireActivity('property.tenancy.manage'), h(async (req, re
   )).rows));
 }));
 
+ops.post('/leases/:id/tenant-access-invitations', requireActivity('property.tenancy.manage'), h(async (req, res) => {
+  const token = randomBytes(32).toString('hex');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const invitation = await withUser(req.user!, async (client) => {
+    const lease = (await client.query(
+      `SELECT l.id,l.tenant_id,l.source_agent_id,p.owner_user_id
+       FROM leases l JOIN property_units u ON u.id=l.unit_id
+       JOIN properties p ON p.id=u.property_id
+       WHERE l.id=$1 AND l.status='active' FOR UPDATE OF l`,
+      [req.params.id],
+    )).rows[0];
+    if (!lease) throw new HttpError(404, 'Active lease not found');
+    await client.query(
+      `UPDATE property_tenant_access_invitations
+       SET revoked_by=$2,revoked_at=now(),revocation_reason='Replaced by a new resident access invitation'
+       WHERE lease_id=$1 AND redeemed_at IS NULL AND revoked_at IS NULL`,
+      [lease.id, req.user!.id],
+    );
+    const created = (await client.query(
+      `INSERT INTO property_tenant_access_invitations
+         (lease_id,tenant_id,source_agent_id,property_owner_user_id,token_hash,invited_by,expires_at)
+       VALUES($1,$2,$3,$4,$5,$6,now()+interval '7 days')
+       RETURNING id,lease_id,expires_at`,
+      [lease.id, lease.tenant_id, lease.source_agent_id, lease.owner_user_id, tokenHash, req.user!.id],
+    )).rows[0];
+    await audit(client, req.user!.id, 'property_tenant_access_invitation_created', 'lease', lease.id, null, {
+      invitation_id: created.id, expires_at: created.expires_at,
+    });
+    return created;
+  });
+  res.status(201).json({
+    ...invitation,
+    claim_code: token,
+    delivery_notice: 'Deliver this one-time code only to the tenant through a separately verified contact channel. AfroLife does not send it.',
+  });
+}));
+
+ops.post('/leases/:leaseId/tenant-access-links/:linkId/revoke', requireActivity('property.tenancy.manage'), h(async (req, res) => {
+  const { reason } = z.object({ reason: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const revoked = await withUser(req.user!, async (client) => {
+    const result = (await client.query(
+      `UPDATE property_tenant_account_links link
+       SET revoked_by=$3,revoked_at=now(),revocation_reason=$4
+       FROM property_tenant_access_invitations invitation
+       WHERE link.invitation_id=invitation.id AND invitation.lease_id=$1
+         AND link.id=$2 AND link.revoked_at IS NULL
+       RETURNING link.id,link.tenant_id,link.user_id,link.revoked_at`,
+      [req.params.leaseId, req.params.linkId, req.user!.id, reason],
+    )).rows[0];
+    if (!result) throw new HttpError(404, 'Active resident account link not found');
+    await audit(client, req.user!.id, 'property_tenant_account_link_revoked', 'lease', req.params.leaseId, null, {
+      link_id: result.id, user_id: result.user_id, reason,
+    });
+    return result;
+  });
+  res.json(revoked);
+}));
+
+ops.post('/resident/access/claim', requireRole('customer'), h(async (req, res) => {
+  const { claim_code: claimCode } = z.object({
+    claim_code: z.string().trim().regex(/^[0-9a-f]{64}$/i),
+  }).strict().parse(req.body);
+  const tokenHash = createHash('sha256').update(claimCode.toLowerCase()).digest('hex');
+  const link = await withUser(req.user!, async (client) => {
+    await client.query("SELECT set_config('app.property_tenant_invite_hash',$1,true)", [tokenHash]);
+    const invitation = (await client.query(
+      `SELECT id,lease_id,tenant_id,expires_at
+       FROM property_tenant_access_invitations
+       WHERE token_hash=$1 AND redeemed_at IS NULL AND revoked_at IS NULL
+         AND expires_at>now()
+       FOR UPDATE`,
+      [tokenHash],
+    )).rows[0];
+    if (!invitation) throw new HttpError(404, 'Tenant access invitation is invalid, expired, or already used');
+    const account = (await client.query(
+      `SELECT u.phone,t.phone AS tenant_phone
+       FROM users u JOIN tenants t ON t.id=$2
+       WHERE u.id=$1 AND u.active AND u.role='customer'`,
+      [req.user!.id, invitation.tenant_id],
+    )).rows[0];
+    if (!account || account.phone !== account.tenant_phone) {
+      throw new HttpError(403, 'Sign in with the customer account registered to the tenant contact phone to claim this invitation');
+    }
+    const existingLink = (await client.query(
+      `SELECT id,tenant_id,created_at FROM property_tenant_account_links
+       WHERE tenant_id=$1 AND user_id=$2 AND revoked_at IS NULL`,
+      [invitation.tenant_id, req.user!.id],
+    )).rows[0];
+    if (existingLink) return { ...existingLink, already_linked: true };
+    const redeemed = await client.query(
+      `UPDATE property_tenant_access_invitations
+       SET redeemed_by=$2,redeemed_at=now()
+       WHERE id=$1 AND redeemed_at IS NULL AND revoked_at IS NULL
+         AND expires_at>now()
+       RETURNING id`,
+      [invitation.id, req.user!.id],
+    );
+    if (!redeemed.rowCount) throw new HttpError(409, 'Tenant access invitation has already been used');
+    const created = (await client.query(
+      `INSERT INTO property_tenant_account_links(tenant_id,user_id,invitation_id)
+       VALUES($1,$2,$3)
+       RETURNING id,tenant_id,created_at`,
+      [invitation.tenant_id, req.user!.id, invitation.id],
+    )).rows[0];
+    await audit(client, req.user!.id, 'property_tenant_account_link_claimed', 'lease', invitation.lease_id, null, {
+      link_id: created.id, invitation_id: invitation.id,
+    });
+    return { ...created, already_linked: false };
+  });
+  res.status(201).json(link);
+}));
+
+ops.get('/resident/property-workspace', requireRole('customer'), h(async (req, res) => {
+  const workspace = await withUser(req.user!, async (client) => {
+    const leases = (await client.query(
+      `SELECT l.id,l.status,l.rent::text,l.deposit::text,l.start_date,l.end_date,
+         l.possession_handover_on,l.move_in_inspection_completed,
+         t.name AS tenant_name,u.unit_no,p.address,
+         COALESCE((SELECT json_agg(json_build_object(
+           'id',d.id,'party',d.party,'signer_name',d.signer_name,'mime',d.mime,
+           'size_bytes',d.size_bytes,'created_at',d.created_at
+         ) ORDER BY d.created_at,d.id) FROM lease_documents d WHERE d.lease_id=l.id),'[]'::json) AS documents,
+         COALESCE((SELECT json_agg(json_build_object(
+           'notice_type',n.notice_type,'received_on',n.received_on,
+           'proposed_effective_on',n.proposed_effective_on,'summary',n.summary,
+           'created_at',n.created_at
+         ) ORDER BY n.created_at DESC) FROM lease_notices n WHERE n.lease_id=l.id),'[]'::json) AS notices
+       FROM leases l
+       JOIN property_tenant_account_links link ON link.tenant_id=l.tenant_id
+       JOIN tenants t ON t.id=l.tenant_id
+       JOIN property_units u ON u.id=l.unit_id
+       JOIN properties p ON p.id=u.property_id
+       WHERE link.user_id=$1 AND link.revoked_at IS NULL
+       ORDER BY l.start_date DESC,l.created_at DESC`,
+      [req.user!.id],
+    )).rows;
+    const leaseIds = leases.map((lease) => lease.id);
+    if (!leaseIds.length) return { leases, charges: [], payments: [], maintenance: [] };
+    const [charges, payments, maintenance] = await Promise.all([
+      client.query(
+        `SELECT charge.id,charge.lease_id,charge.period,charge.due_on,charge.amount::text,
+           CASE WHEN charge.status='due' AND charge.due_on<current_date THEN 'overdue'
+             ELSE charge.status END AS status,charge.paid_at,charge.payment_ref
+         FROM rent_charges charge WHERE charge.lease_id=ANY($1::uuid[])
+         ORDER BY charge.due_on DESC,charge.id`,
+        [leaseIds],
+      ),
+      client.query(
+        `SELECT id,lease_id,kind,amount::text,channel,reference,status,created_at,reconciled_at
+         FROM rent_transactions WHERE lease_id=ANY($1::uuid[])
+         ORDER BY created_at DESC,id`,
+        [leaseIds],
+      ),
+      client.query(
+        `SELECT maintenance.id,maintenance.lease_id,maintenance.category,maintenance.priority,
+           maintenance.description,maintenance.status,maintenance.created_at,
+           property.address,unit.unit_no,
+           COALESCE((SELECT json_agg(json_build_object(
+             'event_type',event.event_type,'from_status',event.from_status,'to_status',event.to_status,
+             'created_at',event.created_at
+           ) ORDER BY event.created_at,event.id) FROM maintenance_request_events event
+             WHERE event.maintenance_request_id=maintenance.id),'[]'::json) AS events,
+           COALESCE((SELECT json_agg(json_build_object(
+             'id',evidence.id,'mime',evidence.mime,'created_at',evidence.created_at
+           ) ORDER BY evidence.created_at,evidence.id) FROM maintenance_evidence evidence
+             WHERE evidence.maintenance_request_id=maintenance.id AND evidence.scan_status='clean'),'[]'::json) AS evidence
+         FROM maintenance_requests maintenance
+         JOIN properties property ON property.id=maintenance.property_id
+         LEFT JOIN property_units unit ON unit.id=maintenance.unit_id
+         WHERE maintenance.resident_user_id=$1 AND maintenance.lease_id=ANY($2::uuid[])
+         ORDER BY maintenance.created_at DESC`,
+        [req.user!.id, leaseIds],
+      ),
+    ]);
+    return { leases, charges: charges.rows, payments: payments.rows, maintenance: maintenance.rows };
+  });
+  res.json(workspace);
+}));
+
+ops.post('/resident/leases/:id/notices', requireRole('customer'), h(async (req, res) => {
+  const body = z.object({
+    idempotency_key: z.string().uuid(),
+    proposed_effective_on: z.string().date(),
+    summary: z.string().trim().min(10).max(1000),
+  }).strict().parse(req.body);
+  const receivedOn = new Date().toISOString().slice(0, 10);
+  if (body.proposed_effective_on < receivedOn) {
+    throw new HttpError(422, 'The proposed effective date cannot be before today');
+  }
+  const notice = await withUser(req.user!, async (client) => {
+    const lease = (await client.query(
+      `SELECT lease.id FROM leases lease
+       JOIN property_tenant_account_links link ON link.tenant_id=lease.tenant_id
+       WHERE lease.id=$1 AND lease.status='active'
+         AND link.user_id=$2 AND link.revoked_at IS NULL`,
+      [req.params.id, req.user!.id],
+    )).rows[0];
+    if (!lease) throw new HttpError(404, 'Active resident lease not found');
+    const inserted = await client.query(
+      `INSERT INTO lease_notices
+         (lease_id,idempotency_key,notice_type,received_on,proposed_effective_on,summary,recorded_by)
+       VALUES($1,$2,'tenant_to_owner',$3,$4,$5,$6)
+       ON CONFLICT(lease_id,idempotency_key) DO NOTHING
+       RETURNING id,lease_id,notice_type,received_on,proposed_effective_on,summary,created_at`,
+      [lease.id, body.idempotency_key, receivedOn, body.proposed_effective_on, body.summary, req.user!.id],
+    );
+    if (inserted.rowCount) {
+      await audit(client, req.user!.id, 'resident_lease_notice_recorded', 'lease', lease.id, null, {
+        notice_id: inserted.rows[0].id, notice_type: 'tenant_to_owner',
+      });
+      return inserted.rows[0];
+    }
+    const existing = (await client.query(
+      `SELECT id,lease_id,notice_type,received_on,proposed_effective_on,summary,recorded_by,created_at
+       FROM lease_notices WHERE lease_id=$1 AND idempotency_key=$2`,
+      [lease.id, body.idempotency_key],
+    )).rows[0];
+    if (!existing || existing.recorded_by !== req.user!.id
+      || String(existing.proposed_effective_on).slice(0, 10) !== body.proposed_effective_on
+      || existing.summary !== body.summary) {
+      throw new HttpError(409, 'Idempotency-Key was already used for a different tenant notice');
+    }
+    return existing;
+  });
+  res.status(201).json(notice);
+}));
+
+ops.post('/resident/maintenance', requireRole('customer'), h(async (req, res) => {
+  const body = z.object({
+    lease_id: z.string().uuid(),
+    category: z.enum(['general','plumbing','electrical','appliance','structural','cleaning','safety','other']).default('general'),
+    priority: z.enum(['low','normal','urgent']).default('normal'),
+    description: z.string().trim().min(10).max(2000),
+    idempotency_key: z.string().uuid(),
+  }).strict().parse(req.body);
+  const priority = body.category === 'safety' ? 'urgent' : body.priority;
+  const payloadHash = createHash('sha256').update(JSON.stringify({
+    lease_id: body.lease_id, category: body.category, priority, description: body.description,
+  })).digest('hex');
+  const result = await withUser(req.user!, async (client) => {
+    const existing = (await client.query(
+      `SELECT * FROM maintenance_requests
+       WHERE idempotency_user_id=$1 AND idempotency_key=$2`,
+      [req.user!.id, body.idempotency_key],
+    )).rows[0];
+    if (existing) {
+      if (existing.idempotency_payload_hash !== payloadHash) {
+        throw new HttpError(409, 'Idempotency-Key was already used for a different maintenance request');
+      }
+      return { row: existing, replayed: true };
+    }
+    const lease = (await client.query(
+      `SELECT lease.id,lease.unit_id,lease.source_agent_id,unit.property_id
+       FROM leases lease
+       JOIN property_tenant_account_links link ON link.tenant_id=lease.tenant_id
+       JOIN property_units unit ON unit.id=lease.unit_id
+       WHERE lease.id=$1 AND lease.status='active'
+         AND lease.start_date<=current_date AND lease.end_date>=current_date
+         AND link.user_id=$2 AND link.revoked_at IS NULL
+       FOR UPDATE OF lease`,
+      [body.lease_id, req.user!.id],
+    )).rows[0];
+    if (!lease) throw new HttpError(404, 'Active resident lease not found');
+    const inserted = await client.query(
+      `INSERT INTO maintenance_requests
+         (property_id,unit_id,lease_id,resident_user_id,description,category,priority,
+          source_agent_id,idempotency_user_id,idempotency_key,idempotency_payload_hash)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$4,$9,$10)
+       ON CONFLICT (idempotency_user_id,idempotency_key)
+         WHERE idempotency_key IS NOT NULL DO NOTHING
+       RETURNING *`,
+      [lease.property_id, lease.unit_id, lease.id, req.user!.id, body.description,
+        body.category, priority, lease.source_agent_id, body.idempotency_key, payloadHash],
+    );
+    if (!inserted.rowCount) {
+      const replay = (await client.query(
+        `SELECT * FROM maintenance_requests
+         WHERE idempotency_user_id=$1 AND idempotency_key=$2`,
+        [req.user!.id, body.idempotency_key],
+      )).rows[0];
+      if (!replay || replay.idempotency_payload_hash !== payloadHash) {
+        throw new HttpError(409, 'Maintenance request could not be replayed safely; retry with a new Idempotency-Key');
+      }
+      return { row: replay, replayed: true };
+    }
+    const row = inserted.rows[0];
+    await client.query(
+      `INSERT INTO maintenance_request_events
+         (maintenance_request_id,actor_id,event_type,to_status,note)
+       VALUES($1,$2,'opened','open',$3)`,
+      [row.id, req.user!.id, body.description],
+    );
+    await audit(client, req.user!.id, 'resident_maintenance_opened', 'maintenance', row.id, null, {
+      lease_id: lease.id, category: body.category, priority,
+    });
+    return { row, replayed: false };
+  });
+  res.status(result.replayed ? 200 : 201).json({ ...result.row, replayed: result.replayed });
+}));
+
 // ================= Leases and rent =================
 const LeaseIn = z.object({
   unit_id: z.string().uuid(), tenant_id: z.string().uuid(), rent: z.number().positive(), deposit: z.number().nonnegative().default(0),
@@ -928,6 +1228,11 @@ ops.get('/leases', requireAnyActivity('property.tenancy.manage', 'rent.payments.
   res.json(await withUser(req.user!, async (c) => (await c.query(
     `SELECT l.*, t.name AS tenant_name, u.unit_no, p.address,
        (SELECT count(*)::int FROM rent_charges r WHERE r.lease_id = l.id AND r.status = 'due' AND r.due_on < current_date) AS overdue_count,
+       COALESCE((SELECT json_agg(json_build_object(
+         'id',link.id,'user_id',account.id,'legal_name',account.legal_name
+       ) ORDER BY account.legal_name)
+         FROM property_tenant_account_links link JOIN users account ON account.id=link.user_id
+         WHERE link.tenant_id=l.tenant_id AND link.revoked_at IS NULL),'[]'::json) AS tenant_access_accounts,
        EXISTS (SELECT 1 FROM lease_documents d WHERE d.lease_id=l.id AND d.party='tenant') AS tenant_signature_evidence,
        EXISTS (SELECT 1 FROM lease_documents d WHERE d.lease_id=l.id AND d.party='owner') AS owner_signature_evidence,
        latest_notice.notice_type,latest_notice.received_on AS notice_received_on,

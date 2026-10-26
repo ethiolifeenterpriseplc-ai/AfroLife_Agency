@@ -10,6 +10,7 @@ import { matchingTuningFromRules, scoreMatch, weightsFromRules } from '../../src
 import { Phone } from '../../src/validators.js';
 import { h, AGENT, num, requireListingPlan } from '../../src/supply-common.js';
 import { loadMarketplaceConfig } from '../../src/marketplace-config.js';
+import { isClamAvConfigured, scanWithClamAv } from '../../src/clamav.js';
 
 export const router = Router();
 // ================= Properties and units =================
@@ -60,10 +61,189 @@ router.post('/properties', requireActivity('property.listings.manage'), requireL
       [b.address,b.description,b.ptype,b.listing_mode,b.sale_price ?? null,b.rent_period,b.territory_id,b.owner_lead_id ?? null,sourceAgentId,ownerUserId,req.user!.id,listingReviewStatus],
     )).rows[0];
     for (const u of b.units) await c.query('INSERT INTO property_units (property_id, unit_no, floor, ptype, rent) VALUES ($1,$2,$3,$4,$5)', [p.id, u.unit_no, u.floor ?? null, u.ptype, u.rent ?? null]);
+    await c.query(
+      `INSERT INTO property_authority_review_events(property_id,actor_id,event_type,to_status)
+       VALUES($1,$2,'submitted','pending_review')`,
+      [p.id, req.user!.id],
+    );
     await audit(c, req.user!.id, 'property_created', 'property', p.id, null, { address: b.address, units: b.units.length });
     return p;
   });
   res.status(201).json(row);
+}));
+
+router.post('/properties/:id/authority-evidence', requireActivity('property.listings.manage'), requireListingPlan, express.raw({ type: () => true, limit: '11mb' }), h(async (req, res) => {
+  const evidenceType = z.enum(['ownership_authority','delegated_authority']).parse(req.query.evidence_type);
+  const file = req.body as Buffer;
+  if (!Buffer.isBuffer(file) || file.length === 0) throw new HttpError(400, 'Choose an ownership or delegated-authority document.');
+  if (file.length > 10 * 1024 * 1024) throw new HttpError(413, 'Property authority evidence must be 10 MB or smaller.');
+  const mime = sniff(file);
+  if (!mime || !['application/pdf','image/jpeg','image/png'].includes(mime)) {
+    throw new HttpError(415, 'Authority evidence must be a PDF, JPEG, or PNG file.');
+  }
+  if (!isClamAvConfigured()) throw new HttpError(503, 'Authority evidence upload is unavailable until the malware scanner is configured.');
+  let scanResult: 'clean' | 'infected';
+  try {
+    scanResult = await scanWithClamAv(file);
+  } catch (error) {
+    console.error('Property authority evidence malware scan failed', error instanceof Error ? error.message : error);
+    throw new HttpError(503, 'Authority evidence upload is unavailable because the malware scan could not be completed.');
+  }
+  if (scanResult !== 'clean') throw new HttpError(422, 'The authority evidence file was rejected by the malware scanner.');
+
+  const evidence = await withUser(req.user!, async (c) => {
+    const property = (await c.query(
+      `SELECT id,authority_review_status FROM properties WHERE id=$1 FOR UPDATE`,
+      [req.params.id],
+    )).rows[0];
+    if (!property) throw new HttpError(404, 'Property listing not found.');
+    if (!['pending_review','needs_info','rejected'].includes(property.authority_review_status)) {
+      throw new HttpError(409, 'Authority evidence can only be added to a pending or returned listing.');
+    }
+    const storageKey = randomUUID();
+    const digest = createHash('sha256').update(file).digest('hex');
+    const row = (await c.query(
+      `INSERT INTO property_authority_evidence
+         (property_id,evidence_type,storage_key,sha256,mime,size_bytes,scan_status,uploaded_by)
+       VALUES($1,$2,$3,$4,$5,$6,'clean',$7)
+       RETURNING id,property_id,evidence_type,sha256,mime,size_bytes,uploaded_by,created_at`,
+      [property.id,evidenceType,storageKey,digest,mime,file.length,req.user!.id],
+    )).rows[0];
+    await putFile(storageKey, file);
+    await c.query(
+      `INSERT INTO property_authority_review_events(property_id,actor_id,event_type,from_status,to_status,reason)
+       VALUES($1,$2,'evidence_submitted',$3,$3,$4)`,
+      [property.id,req.user!.id,property.authority_review_status,`Uploaded ${evidenceType} evidence`],
+    );
+    await audit(c, req.user!.id, 'property_authority_evidence_uploaded', 'property', property.id, null, {
+      evidence_id: row.id, evidence_type: evidenceType, sha256: digest, mime, size_bytes: file.length,
+    });
+    return row;
+  });
+  res.status(201).json(evidence);
+}));
+
+router.get('/properties/:id/authority-evidence/:evidenceId/file', requireActivity('property.listings.view'), requireListingPlan, h(async (req, res) => {
+  const evidence = await withUser(req.user!, async (c) => (await c.query(
+    `SELECT id,storage_key,mime FROM property_authority_evidence
+     WHERE id=$1 AND property_id=$2 AND scan_status='clean'`,
+    [req.params.evidenceId,req.params.id],
+  )).rows[0]);
+  if (!evidence) throw new HttpError(404, 'Property authority evidence not found.');
+  const file = await getFile(evidence.storage_key);
+  res.set({
+    'Content-Type': evidence.mime,
+    'Content-Disposition': 'attachment',
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'private, no-store',
+  }).send(file);
+}));
+
+router.patch('/properties/:id/authority-resubmit', requireActivity('property.listings.manage'), requireListingPlan, h(async (req, res) => {
+  const body = z.object({ note: z.string().trim().min(10).max(1000) }).strict().parse(req.body);
+  const property = await withUser(req.user!, async (c) => {
+    const current = (await c.query(
+      `SELECT id,authority_review_status FROM properties WHERE id=$1 FOR UPDATE`,
+      [req.params.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404, 'Property listing not found.');
+    if (!['needs_info','rejected'].includes(current.authority_review_status)) {
+      throw new HttpError(409, 'Only a returned authority review can be resubmitted.');
+    }
+    const updated = (await c.query(
+      `UPDATE properties SET authority_review_status='pending_review',authority_review_note=NULL,
+         authority_reviewed_by=NULL,authority_reviewed_at=NULL
+       WHERE id=$1
+       RETURNING id,authority_review_status`,
+      [current.id],
+    )).rows[0];
+    await c.query(
+      `INSERT INTO property_authority_review_events(property_id,actor_id,event_type,from_status,to_status,reason)
+       VALUES($1,$2,'resubmitted',$3,'pending_review',$4)`,
+      [current.id,req.user!.id,current.authority_review_status,body.note],
+    );
+    await audit(c, req.user!.id, 'property_authority_resubmitted', 'property', current.id,
+      { authority_review_status: current.authority_review_status },
+      { authority_review_status: 'pending_review', note: body.note });
+    return updated;
+  });
+  res.json(property);
+}));
+
+router.patch('/properties/:id/authority-review', requireRole('super_admin', 'corporate_business_manager'), h(async (req, res) => {
+  const body = z.object({
+    decision: z.enum(['approve','needs_info','reject']),
+    note: z.string().trim().max(1000).optional(),
+  }).strict().parse(req.body);
+  if (body.decision !== 'approve' && (!body.note || body.note.length < 10)) {
+    throw new HttpError(422, 'Provide a reason of at least 10 characters when returning authority evidence.');
+  }
+  const property = await withUser(req.user!, async (c) => {
+    const current = (await c.query(
+      `SELECT id,created_by,owner_user_id,source_agent_id,authority_review_status
+       FROM properties WHERE id=$1 FOR UPDATE`,
+      [req.params.id],
+    )).rows[0];
+    if (!current) throw new HttpError(404, 'Property listing not found.');
+    if (current.authority_review_status !== 'pending_review') {
+      throw new HttpError(409, 'Property authority evidence is not awaiting review.');
+    }
+    if (current.created_by === req.user!.id) throw new HttpError(403, 'A different reviewer must decide this property authority review.');
+    if (body.decision === 'approve') {
+      const evidence = await c.query(
+        `SELECT 1 FROM property_authority_evidence
+         WHERE property_id=$1 AND scan_status='clean' LIMIT 1`,
+        [current.id],
+      );
+      if (!evidence.rowCount) throw new HttpError(422, 'Upload malware-scanned authority evidence before approving this listing.');
+      const identity = await c.query(
+        `SELECT 1 FROM users
+         WHERE id=$1 AND active=true AND kyc_status='verified'`,
+        [current.owner_user_id ?? current.source_agent_id],
+      );
+      if (!identity.rowCount) throw new HttpError(422, 'The listed owner or agent must have verified identity before authority approval.');
+    }
+    const status = body.decision === 'approve' ? 'approved' : body.decision === 'needs_info' ? 'needs_info' : 'rejected';
+    const note = body.decision === 'approve' ? null : body.note;
+    const updated = (await c.query(
+      `UPDATE properties SET authority_review_status=$2,authority_review_note=$3,
+         authority_reviewed_by=$4,authority_reviewed_at=now()
+       WHERE id=$1
+       RETURNING id,authority_review_status,authority_review_note,authority_reviewed_by,authority_reviewed_at`,
+      [current.id,status,note,req.user!.id],
+    )).rows[0];
+    await c.query(
+      `INSERT INTO property_authority_review_events(property_id,actor_id,event_type,from_status,to_status,reason)
+       VALUES($1,$2,$3,$4,$5,$6)`,
+      [current.id,req.user!.id,status,current.authority_review_status,status,note],
+    );
+    await audit(c, req.user!.id, `property_authority_${status}`, 'property', current.id,
+      { authority_review_status: current.authority_review_status },
+      { authority_review_status: status, note });
+    return updated;
+  });
+  res.json(property);
+}));
+
+router.get('/properties/authority-review', requireRole('super_admin', 'corporate_business_manager'), h(async (_req, res) => {
+  const rows = await withUser(_req.user!, async (c) => (await c.query(
+    `SELECT p.id,p.address,p.description,p.ptype,p.listing_mode,p.sale_price,p.rent_period,
+       p.territory_id,p.status,p.created_by,p.authority_review_status,p.authority_review_note,
+       p.authority_reviewed_by,p.authority_reviewed_at,p.created_at,
+       COALESCE((
+         SELECT json_agg(json_build_object(
+           'id',evidence.id,'evidence_type',evidence.evidence_type,'mime',evidence.mime,
+           'size_bytes',evidence.size_bytes,'uploaded_by',evidence.uploaded_by,'created_at',evidence.created_at
+         ) ORDER BY evidence.created_at,evidence.id)
+         FROM property_authority_evidence evidence
+         WHERE evidence.property_id=p.id AND evidence.scan_status='clean'
+       ),'[]'::json) AS authority_evidence
+     FROM properties p
+     WHERE p.authority_review_status='pending_review'
+     ORDER BY p.created_at,p.id
+     LIMIT 200`,
+  )).rows);
+  res.json(rows);
 }));
 router.post('/properties/:id/photos/upload', requireActivity('property.listings.manage'), requireListingPlan, express.raw({ type: () => true, limit: '100mb' }), h(async (req, res) => {
   const caption = z.string().trim().max(300).optional().parse(req.query.caption) ?? '';
@@ -81,6 +261,15 @@ router.post('/properties/:id/photos/upload', requireActivity('property.listings.
     const config = await loadMarketplaceConfig(c);
     const maxBytes = Number(mime.startsWith('image/') ? config.system.image_max_bytes : config.system.video_max_bytes);
     if (file.length > maxBytes) throw new HttpError(413, 'The media file exceeds the configured size limit.');
+    if (!isClamAvConfigured()) throw new HttpError(503, 'Property media upload is unavailable until the malware scanner is configured.');
+    let scanResult: 'clean' | 'infected';
+    try {
+      scanResult = await scanWithClamAv(file);
+    } catch (error) {
+      console.error('Property listing media malware scan failed', error instanceof Error ? error.message : error);
+      throw new HttpError(503, 'Property media upload is unavailable because the malware scan could not be completed.');
+    }
+    if (scanResult !== 'clean') throw new HttpError(422, 'The property media file was rejected by the malware scanner.');
     const count = Number((await c.query('SELECT count(*)::int AS count FROM property_photos WHERE property_id=$1',[req.params.id])).rows[0].count);
     if (count >= Number(config.system.max_media_per_listing)) throw new HttpError(409, 'This listing has reached its configured media limit.');
     const result = await c.query(
@@ -209,9 +398,18 @@ router.patch('/properties/:id/resubmit', requireActivity('property.listings.mana
 router.get('/properties', requireActivity('property.listings.view'), requireListingPlan, h(async (req, res) => {
   const reviewFields = req.user!.role === 'customer'
     ? ''
-    : 'p.created_by, p.listing_review_status, p.listing_review_note, p.listing_reviewed_by, p.listing_reviewed_at,';
+    : `p.created_by, p.listing_review_status, p.listing_review_note, p.listing_reviewed_by, p.listing_reviewed_at,
+       p.authority_review_status,p.authority_review_note,p.authority_reviewed_by,p.authority_reviewed_at,`;
   res.json(await withUser(req.user!, async (c) => (await c.query(
     `SELECT p.id, p.address, p.description, p.ptype, p.listing_mode, p.sale_price, p.rent_period, ${reviewFields} p.territory_id, p.status, p.created_at,
+            COALESCE((
+              SELECT json_agg(json_build_object(
+                'id',evidence.id,'evidence_type',evidence.evidence_type,'mime',evidence.mime,
+                'size_bytes',evidence.size_bytes,'uploaded_by',evidence.uploaded_by,'created_at',evidence.created_at
+              ) ORDER BY evidence.created_at,evidence.id)
+              FROM property_authority_evidence evidence
+              WHERE evidence.property_id=p.id AND evidence.scan_status='clean'
+            ),'[]'::json) AS authority_evidence,
             COALESCE(
               json_agg(json_build_object(
                 'id', u.id,
