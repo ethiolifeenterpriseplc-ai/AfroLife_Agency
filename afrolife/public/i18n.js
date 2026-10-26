@@ -3558,6 +3558,46 @@ const publicSurfaceTranslations = {
   'ETB {{rent}} rent · {{status}} · Lease {{start}} to {{end}} · Rent starts {{rentStart}}': {
     am: 'የኪራይ ክፍያ ETB {{rent}} · {{status}} · ውል {{start}} እስከ {{end}} · ኪራይ የሚጀምረው {{rentStart}}',
   },
+  'More attendance rows remain in this period. Continue with the next batch.': {
+    am: 'በዚህ ወቅት ተጨማሪ የሥራ ሰዓት መዝገቦች አሉ። በሚቀጥለው ባች ይቀጥሉ።',
+    om: 'Yeroo kana keessatti galmeewwan argama hojii dabalataa jiru. Tuuta itti aanu waliin itti fufaa.',
+    ti: 'ኣብዚ ግዜ ተወሳኺ መዝገባት ሰዓት ስራሕ ኣለዉ። ብቀጻሊ ጉጅለ ቀጽሉ።',
+    so: 'Muddadan waxaa ku hadhay diiwaanno xaadiris dheeraad ah. Ku sii wad qaybta xigta.',
+    ar: 'ما زالت هناك سجلات حضور إضافية لهذه الفترة. تابع بالدفعة التالية.',
+    sw: 'Kuna rekodi zaidi za mahudhurio katika kipindi hiki. Endelea na kundi linalofuata.',
+  },
+  'More payable rows remain in this period. Continue with the next encrypted export.': {
+    am: 'በዚህ ወቅት ተጨማሪ የሚከፈሉ መዝገቦች አሉ። በሚቀጥለው የተመሰጠረ ወደ ውጭ ማስተላለፊያ ይቀጥሉ።',
+    om: 'Yeroo kana keessatti galmeewwan kaffalamu dabalataa jiru. Ergaa icciitii itti aanu waliin itti fufaa.',
+    ti: 'ኣብዚ ግዜ ተወሳኺ መዝገባት ዝኽፈሉ ኣለዉ። ብቀጻሊ ምስጢራዊ ምልኣኽ ቀጽሉ።',
+    so: 'Muddadan waxaa ku hadhay diiwaanno lacag-bixin oo dheeraad ah. Ku sii wad dhoofinta siraysan ee xigta.',
+    ar: 'ما زالت هناك سجلات مستحقة إضافية لهذه الفترة. تابع بالتصدير المشفر التالي.',
+    sw: 'Kuna rekodi zaidi zinazolipwa katika kipindi hiki. Endelea na uhamishaji fiche unaofuata.',
+  },
+  'Calculated payable time for {{count}} attendance records. {{warnings}} have warning thresholds to review.': {
+    am: 'የሚከፈል ሰዓት ለ{{count}} የመገኘት መዝገቦች ተሰልቷል። የማስጠንቀቂያ ገደቦችን የሚፈልጉ {{warnings}} መዝገቦችን ይገምግሙ።',
+    om: 'Yeroon kaffalamu galmee argama hojii {{count}} tiif shallagame. Galmeewwan {{warnings}} akeekkachiisa ulaagaa qabaachuu isaanii gamaaggamaa.',
+    ti: 'ዝኽፈል ግዜ ን{{count}} መዝገባት ምህላው ተሰሊሑ። ን{{warnings}} መዝገባት መጠንቀቕታ ገደብ ግምግሙ።',
+    so: 'Waqtiga la bixinayo waxaa loo xisaabiyey {{count}} diiwaan xaadiris. Dib u eeg {{warnings}} diiwaan oo leh digniino xad ah.',
+    ar: 'تم حساب الوقت المستحق لـ{{count}} سجل حضور. راجع {{warnings}} سجلات تتطلب مراجعة حدود التنبيه.',
+    sw: 'Muda unaolipwa imehesabiwa kwa rekodi {{count}} za mahudhurio. Kagua rekodi {{warnings}} zenye tahadhari za viwango.',
+  },
+  'Calculate next payable-time batch': {
+    am: 'ቀጣዩን የሚከፈል ሰዓት ባች አስሉ',
+    om: 'Tuuta yeroon kaffalamu itti aanu shallagaa',
+    ti: 'ቀጻሊ ጉጅለ ዝኽፈል ግዜ ስልዑ',
+    so: 'Xisaabi qaybta xigta ee waqtiga la bixinayo',
+    ar: 'احسب الدفعة التالية من الوقت المستحق',
+    sw: 'Hesabu kundi linalofuata la muda unaolipwa',
+  },
+  'Generate next encrypted export batch': {
+    am: 'ቀጣዩን የተመሰጠረ የወጪ ፋይል ባች ይፍጠሩ',
+    om: 'Tuuta ergaa icciitii itti aanu uumaa',
+    ti: 'ቀጻሊ ምስጢራዊ ጉጅለ ምልኣኽ ፍጠሩ',
+    so: 'Samee qaybta xigta ee dhoofinta siraysan',
+    ar: 'أنشئ دفعة التصدير المشفر التالية',
+    sw: 'Tengeneza kundi fiche linalofuata la kuhamisha',
+  },
 };
 for (const [message, translations] of Object.entries(publicSurfaceTranslations)) {
   catalogs.en[message] ??= message;

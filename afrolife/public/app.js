@@ -39,7 +39,7 @@ const MINI_APP_PANELS = new Set([
   'insurance', 'privacy', 'global-bi',
 ]);
 const $ = (selector) => document.querySelector(selector);
-const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], propertyAuthorityReviewQueue: [], rentalApplications: [], residentPropertyWorkspace: { leases: [], charges: [], payments: [], maintenance: [] }, maintenanceRequests: [], maintenanceVendors: [], maintenanceMetrics: null, maintenanceOverdue: [], maintenanceCostQueue: [], maintenanceInvoiceMismatchQueue: [], maintenanceInvoiceApprovalQueue: [], maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, notificationDeliveryStatus: [], learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
+const state = { user: null, features: { mfiPilotEnabled: false, edirEnabled: false, accountingEnabled: false, globalBiEnabled: false, insuranceBrokerageSandboxEnabled: false, enabledModules: [] }, edirMe: null, edirOrganizationId: localStorage.getItem(EDIR_ORGANIZATION_KEY) ?? DEFAULT_EDIR_ORGANIZATION, platformTenantContextId: null, dataAdminTenantId: null, myDataCapabilities: [], tenantDataWorkspace: null, tenantAnalyticsStatus: null, panel: panelFromUrl(window.location.href, KNOWN_PANELS), mfaRequired: false, mfaSetup: null, authSessions: [], supportCases: [], supportQueue: [], supportAccessRequests: [], supportAgents: [], supportCaseDetail: null, supportCaseEvents: [], leads: [], workers: [], workerDocumentExpiry: [], workerPortalEngagements: [], workerPortalReports: [], workerPortalSettlements: [], workerSupportRequests: [], workerSupportQueue: [], workerPortalShifts: [], workerPortalLeave: [], workerPortalPayrollExports: [], workforceEngagements: [], workforceShifts: [], workforceTimeQueue: [], workforceLeaveQueue: [], workforcePolicies: [], workforcePayrollExports: [], workforcePayableCalculation: null, workforcePayrollExportBatch: null, requests: [], staffingEngagements: [], staffingFinanceEngagements: [], pendingStaffingWork: [], properties: [], propertyAuthorityReviewQueue: [], rentalApplications: [], residentPropertyWorkspace: { leases: [], charges: [], payments: [], maintenance: [] }, maintenanceRequests: [], maintenanceVendors: [], maintenanceMetrics: null, maintenanceOverdue: [], maintenanceCostQueue: [], maintenanceInvoiceMismatchQueue: [], maintenanceInvoiceApprovalQueue: [], maintenanceHasMore: false, maintenanceLoadingMore: false, ownerStatements: [], territories: [], commissions: [], summary: null, users: [], team: [], globalAdminPromotions: [], businessRules: [], roleAccess: null, notificationDeliveryStatus: [], learningContent: [], signupOptions: null, contracts: [], leases: [], tenants: [], pendingRent: [], serviceIdentities: [], readinessEvidence: [], propertyAccountingTemplate: null, propertyPeriodClose: null, marketplaceConfig: {}, marketplaceListings: [], marketplaceSellers: [], insuranceRequests: [], insuranceStaffRequests: [], insuranceAgentReferrals: [], insuranceEligibleAgents: [], insuranceSandboxStatus: null, insuranceSandboxCases: [], platformServices: [], platformServicePackages: [], platformTenants: [], tenantAdminTenants: [], platformCatalogProducts: [], platformDataAdmin: null, businessTenants: [], serviceStatus: null, serviceMetrics: null, searchResults: [], searchUnavailable: [], searchQuery: '', workspaceDataErrors: [], workspaceDataOmitted: [] };
 const loadedPanels = new Set();
 state.supportAppealQueue = [];
 state.overviewDataErrors = [];
@@ -3017,6 +3017,13 @@ function renderWorkforceOperations() {
         ));
       }
       results.append(resultList);
+      if (state.workforcePayableCalculation.has_more) {
+        results.append(node('p', t('More attendance rows remain in this period. Continue with the next batch.'), 'muted'));
+        results.append(button('Calculate next payable-time batch', 'workforce-payable-next-batch', 'button button-outline', {
+          periodStart: state.workforcePayableCalculation.period_start,
+          periodEnd: state.workforcePayableCalculation.period_end,
+        }));
+      }
       payroll.append(results);
     }
     const calculateForm = node('form', undefined, 'panel form-card inline-form');
@@ -3035,6 +3042,19 @@ function renderWorkforceOperations() {
       button('Generate encrypted export', 'submit', 'button button-primary'),
     );
     payroll.append(calculateForm, exportForm);
+    if (state.workforcePayrollExportBatch?.requestedBy === state.user.id
+      && state.workforcePayrollExportBatch.has_more) {
+      const nextExport = node('section', undefined, 'panel');
+      nextExport.append(
+        node('p', t('More payable rows remain in this period. Continue with the next encrypted export.'), 'muted'),
+        button('Generate next encrypted export batch', 'workforce-payroll-next-batch', 'button button-outline', {
+          periodStart: state.workforcePayrollExportBatch.period_start,
+          periodEnd: state.workforcePayrollExportBatch.period_end,
+          mappingVersion: state.workforcePayrollExportBatch.mapping_version,
+        }),
+      );
+      payroll.append(nextExport);
+    }
     const list = node('div', undefined, 'list');
     if (!state.workforcePayrollExports.length) list.append(empty('No payroll exports have been generated.'));
     for (const record of state.workforcePayrollExports) {
@@ -6183,11 +6203,15 @@ async function submitForm(form) {
     form.reset();
     await refresh();
     const warningCount = result.calculated.filter((entry) => entry.policy_warnings.length).length;
-    showAlert(`Calculated payable time for ${result.calculated.length} attendance record${result.calculated.length === 1 ? '' : 's'}; ${warningCount} record${warningCount === 1 ? '' : 's'} need warning review.`);
+    showAlert(result.has_more
+      ? t('More attendance rows remain in this period. Continue with the next batch.')
+      : t('Calculated payable time for {{count}} attendance records. {{warnings}} have warning thresholds to review.', {
+        count: result.calculated.length, warnings: warningCount,
+      }));
     return;
   }
   if (form.dataset.form === 'workforce-payroll-export') {
-    await api('/workforce/payroll-exports', {
+    const result = await api('/workforce/payroll-exports', {
       method: 'POST',
       body: JSON.stringify({
         period_start: values.period_start,
@@ -6195,9 +6219,12 @@ async function submitForm(form) {
         mapping_version: values.mapping_version.trim(),
       }),
     });
+    state.workforcePayrollExportBatch = { ...result, requestedBy: state.user.id };
     form.reset();
     await refresh();
-    showAlert('Encrypted payroll export generated. It has not been filed or paid.');
+    showAlert(result.has_more
+      ? t('More payable rows remain in this period. Continue with the next encrypted export.')
+      : t('Encrypted payroll export generated. It has not been filed or paid.'));
     return;
   }
   if (form.dataset.form === 'maintenance') {
@@ -7124,6 +7151,44 @@ document.addEventListener('click', async (event) => {
   const action = event.target.closest('button[data-action]');
   if (!action) return;
   const { action: name, id } = action.dataset;
+  if (name === 'workforce-payable-next-batch') {
+    try {
+      const result = await api('/workforce/payable-time/calculate', {
+        method: 'POST',
+        body: JSON.stringify({
+          period_start: action.dataset.periodStart,
+          period_end: action.dataset.periodEnd,
+        }),
+      });
+      state.workforcePayableCalculation = { ...result, requestedBy: state.user.id };
+      await refresh();
+      const warningCount = result.calculated.filter((entry) => entry.policy_warnings.length).length;
+      showAlert(result.has_more
+        ? t('More attendance rows remain in this period. Continue with the next batch.')
+        : t('Calculated payable time for {{count}} attendance records. {{warnings}} have warning thresholds to review.', {
+          count: result.calculated.length, warnings: warningCount,
+        }));
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-payroll-next-batch') {
+    try {
+      const result = await api('/workforce/payroll-exports', {
+        method: 'POST',
+        body: JSON.stringify({
+          period_start: action.dataset.periodStart,
+          period_end: action.dataset.periodEnd,
+          mapping_version: action.dataset.mappingVersion,
+        }),
+      });
+      state.workforcePayrollExportBatch = { ...result, requestedBy: state.user.id };
+      await refresh();
+      showAlert(result.has_more
+        ? t('More payable rows remain in this period. Continue with the next encrypted export.')
+        : t('Encrypted payroll export generated. It has not been filed or paid.'));
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
   if (name === 'tenant-access-invite') {
     try {
       const invitation = await api(`/leases/${encodeURIComponent(id)}/tenant-access-invitations`, {

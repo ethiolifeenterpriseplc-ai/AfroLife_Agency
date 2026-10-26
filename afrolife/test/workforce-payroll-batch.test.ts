@@ -2,31 +2,45 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  exceedsWorkforcePayrollBatchLimit,
+  takeWorkforcePayrollBatch,
   WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS,
   WORKFORCE_PAYROLL_EXPORT_MAX_ROWS,
 } from '../src/workforce-payroll-batch.js';
 
 const workforceOperations = readFileSync(new URL('../src/workforce-operations.ts', import.meta.url), 'utf8');
 const publicApp = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+const publicTranslations = readFileSync(new URL('../public/i18n.js', import.meta.url), 'utf8');
 
-test('payroll batch boundary distinguishes complete and truncated batches', () => {
-  assert.equal(exceedsWorkforcePayrollBatchLimit(0, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS), false);
-  assert.equal(exceedsWorkforcePayrollBatchLimit(WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS), false);
-  assert.equal(exceedsWorkforcePayrollBatchLimit(WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS + 1, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS), true);
-  assert.equal(exceedsWorkforcePayrollBatchLimit(WORKFORCE_PAYROLL_EXPORT_MAX_ROWS + 1, WORKFORCE_PAYROLL_EXPORT_MAX_ROWS), true);
+test('payroll batch helper bounds returned rows and reports remaining work', () => {
+  assert.deepEqual(takeWorkforcePayrollBatch([], WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS), { rows: [], hasMore: false });
+  assert.deepEqual(takeWorkforcePayrollBatch([1, 2], 2), { rows: [1, 2], hasMore: false });
+  assert.deepEqual(takeWorkforcePayrollBatch([1, 2, 3], 2), { rows: [1, 2], hasMore: true });
+  assert.equal(takeWorkforcePayrollBatch(Array(WORKFORCE_PAYROLL_EXPORT_MAX_ROWS + 1).fill(0), WORKFORCE_PAYROLL_EXPORT_MAX_ROWS).hasMore, true);
+  assert.throws(() => takeWorkforcePayrollBatch([], 0), /positive integer/);
 });
 
-test('payable-time calculation and payroll export reject a lookahead row before writing', () => {
-  assert.match(workforceOperations, /LIMIT \$\{WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS \+ 1\}[\s\S]*?if \(exceedsWorkforcePayrollBatchLimit\(entries\.length, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS\)\)/);
-  assert.match(workforceOperations, /LIMIT \$\{WORKFORCE_PAYROLL_EXPORT_MAX_ROWS \+ 1\}[\s\S]*?if \(exceedsWorkforcePayrollBatchLimit\(rows\.length, WORKFORCE_PAYROLL_EXPORT_MAX_ROWS\)\)/);
+test('payable-time calculation and payroll export process one locked batch before reporting remaining work', () => {
+  assert.match(workforceOperations, /LIMIT \$\{WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS \+ 1\}[\s\S]*?FOR UPDATE OF t SKIP LOCKED/);
+  assert.match(workforceOperations, /LIMIT \$\{WORKFORCE_PAYROLL_EXPORT_MAX_ROWS \+ 1\}[\s\S]*?FOR UPDATE OF t SKIP LOCKED/);
+  assert.match(workforceOperations, /takeWorkforcePayrollBatch\(selectedEntries, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS\)/);
+  assert.match(workforceOperations, /takeWorkforcePayrollBatch\(selectedRows, WORKFORCE_PAYROLL_EXPORT_MAX_ROWS\)/);
+  assert.match(workforceOperations, /count: calculated\.length, has_more: hasMore/);
+  assert.match(workforceOperations, /calculated, has_more: hasMore/);
+  assert.match(workforceOperations, /has_more: hasMore/);
+  assert.match(workforceOperations, /remaining\.status='approved'[\s\S]*?AS has_more/);
+  assert.match(workforceOperations, /const hasMore = batch\.hasMore \|\| remainingEntries\.rows\[0\]\.has_more/);
+  assert.match(workforceOperations, /const hasMore = batch\.hasMore \|\| remainingRows\.rows\[0\]\.has_more/);
 
-  const calculationGuard = workforceOperations.indexOf('if (exceedsWorkforcePayrollBatchLimit(entries.length');
+  const calculationGuard = workforceOperations.indexOf('takeWorkforcePayrollBatch(selectedEntries');
   const firstCalculationWrite = workforceOperations.indexOf("UPDATE workforce_time_entries SET status='payable'");
-  const exportGuard = workforceOperations.indexOf('if (exceedsWorkforcePayrollBatchLimit(rows.length');
+  const exportGuard = workforceOperations.indexOf('takeWorkforcePayrollBatch(selectedRows');
   const firstExportWrite = workforceOperations.indexOf('INSERT INTO workforce_payroll_exports');
   assert.ok(calculationGuard >= 0 && calculationGuard < firstCalculationWrite);
   assert.ok(exportGuard >= 0 && exportGuard < firstExportWrite);
+  assert.match(publicApp, /Calculate next payable-time batch/);
+  assert.match(publicApp, /Generate next encrypted export batch/);
+  assert.match(publicTranslations, /'Calculate next payable-time batch':/);
+  assert.match(publicTranslations, /'Generate next encrypted export batch':/);
 });
 
 test('shift schedule exposes engagement rates and estimates direct labor cost only for hourly billing', () => {

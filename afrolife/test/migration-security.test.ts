@@ -49,6 +49,7 @@ const propertyOwnerAuthorityReview = readFileSync(new URL('../migrations/106_pro
 const leaseRentStartDate = readFileSync(new URL('../migrations/107_lease_rent_start_date.sql', import.meta.url), 'utf8');
 const globalAdminPropertyAuthorityReview = readFileSync(new URL('../migrations/108_global_admin_property_authority_review.sql', import.meta.url), 'utf8');
 const maintenanceSlaEscalationIndex = readFileSync(new URL('../migrations/109_maintenance_sla_escalation_index.sql', import.meta.url), 'utf8');
+const workforceOffboardingSerialization = readFileSync(new URL('../migrations/110_workforce_offboarding_serialization.sql', import.meta.url), 'utf8');
 const marketplaceRouter = readFileSync(new URL('../services/marketplace/router.ts', import.meta.url), 'utf8');
 const propertyManagementRouter = readFileSync(new URL('../services/property-management/router.ts', import.meta.url), 'utf8');
 const propertyVendorPortal = readFileSync(new URL('../src/property-vendor-portal.ts', import.meta.url), 'utf8');
@@ -413,6 +414,18 @@ test('WF-D attendance, reviewed corrections, and payroll payloads enforce separa
   assert.match(workforceWorkflows, /UPDATE auth_sessions SET revoked_at=now\(\)/);
   assert.match(workforceWorkflows, /set_config\('app\.access_change_reason',trim\(reason\),true\)/);
   assert.match(workforceWorkflows, /AND status='scheduled' AND starts_at>now\(\)/);
+});
+
+test('WF-D shift acceptance serializes with offboarding without bypassing worker RLS', () => {
+  const start = workforceOperations.indexOf("workforceOperations.post('/workforce/shifts/:id/response'");
+  const end = workforceOperations.indexOf("workforceOperations.post('/workforce/shifts/:id/cancel'", start);
+  const route = workforceOperations.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(route, /pg_advisory_xact_lock\([\s\S]*?hashtextextended\('workforce-worker:'/);
+  assert.match(route, /workerState\.employment_status !== 'active' \|\| workerState\.engagement_status !== 'active'/);
+  assert.match(workforceOffboardingSerialization, /PERFORM pg_advisory_xact_lock\([\s\S]*?hashtextextended\('workforce-worker:'/);
+  assert.match(workforceOffboardingSerialization, /UPDATE auth_sessions SET revoked_at=now\(\)/);
+  assert.ok(route.indexOf('pg_advisory_xact_lock') < route.indexOf('SET worker_response='));
 });
 
 test('session device management records bounded browser metadata without storing network addresses', () => {

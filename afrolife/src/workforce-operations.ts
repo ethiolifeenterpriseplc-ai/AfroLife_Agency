@@ -7,7 +7,7 @@ import { audit } from './domain.js';
 import { toCsv } from './csv.js';
 import { hasRoleActivityAccess } from './role-activities.js';
 import {
-  exceedsWorkforcePayrollBatchLimit,
+  takeWorkforcePayrollBatch,
   WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS,
   WORKFORCE_PAYROLL_EXPORT_MAX_ROWS,
 } from './workforce-payroll-batch.js';
@@ -206,15 +206,34 @@ workforceOperations.post('/workforce/shifts/:id/response', requireRole('worker')
     reason: z.string().trim().min(10).max(1000),
   }).strict().parse(req.body);
   const row = await withUser(req.user!, async (client) => {
-    const shift = (await client.query(
-      `SELECT s.*,e.status AS engagement_status,w.phone,w.employment_status
-       FROM workforce_shifts s JOIN staffing_engagements e ON e.id=s.engagement_id
-       JOIN workers w ON w.id=e.worker_id WHERE s.id=$1 FOR UPDATE OF s`,
+    const ownership = (await client.query(
+      `SELECT s.id,e.id AS engagement_id,e.worker_id,w.phone
+       FROM workforce_shifts s
+       JOIN staffing_engagements e ON e.id=s.engagement_id
+       JOIN workers w ON w.id=e.worker_id
+       WHERE s.id=$1`,
       [req.params.id],
     )).rows[0];
-    if (!shift || shift.phone !== req.user!.phone) throw new HttpError(404, 'Shift not found');
+    if (!ownership || ownership.phone !== req.user!.phone) throw new HttpError(404, 'Shift not found');
+    await client.query(
+      `SELECT pg_advisory_xact_lock(
+         hashtextextended('workforce-worker:' || $1::text, 0)
+       )`,
+      [ownership.worker_id],
+    );
+    const workerState = (await client.query(
+      `SELECT e.status AS engagement_status,w.employment_status
+       FROM staffing_engagements e JOIN workers w ON w.id=e.worker_id
+       WHERE e.id=$1`,
+      [ownership.engagement_id],
+    )).rows[0];
+    const shift = (await client.query(
+      'SELECT * FROM workforce_shifts WHERE id=$1 FOR UPDATE',
+      [ownership.id],
+    )).rows[0];
+    if (!shift) throw new HttpError(404, 'Shift not found');
     if (shift.status !== 'scheduled' || shift.worker_response !== 'pending') throw new HttpError(409, 'This shift is no longer awaiting your response');
-    if (shift.employment_status !== 'active' || shift.engagement_status !== 'active') {
+    if (!workerState || workerState.employment_status !== 'active' || workerState.engagement_status !== 'active') {
       throw new HttpError(403, 'An inactive or terminated worker cannot accept a shift');
     }
     const updated = (await client.query(
@@ -698,19 +717,19 @@ workforceOperations.post('/workforce/payable-time/calculate', requireActivity('w
       message: 'Period end must be on or after period start',
     }).parse(req.body);
   const result = await withUser(req.user!, async (client) => {
-    const entries = (await client.query(
+    const selectedEntries = (await client.query(
       `SELECT t.id,t.shift_id,t.approved_clock_in_at,t.approved_clock_out_at,s.starts_at,
           e.worker_id,e.worker_type,w.name AS worker_name
        FROM workforce_time_entries t JOIN workforce_shifts s ON s.id=t.shift_id
        JOIN staffing_engagements e ON e.id=s.engagement_id JOIN workers w ON w.id=e.worker_id
        WHERE t.status='approved'
          AND (s.starts_at AT TIME ZONE 'Africa/Addis_Ababa')::date BETWEEN $1::date AND $2::date
-       ORDER BY s.starts_at LIMIT ${WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS + 1}`,
+       ORDER BY s.starts_at,t.id LIMIT ${WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS + 1}
+       FOR UPDATE OF t SKIP LOCKED`,
       [body.period_start, body.period_end],
     )).rows;
-    if (exceedsWorkforcePayrollBatchLimit(entries.length, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS)) {
-      throw new HttpError(409, `This period has more than ${WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS} approved attendance rows; split the period before calculating payable time`);
-    }
+    const batch = takeWorkforcePayrollBatch(selectedEntries, WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS);
+    const entries = batch.rows;
     if (!entries.length) throw new HttpError(409, 'No newly approved attendance is available for this period');
     const calculated = [];
     for (const entry of entries) {
@@ -755,9 +774,24 @@ workforceOperations.post('/workforce/payable-time/calculate', requireActivity('w
         shift_start: entry.starts_at,
       });
     }
+    const remainingEntries = await client.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM workforce_time_entries remaining
+         JOIN workforce_shifts remaining_shift ON remaining_shift.id=remaining.shift_id
+         WHERE remaining.status='approved'
+           AND (remaining_shift.starts_at AT TIME ZONE 'Africa/Addis_Ababa')::date
+             BETWEEN $1::date AND $2::date
+       ) AS has_more`,
+      [body.period_start, body.period_end],
+    );
+    const hasMore = batch.hasMore || remainingEntries.rows[0].has_more;
     await audit(client, req.user!.id, 'workforce_payable_time_calculated', 'workforce_time_period',
-      `${body.period_start}:${body.period_end}`, null, { count: calculated.length, period_start: body.period_start, period_end: body.period_end });
-    return { period_start: body.period_start, period_end: body.period_end, calculated };
+      `${body.period_start}:${body.period_end}`, null, {
+        count: calculated.length, has_more: hasMore,
+        period_start: body.period_start, period_end: body.period_end,
+      });
+    return { period_start: body.period_start, period_end: body.period_end, calculated, has_more: hasMore };
   });
   res.json(result);
 }));
@@ -772,7 +806,7 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
   }).parse(req.body);
   const { key, keyId } = payrollEncryptionConfig();
   const exportRecord = await withUser(req.user!, async (client) => {
-    const rows = (await client.query(
+    const selectedRows = (await client.query(
       `SELECT t.id AS time_entry_id,s.id AS shift_id,s.starts_at,s.ends_at,e.worker_type,e.billing_unit,
           e.worker_rate::text,w.id AS worker_id,w.name AS worker_name,t.payable_minutes,
           p.id AS policy_version_id,p.policy_version
@@ -782,12 +816,22 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
        WHERE t.status='payable'
          AND (s.starts_at AT TIME ZONE 'Africa/Addis_Ababa')::date BETWEEN $1::date AND $2::date
          AND p.status='approved'
-       ORDER BY s.starts_at LIMIT ${WORKFORCE_PAYROLL_EXPORT_MAX_ROWS + 1}`,
+         AND p.id=(
+           SELECT policy.id
+           FROM workforce_time_entries remaining
+           JOIN workforce_shifts remaining_shift ON remaining_shift.id=remaining.shift_id
+           JOIN workforce_policy_versions policy ON policy.id=remaining.policy_version_id
+           WHERE remaining.status='payable' AND policy.status='approved'
+             AND (remaining_shift.starts_at AT TIME ZONE 'Africa/Addis_Ababa')::date
+               BETWEEN $1::date AND $2::date
+           ORDER BY policy.id LIMIT 1
+         )
+       ORDER BY s.starts_at,t.id LIMIT ${WORKFORCE_PAYROLL_EXPORT_MAX_ROWS + 1}
+       FOR UPDATE OF t SKIP LOCKED`,
       [body.period_start, body.period_end],
     )).rows;
-    if (exceedsWorkforcePayrollBatchLimit(rows.length, WORKFORCE_PAYROLL_EXPORT_MAX_ROWS)) {
-      throw new HttpError(409, `This period has more than ${WORKFORCE_PAYROLL_EXPORT_MAX_ROWS} payable attendance rows; split the period before exporting payroll`);
-    }
+    const batch = takeWorkforcePayrollBatch(selectedRows, WORKFORCE_PAYROLL_EXPORT_MAX_ROWS);
+    const rows = batch.rows;
     if (!rows.length) throw new HttpError(409, 'No payable, approved time rows are available for this period');
     if (new Set(rows.map((row) => row.policy_version_id)).size !== 1) {
       throw new HttpError(409, 'This export period spans multiple workforce policy versions; create separate exports per policy version');
@@ -838,9 +882,25 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
         [row.time_entry_id],
       );
     }
+    const remainingRows = await client.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM workforce_time_entries remaining
+         JOIN workforce_shifts remaining_shift ON remaining_shift.id=remaining.shift_id
+         JOIN workforce_policy_versions policy ON policy.id=remaining.policy_version_id
+         WHERE remaining.status='payable' AND policy.status='approved'
+           AND (remaining_shift.starts_at AT TIME ZONE 'Africa/Addis_Ababa')::date
+             BETWEEN $1::date AND $2::date
+       ) AS has_more`,
+      [body.period_start, body.period_end],
+    );
+    const hasMore = batch.hasMore || remainingRows.rows[0].has_more;
     await audit(client, req.user!.id, 'workforce_payroll_export_generated', 'workforce_payroll_export', record.id,
-      null, { row_count: rows.length, total_payable_minutes: totalMinutes, mapping_version: body.mapping_version, control_hash: encrypted.controlHash });
-    return record;
+      null, {
+        row_count: rows.length, total_payable_minutes: totalMinutes, mapping_version: body.mapping_version,
+        control_hash: encrypted.controlHash, has_more: hasMore,
+      });
+    return { ...record, has_more: hasMore };
   });
   res.status(201).json(exportRecord);
 }));
