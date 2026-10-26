@@ -5,7 +5,7 @@ import { pool, withUser, requireActivity, requireAnyActivity, requireRole, HttpE
 import { audit, post } from './domain.js';
 import { sniff } from './files.js';
 import { notify } from './notify.js';
-import { rentSchedule, endDate } from './rent.js';
+import { rentSchedule, rentScheduleForPeriod, endDate } from './rent.js';
 import { refundLimit } from './refunds.js';
 import { loadRules } from './domain.js';
 import { getFile, putFile } from './storage.js';
@@ -395,7 +395,7 @@ ops.post('/accounting-event-outbox/:id/retry', requireRole('global_admin','finan
 ops.get('/owner/statements', requireRole('property_owner'), h(async (req, res) => {
   const format = z.enum(['json', 'csv']).default('json').parse(req.query.format ?? 'json');
   const statements = await withUser(req.user!, async (client) => (await client.query(
-    `SELECT l.id AS lease_id,p.id AS property_id,p.address,u.unit_no,l.start_date,l.end_date,l.status,
+    `SELECT l.id AS lease_id,p.id AS property_id,p.address,u.unit_no,l.start_date,l.rent_start_on,l.end_date,l.status,
        l.rent::text AS monthly_rent,l.deposit::text AS agreed_deposit,
        COALESCE((SELECT sum(c.amount) FROM rent_charges c WHERE c.lease_id=l.id AND c.status<>'waived'),0)::text AS rent_charged,
        COALESCE((SELECT sum(t.amount) FROM rent_transactions t WHERE t.lease_id=l.id AND t.kind='rent' AND t.status='reconciled'),0)::text AS rent_reconciled,
@@ -630,7 +630,7 @@ ops.post('/resident/access/claim', requireRole('customer'), h(async (req, res) =
 ops.get('/resident/property-workspace', requireRole('customer'), h(async (req, res) => {
   const workspace = await withUser(req.user!, async (client) => {
     const leases = (await client.query(
-      `SELECT l.id,l.status,l.rent::text,l.deposit::text,l.start_date,l.end_date,
+      `SELECT l.id,l.status,l.rent::text,l.deposit::text,l.start_date,l.rent_start_on,l.end_date,
          l.possession_handover_on,l.move_in_inspection_completed,
          t.name AS tenant_name,u.unit_no,p.address,
          COALESCE((SELECT json_agg(json_build_object(
@@ -818,7 +818,8 @@ ops.post('/resident/maintenance', requireRole('customer'), h(async (req, res) =>
 // ================= Leases and rent =================
 const LeaseIn = z.object({
   unit_id: z.string().uuid(), tenant_id: z.string().uuid(), rent: z.number().positive(), deposit: z.number().nonnegative().default(0),
-  start_date: z.string().date(), months: z.number().int().min(1).max(120), due_day: z.number().int().min(1).max(28).optional(),
+  start_date: z.string().date(), rent_start_on: z.string().date().optional(),
+  months: z.number().int().min(1).max(120), due_day: z.number().int().min(1).max(28).optional(),
 });
 
 const LifecycleReason = z.string().trim().min(10).max(1000);
@@ -923,6 +924,11 @@ ops.post('/leases/workflow', requireActivity('property.tenancy.manage'), h(async
     if (b.months < minMonths) throw new HttpError(422, `Lease term cannot be less than ${minMonths} months.`);
     if (b.months > maxMonths) throw new HttpError(422, `Lease term cannot exceed ${maxMonths} months.`);
     const dueDay = b.due_day ?? rules.lease_default_due_day ?? 5;
+    const rentStartOn = b.rent_start_on ?? b.start_date;
+    const leaseEnd = endDate(b.start_date, b.months);
+    if (rentStartOn < b.start_date || rentStartOn > leaseEnd) {
+      throw new HttpError(422, 'Rent start date must fall within the lease term and cannot precede lease commencement');
+    }
     const unit = (await c.query(
       `SELECT u.id, u.occupancy, p.source_agent_id, p.id AS property_id
        FROM property_units u JOIN properties p ON p.id=u.property_id
@@ -936,17 +942,17 @@ ops.post('/leases/workflow', requireActivity('property.tenancy.manage'), h(async
     }
     const lease = (await c.query(
       `INSERT INTO leases
-         (unit_id,tenant_id,rent,deposit,start_date,end_date,source_agent_id,status,created_by,term_months,due_day)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9,$10)
+         (unit_id,tenant_id,rent,deposit,start_date,rent_start_on,end_date,source_agent_id,status,created_by,term_months,due_day)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'draft',$9,$10,$11)
        RETURNING *`,
-      [b.unit_id, b.tenant_id, b.rent, b.deposit, b.start_date, endDate(b.start_date, b.months),
+      [b.unit_id, b.tenant_id, b.rent, b.deposit, b.start_date, rentStartOn, leaseEnd,
         unit.source_agent_id, req.user!.id, b.months, dueDay],
     )).rows[0];
     await c.query(
       `INSERT INTO lease_lifecycle_events (lease_id,from_status,to_status,action,actor_id,reason,metadata)
        VALUES ($1,NULL,'draft','draft_created',$2,'Lease draft created',
-         jsonb_build_object('workflow_version',1))`,
-      [lease.id, req.user!.id],
+         jsonb_build_object('workflow_version',1,'commencement_on',$3::date,'rent_start_on',$4::date))`,
+      [lease.id, req.user!.id, b.start_date, rentStartOn],
     );
     await audit(c, req.user!.id, 'lease_workflow_draft_created', 'lease', lease.id, null,
       { unit_id: b.unit_id, tenant_id: b.tenant_id, months: b.months });
@@ -1107,6 +1113,7 @@ ops.post('/leases/:id/execute', requireActivity('property.tenancy.execute'), h(a
       rent: String(lease.rent),
       deposit: String(lease.deposit),
       start_date: lease.start_date,
+      rent_start_on: lease.rent_start_on,
       end_date: lease.end_date,
       term_months: lease.term_months,
       due_day: lease.due_day,
@@ -1133,7 +1140,7 @@ ops.post('/leases/:id/execute', requireActivity('property.tenancy.execute'), h(a
        WHERE id=$1 RETURNING *`,
       [lease.id, req.user!.id, version.snapshot_sha256, b.handover_date],
     )).rows[0];
-    for (const charge of rentSchedule(lease.start_date, lease.term_months, Number(lease.rent), lease.due_day)) {
+    for (const charge of rentScheduleForPeriod(lease.rent_start_on, lease.end_date, Number(lease.rent), lease.due_day)) {
       await c.query(
         'INSERT INTO rent_charges (lease_id,period,due_on,amount) VALUES ($1,$2,$3,$4)',
         [lease.id, charge.period, charge.due_on, charge.amount],
@@ -1143,8 +1150,15 @@ ops.post('/leases/:id/execute', requireActivity('property.tenancy.execute'), h(a
     await c.query(
       `INSERT INTO lease_lifecycle_events (lease_id,from_status,to_status,action,actor_id,reason,metadata)
        VALUES ($1,'pending_signature','active','lease_executed',$2,$3,
-         jsonb_build_object('lease_version_id',$4::uuid,'snapshot_sha256',$5::text,'handover_date',$6::date))`,
-      [lease.id, req.user!.id, b.reason, version.id, version.snapshot_sha256, b.handover_date],
+         jsonb_build_object('lease_version_id',$4::uuid,'snapshot_sha256',$5::text,'handover_date',$6::date,'commencement_on',$7::date,'rent_start_on',$8::date))`,
+      [lease.id, req.user!.id, b.reason, version.id, version.snapshot_sha256, b.handover_date, lease.start_date, lease.rent_start_on],
+    );
+    await c.query(
+      `INSERT INTO lease_lifecycle_events (lease_id,from_status,to_status,action,actor_id,reason,metadata)
+       VALUES ($1,'active','active','rent_commencement_recorded',$2,
+         'Rent commencement is recorded separately from lease commencement and possession handover',
+         jsonb_build_object('rent_start_on',$3::date))`,
+      [lease.id, req.user!.id, lease.rent_start_on],
     );
     await audit(c, req.user!.id, 'lease_executed', 'lease', lease.id, { status: lease.status }, {
       reason: b.reason, version: version.version, snapshot_sha256: version.snapshot_sha256,
@@ -1178,8 +1192,8 @@ ops.post('/leases', requireActivity('property.tenancy.manage'), h(async (req, re
     if (!tenant) throw new HttpError(404, 'Tenant not found');
     const lease = (await c.query(
       `INSERT INTO leases
-         (unit_id,tenant_id,rent,deposit,start_date,end_date,source_agent_id,created_by,term_months,due_day)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+         (unit_id,tenant_id,rent,deposit,start_date,rent_start_on,end_date,source_agent_id,created_by,term_months,due_day)
+       VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [b.unit_id, b.tenant_id, b.rent, b.deposit, b.start_date, endDate(b.start_date, b.months),
         u.source_agent_id, req.user!.id, b.months, dueDay],
     )).rows[0];
@@ -1197,6 +1211,7 @@ ops.post('/leases', requireActivity('property.tenancy.manage'), h(async (req, re
       rent: String(lease.rent),
       deposit: String(lease.deposit),
       start_date: lease.start_date,
+      rent_start_on: lease.rent_start_on,
       end_date: lease.end_date,
       term_months: b.months,
       due_day: dueDay,

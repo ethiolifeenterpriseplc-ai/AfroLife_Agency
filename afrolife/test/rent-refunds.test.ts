@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rentSchedule, endDate } from '../src/rent.js';
+import { rentSchedule, rentScheduleForPeriod, endDate } from '../src/rent.js';
 import { refundLimit } from '../src/refunds.js';
 
 test('rent schedule: one charge per month, across a year boundary', () => {
@@ -10,6 +10,12 @@ test('rent schedule: one charge per month, across a year boundary', () => {
   assert.deepEqual(s.map((x) => x.amount), [8000, 15000, 15000, 7500]);
 });
 test('due day is capped at 28 so every month has it', () => assert.equal(rentSchedule('2027-01-01', 2, 1, 31)[1].due_on, '2027-02-28'));
+test('rent commencement is independent from lease commencement and schedules through the lease end', () => {
+  const schedule = rentScheduleForPeriod('2027-02-15', '2027-03-31', 1000);
+  assert.deepEqual(schedule.map((charge) => charge.period), ['2027-02-01', '2027-03-01']);
+  assert.deepEqual(schedule.map((charge) => charge.due_on), ['2027-02-15', '2027-03-05']);
+  assert.deepEqual(schedule.map((charge) => charge.amount), [500, 1000]);
+});
 test('lease end date is the day before its calendar-month anniversary', () => {
   assert.equal(endDate('2026-11-15', 3), '2027-02-14');
   assert.equal(endDate('2027-01-01', 1), '2027-01-31');

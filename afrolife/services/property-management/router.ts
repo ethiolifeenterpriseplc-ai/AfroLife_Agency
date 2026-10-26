@@ -170,7 +170,7 @@ router.patch('/properties/:id/authority-resubmit', requireActivity('property.lis
   res.json(property);
 }));
 
-router.patch('/properties/:id/authority-review', requireRole('super_admin', 'corporate_business_manager'), h(async (req, res) => {
+router.patch('/properties/:id/authority-review', requireRole('global_admin', 'super_admin', 'corporate_business_manager'), h(async (req, res) => {
   const body = z.object({
     decision: z.enum(['approve','needs_info','reject']),
     note: z.string().trim().max(1000).optional(),
@@ -225,7 +225,7 @@ router.patch('/properties/:id/authority-review', requireRole('super_admin', 'cor
   res.json(property);
 }));
 
-router.get('/properties/authority-review', requireRole('super_admin', 'corporate_business_manager'), h(async (_req, res) => {
+router.get('/properties/authority-review', requireRole('global_admin', 'super_admin', 'corporate_business_manager'), h(async (_req, res) => {
   const rows = await withUser(_req.user!, async (c) => (await c.query(
     `SELECT p.id,p.address,p.description,p.ptype,p.listing_mode,p.sale_price,p.rent_period,
        p.territory_id,p.status,p.created_by,p.authority_review_status,p.authority_review_note,

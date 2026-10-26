@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import ts from 'typescript';
 import { checkWorkspaceServices, createApiMetrics } from '../src/workspace-status.ts';
 import { isMiniAppAllowed, isPanelEnabled, panelFromUrl, panelUrl } from '../public/workspace-navigation.js';
 import { MIN_SEARCH_QUERY_LENGTH, searchWorkspaceRecords } from '../public/workspace-search.js';
@@ -7,6 +9,47 @@ import { isGlobalBiUtcBucketBoundary, normalizeGlobalBiDashboard } from '../publ
 import { buildMiniAppAccessPayload } from '../public/mini-app-access.js';
 import { normalizeAccountingTrendRows } from '../public/accounting-dashboard.js';
 import { paginateRows } from '../public/row-pagination.js';
+
+function collectPublicUiMessages() {
+  const argumentIndexes = new Map([
+    ['t', 0],
+    ['node', 1],
+    ['showAlert', 0],
+    ['setLocalizedText', 1],
+    ['setLocalizedNodeText', 1],
+    ['setLocalizedAttribute', 2],
+  ]);
+  const messages = new Set();
+  const publicDirectory = new URL('../public/', import.meta.url);
+
+  for (const filename of readdirSync(publicDirectory).filter((name) => name.endsWith('.js'))) {
+    const source = ts.createSourceFile(
+      filename,
+      readFileSync(new URL(filename, publicDirectory), 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.JS,
+    );
+    const visit = (node) => {
+      if (ts.isCallExpression(node)) {
+        const callee = ts.isIdentifier(node.expression)
+          ? node.expression.text
+          : ts.isPropertyAccessExpression(node.expression)
+            ? node.expression.name.text
+            : null;
+        const argumentIndex = argumentIndexes.get(callee);
+        const argument = argumentIndex === undefined ? undefined : node.arguments[argumentIndex];
+        if (argument && ts.isStringLiteralLike(argument) && argument.text.trim() && argument.text !== '⋯') {
+          messages.add(argument.text);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+
+  return [...messages];
+}
 
 test('key app workflows are translated in every supported locale', async () => {
   const messages = [
@@ -127,6 +170,7 @@ test('key app workflows are translated in every supported locale', async () => {
     'Insurance policy enrollment, claims, member wallets, and loans are not available in this platform. Existing Insurance ledgers are separate organization accounting records and do not prove personal cover or a payment balance.',
     'Agents may only make a consented, non-binding follow-up or refer a customer to the Insurance service team. Product recommendations, comparisons, quotes, premium collection, policy issuance or changes, and claims decisions are not available.',
   ];
+  messages.push(...collectPublicUiMessages());
   const locales = ['am', 'om', 'ti', 'so', 'ar', 'sw'];
   const store = new Map();
   const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');

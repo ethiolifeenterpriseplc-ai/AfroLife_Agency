@@ -45,6 +45,8 @@ const payrollHandoffHistory = readFileSync(new URL('../migrations/103_workforce_
 const propertyRentalApplications = readFileSync(new URL('../migrations/104_property_rental_applications.sql', import.meta.url), 'utf8');
 const propertyTenantSelfService = readFileSync(new URL('../migrations/105_property_tenant_self_service.sql', import.meta.url), 'utf8');
 const propertyOwnerAuthorityReview = readFileSync(new URL('../migrations/106_property_owner_authority_review.sql', import.meta.url), 'utf8');
+const leaseRentStartDate = readFileSync(new URL('../migrations/107_lease_rent_start_date.sql', import.meta.url), 'utf8');
+const globalAdminPropertyAuthorityReview = readFileSync(new URL('../migrations/108_global_admin_property_authority_review.sql', import.meta.url), 'utf8');
 const marketplaceRouter = readFileSync(new URL('../services/marketplace/router.ts', import.meta.url), 'utf8');
 const propertyManagementRouter = readFileSync(new URL('../services/property-management/router.ts', import.meta.url), 'utf8');
 const propertyVendorPortal = readFileSync(new URL('../src/property-vendor-portal.ts', import.meta.url), 'utf8');
@@ -567,6 +569,29 @@ test('property publication requires independent owner-authority review and scann
   assert.match(publicApp,/property-authority-review/);
   assert.match(publicApp,/property-authority-file/);
   assert.match(publicApp,/Owner-authority review queue/);
+});
+
+test('global admins can independently review property authority evidence', () => {
+  assert.match(globalAdminPropertyAuthorityReview,/app_role\(\) IN \('global_admin','super_admin','corporate_business_manager'\)/);
+  assert.match(globalAdminPropertyAuthorityReview,/DROP POLICY property_authority_review_events_insert/);
+  assert.match(globalAdminPropertyAuthorityReview,/Only an independent reviewer may decide a pending property authority review/);
+  assert.match(globalAdminPropertyAuthorityReview,/actor = OLD\.created_by/);
+  assert.match(propertyManagementRouter,/authority-review', requireRole\('global_admin', 'super_admin', 'corporate_business_manager'\)/);
+  assert.match(publicApp,/state\.propertyAuthorityReviewQueue = \['global_admin','super_admin','corporate_business_manager'\]/);
+  assert.match(publicApp,/if \(\['global_admin','super_admin','corporate_business_manager'\]\.includes\(state\.user\.role\)\) \{\s+const authorityQueue/);
+});
+
+test('lease rent commencement remains separate from term commencement and handover', () => {
+  assert.match(leaseRentStartDate,/ADD COLUMN rent_start_on date/);
+  assert.match(leaseRentStartDate,/SET rent_start_on = start_date/);
+  assert.match(leaseRentStartDate,/rent_start_on >= start_date AND rent_start_on <= end_date/);
+  assert.match(leaseRentStartDate,/Versioned lease rent commencement is immutable/);
+  assert.match(operations,/rent_start_on: z\.string\(\)\.date\(\)\.optional\(\)/);
+  assert.match(operations,/rentScheduleForPeriod\(lease\.rent_start_on, lease\.end_date/);
+  assert.match(operations,/rent_commencement_recorded/);
+  assert.match(publicApp,/field\('Rent commencement date', 'rent_start_on', 'date', true\)/);
+  assert.match(publicApp,/Rent commencement date/);
+  assert.match(publicApp,/Lease commencement, rent commencement, signature, and possession handover are recorded separately/);
 });
 
 test('notification delivery retries are bounded, idempotent, and operator-visible', () => {

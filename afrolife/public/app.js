@@ -1300,7 +1300,7 @@ async function loadPanelData(panel) {
       state.marketplaceSellers = ['global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)
         ? await safeGet('/marketplace/sellers', []) : [];
       if (hasActivity('property.listings.view')) state.properties = await safeGet('/properties', []);
-      state.propertyAuthorityReviewQueue = ['super_admin','corporate_business_manager'].includes(state.user.role)
+      state.propertyAuthorityReviewQueue = ['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)
         ? await safeGet('/properties/authority-review', []) : [];
       if (hasActivity('property.maintenance.manage')) {
         const [firstPage, metrics] = await Promise.all([
@@ -3395,7 +3395,7 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
       button('Add media', 'property-upload', 'button button-outline', { id: property.id }),
     );
     if (authorityStatus === 'pending_review'
-      && ['super_admin', 'corporate_business_manager'].includes(state.user.role)
+      && ['global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)
       && property.created_by !== state.user.id
       && property.authority_evidence?.length) {
       actions.append(
@@ -3405,7 +3405,7 @@ function renderPropertyListings(canManage, emptyMessage = 'No property listings 
       );
     }
     if (reviewStatus === 'pending_review'
-      && ['super_admin', 'corporate_business_manager'].includes(state.user.role)
+      && ['global_admin', 'super_admin', 'corporate_business_manager'].includes(state.user.role)
       && property.created_by !== state.user.id) {
       actions.append(
         button('Approve listing', 'property-review', 'button button-primary', { id: property.id, decision: 'approve' }),
@@ -3480,7 +3480,10 @@ function renderResidentPropertyPortal() {
   for (const payment of workspace.payments) payments.get(payment.lease_id)?.push(payment);
   for (const lease of workspace.leases) {
     const item = card(`${lease.address} · ${lease.unit_no}`,
-      `ETB ${Number(lease.rent).toLocaleString(document.documentElement.lang)} rent · ${lease.status.replaceAll('_', ' ')} · ${lease.start_date} to ${lease.end_date}`,
+      t('ETB {{rent}} rent · {{status}} · Lease {{start}} to {{end}} · Rent starts {{rentStart}}', {
+        rent: Number(lease.rent).toLocaleString(document.documentElement.lang),
+        status: t(lease.status), start: lease.start_date, end: lease.end_date, rentStart: lease.rent_start_on,
+      }),
       lease.status);
     item.append(node('p', `Deposit recorded in lease: ETB ${Number(lease.deposit).toLocaleString(document.documentElement.lang)}. Key handover: ${lease.possession_handover_on ?? 'not recorded'}.`, 'muted'));
     const leaseCharges = charges.get(lease.id) ?? [];
@@ -3616,7 +3619,7 @@ function renderProperties() {
     emptyMessage: 'No property listings are currently available for this dashboard.',
     values: (data) => [['Property listings', data.totalListings], ['Units in listed properties', data.totalUnits]],
   }));
-  if (['super_admin','corporate_business_manager'].includes(state.user.role)) {
+  if (['global_admin','super_admin','corporate_business_manager'].includes(state.user.role)) {
     const authorityQueue = node('section', undefined, 'panel');
     authorityQueue.append(
       sectionHeading('Owner-authority review queue', 'Inspect scanned ownership or delegated-authority evidence. This operational review is separate from listing moderation.'),
@@ -3770,6 +3773,7 @@ function renderProperties() {
     if (!state.ownerStatements.length) statements.append(empty('No lease statements are available for your listings yet.'));
     for (const item of state.ownerStatements) {
       const statement = card(`${item.address} · ${item.unit_no}`, `Lease ${item.start_date} to ${item.end_date} · ${item.status}`);
+      statement.append(node('p', t('Rent commencement: {{date}}.', { date: item.rent_start_on })));
       statement.append(node('p',`Rent charged ETB ${item.rent_charged} · reconciled ETB ${item.rent_reconciled} · pending reconciliation ETB ${item.rent_pending_reconciliation}`));
       statement.append(node('p',`Deposit received ETB ${item.deposit_reconciled} · refunded ETB ${item.deposit_refunded} · agreed deposit ETB ${item.agreed_deposit}`));
       statements.append(statement);
@@ -4503,7 +4507,20 @@ function renderRent() {
     const tenant = field('Tenant', 'tenant_id', 'select');
     const tenantEmpty = node('option', 'Choose a tenant'); tenantEmpty.value = ''; tenantEmpty.disabled = true; tenantEmpty.selected = true; tenant.input.append(tenantEmpty);
     for (const entry of state.tenants) { const option = node('option', `${entry.name} · ${entry.phone}`); option.value = entry.id; tenant.input.append(option); }
-    leaseForm.append(unit.label, tenant.label, field('Monthly rent (ETB)', 'rent', 'number', true, { min: '0.01', step: '0.01' }).label, field('Deposit (ETB)', 'deposit', 'number', false, { min: '0', step: '0.01', value: '0' }).label, field('Start date', 'start_date', 'date').label, field('Term (months)', 'months', 'number', true, { min: '1', max: '120', value: '12' }).label, button('Create lease draft', 'submit', 'button button-primary'));
+    const commencement = field('Lease commencement date', 'start_date', 'date');
+    const rentStart = field('Rent commencement date', 'rent_start_on', 'date', true);
+    let rentStartWasEdited = false;
+    commencement.input.addEventListener('change', () => {
+      if (!rentStartWasEdited) rentStart.input.value = commencement.input.value;
+    });
+    rentStart.input.addEventListener('input', () => { rentStartWasEdited = true; });
+    leaseForm.append(unit.label, tenant.label,
+      field('Monthly rent (ETB)', 'rent', 'number', true, { min: '0.01', step: '0.01' }).label,
+      field('Deposit (ETB)', 'deposit', 'number', false, { min: '0', step: '0.01', value: '0' }).label,
+      commencement.label, rentStart.label,
+      field('Term (months)', 'months', 'number', true, { min: '1', max: '120', value: '12' }).label,
+      node('p', 'Lease commencement, rent commencement, signature, and possession handover are recorded separately.', 'muted span-2'),
+      button('Create lease draft', 'submit', 'button button-primary'));
     columns.append(leaseForm);
   }
   if (['global_admin', 'super_admin', 'finance_manager'].includes(state.user.role)) {
@@ -4522,11 +4539,25 @@ function renderRent() {
   for (const lease of state.leases) {
     const item = card(`${lease.address} · ${lease.unit_no}`, t('{{tenant}} · ETB {{rent}} monthly · {{status}}', { tenant: lease.tenant_name, rent: Number(lease.rent).toLocaleString(document.documentElement.lang), status: t(lease.status) }), lease.status);
     item.dataset.lease = lease.id;
+    item.append(node('p', t(
+      'Lease commencement: {{commencement}} · Rent commencement: {{rentStart}} · Possession handover: {{handover}}.',
+      {
+        commencement: lease.start_date, rentStart: lease.rent_start_on,
+        handover: lease.possession_handover_on ?? t('not recorded'),
+      },
+    ), 'muted'));
     if (lease.notice_type) {
       item.append(node('p', `Latest operational notice: ${lease.notice_type}, received ${lease.notice_received_on}, proposed effective ${lease.proposed_effective_on}. This is not legal validation or lease termination.`));
     }
+    item.append(node('p', t(
+      'Lease commencement: {{commencement}} · Rent commencement: {{rentStart}} · Possession handover: {{handover}}.',
+      {
+        commencement: lease.start_date, rentStart: lease.rent_start_on,
+        handover: lease.possession_handover_on ?? t('not recorded'),
+      },
+    ), 'muted'));
     if (lease.status !== 'active' && lease.status !== 'ended') {
-      item.append(node('p', `Term ${lease.start_date} to ${lease.end_date}. Signature uploads are evidence only and do not verify signer identity or legal validity.`));
+      item.append(node('p', 'Signature uploads are evidence only and do not verify signer identity or legal validity.'));
     }
     if (hasActivity('property.tenancy.manage')) {
       for (const account of lease.tenant_access_accounts ?? []) {

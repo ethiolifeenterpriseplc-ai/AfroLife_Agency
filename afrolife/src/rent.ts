@@ -1,7 +1,10 @@
 // Pure helpers for lease schedules. Dates are Gregorian ISO strings (YYYY-MM-DD).
 export function rentSchedule(startISO: string, months: number, rent: number, dueDay = 5) {
+  return rentScheduleForPeriod(startISO, endDate(startISO, months), rent, dueDay);
+}
+
+export function rentScheduleForPeriod(startISO: string, endISO: string, rent: number, dueDay = 5) {
   const [y, m, startDay] = startISO.split('-').map(Number);
-  const endISO = endDate(startISO, months);
   const [endYear, endMonth, endDay] = endISO.split('-').map(Number);
   const end = new Date(Date.UTC(endYear, endMonth - 1, endDay));
   const safeDueDay = Math.min(Math.max(dueDay, 1), 28);

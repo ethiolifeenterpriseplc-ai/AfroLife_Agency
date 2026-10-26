@@ -89,7 +89,7 @@ export const agencyDomainSchemaRequirements: Record<AgencyDomain, {
       'user_signups.user_id', 'user_signups.account_type', 'user_signups.requested_plan',
       'user_signups.status', 'tenants.id', 'tenants.name', 'tenants.phone',
       'tenants.source_agent_id', 'leases.id', 'leases.unit_id', 'leases.tenant_id',
-      'leases.rent', 'leases.deposit', 'leases.start_date', 'leases.end_date',
+      'leases.rent', 'leases.deposit', 'leases.start_date', 'leases.rent_start_on', 'leases.end_date',
       'leases.source_agent_id', 'leases.status', 'rent_charges.id', 'rent_charges.lease_id',
       'rent_charges.period', 'rent_charges.due_on', 'rent_charges.amount', 'rent_charges.status',
       'maintenance_requests.id', 'maintenance_requests.property_id', 'maintenance_requests.unit_id',
