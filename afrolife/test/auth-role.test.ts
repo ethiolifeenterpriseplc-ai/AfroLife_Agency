@@ -81,9 +81,12 @@ test('SQL role activity defaults match the application catalog and preserve over
   const defaultsMigration = await readFile(new URL('../migrations/057_role_activity_defaults.sql', import.meta.url), 'utf8');
   const lifecycleMigration = await readFile(new URL('../migrations/060_lease_lifecycle.sql', import.meta.url), 'utf8');
   const propertyOwnerMaintenanceMigration = await readFile(new URL('../migrations/076_property_owner_maintenance_access.sql', import.meta.url), 'utf8');
-  const migration = `${defaultsMigration}\n${lifecycleMigration}\n${propertyOwnerMaintenanceMigration}`;
+  const workforceDefaultsMigration = await readFile(new URL('../migrations/095_workforce_workflows.sql', import.meta.url), 'utf8');
+  const maintenanceReviewMigration = await readFile(new URL('../migrations/100_maintenance_completion_review.sql', import.meta.url), 'utf8');
+  const propertyVendorLearningMigration = await readFile(new URL('../migrations/111_property_vendor_learning_access.sql', import.meta.url), 'utf8');
+  const migration = `${defaultsMigration}\n${lifecycleMigration}\n${propertyOwnerMaintenanceMigration}\n${workforceDefaultsMigration}\n${maintenanceReviewMigration}\n${propertyVendorLearningMigration}`;
   const seededDefaults = new Set(
-    [...migration.matchAll(/\('([a-z_]+)','([a-z_.]+)',true\)/g)]
+    [...migration.matchAll(/\(\s*'([a-z_]+)'\s*,\s*'([a-z_.]+)'\s*,\s*true\s*\)/g)]
       .map((match) => `${match[1]}:${match[2]}`),
   );
   let expectedDefaults = 0;
