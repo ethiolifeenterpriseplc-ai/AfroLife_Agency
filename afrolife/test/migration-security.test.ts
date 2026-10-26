@@ -40,6 +40,7 @@ const supportCaseAccessHardening = readFileSync(new URL('../migrations/098_suppo
 const supportCaseAppealReview = readFileSync(new URL('../migrations/099_support_case_appeal_review.sql', import.meta.url), 'utf8');
 const maintenanceCompletionReview = readFileSync(new URL('../migrations/100_maintenance_completion_review.sql', import.meta.url), 'utf8');
 const maintenanceVendorFulfillment = readFileSync(new URL('../migrations/101_maintenance_vendor_fulfillment.sql', import.meta.url), 'utf8');
+const maintenanceSlaDispatcher = readFileSync(new URL('../src/maintenance-sla.ts', import.meta.url), 'utf8');
 const notificationDeliveryRetries = readFileSync(new URL('../migrations/102_notification_delivery_retries.sql', import.meta.url), 'utf8');
 const payrollHandoffHistory = readFileSync(new URL('../migrations/103_workforce_payroll_handoff_history.sql', import.meta.url), 'utf8');
 const propertyRentalApplications = readFileSync(new URL('../migrations/104_property_rental_applications.sql', import.meta.url), 'utf8');
@@ -47,6 +48,7 @@ const propertyTenantSelfService = readFileSync(new URL('../migrations/105_proper
 const propertyOwnerAuthorityReview = readFileSync(new URL('../migrations/106_property_owner_authority_review.sql', import.meta.url), 'utf8');
 const leaseRentStartDate = readFileSync(new URL('../migrations/107_lease_rent_start_date.sql', import.meta.url), 'utf8');
 const globalAdminPropertyAuthorityReview = readFileSync(new URL('../migrations/108_global_admin_property_authority_review.sql', import.meta.url), 'utf8');
+const maintenanceSlaEscalationIndex = readFileSync(new URL('../migrations/109_maintenance_sla_escalation_index.sql', import.meta.url), 'utf8');
 const marketplaceRouter = readFileSync(new URL('../services/marketplace/router.ts', import.meta.url), 'utf8');
 const propertyManagementRouter = readFileSync(new URL('../services/property-management/router.ts', import.meta.url), 'utf8');
 const propertyVendorPortal = readFileSync(new URL('../src/property-vendor-portal.ts', import.meta.url), 'utf8');
@@ -489,8 +491,17 @@ test('maintenance vendor access is assignment-scoped and invoice mismatches requ
   assert.match(maintenanceVendorFulfillment,/property_vendor_bills_vendor_insert/);
   assert.match(maintenanceVendorFulfillment,/match_status IN \('unmatched','matched','mismatch','accepted_exception'\)/);
   assert.match(maintenanceVendorFulfillment,/CREATE TABLE maintenance_sla_escalations/);
+  assert.match(maintenanceSlaEscalationIndex,/ON maintenance_requests \(sla_due_at, id\)/);
+  assert.match(maintenanceSlaEscalationIndex,/status NOT IN \('completed','done','cancelled'\)/);
   assert.match(propertyVendorPortal,/maintenance\/vendor\/:id\/complete/);
   assert.match(operations,/maintenance\/sla\/overdue/);
+  assert.match(server,/dispatchMaintenanceSlaEscalations\(pool\)/);
+  assert.match(maintenanceSlaDispatcher,/ON CONFLICT \(maintenance_request_id,escalation_level,recipient_id\) DO NOTHING/);
+  assert.match(maintenanceSlaDispatcher,/WITH eligible_recipients AS/);
+  assert.match(maintenanceSlaDispatcher,/maintenance_sla_escalation/);
+  assert.match(maintenanceSlaDispatcher,/property_vendor_memberships/);
+  assert.match(maintenanceSlaDispatcher,/corporate_business_manager/);
+  assert.match(maintenanceSlaDispatcher,/global_admin','super_admin/);
 });
 
 test('V11 rental applications require an approved vacant listing, explicit consent, human review, and private append-only history', () => {

@@ -64,11 +64,13 @@ export const agencyDomainSchemaRequirements: Record<AgencyDomain, {
       'tenants', 'territories', 'users', 'user_signups', 'leases',
       'property_tenant_access_invitations', 'property_tenant_account_links',
       'property_authority_evidence', 'property_authority_review_events',
+      'maintenance_sla_escalations',
     ],
     rowLevelSecurity: [
       'agents', 'marketplace_configuration', 'maintenance_requests', 'properties', 'property_photos',
       'property_units', 'rent_charges', 'leases', 'property_tenant_access_invitations',
       'property_tenant_account_links', 'property_authority_evidence', 'property_authority_review_events',
+      'maintenance_sla_escalations',
     ],
     requiredColumns: [
       'users.id', 'users.role', 'users.active', 'users.kyc_status', 'agents.id', 'agents.territory_id',

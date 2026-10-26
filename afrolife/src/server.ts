@@ -27,6 +27,7 @@ import { privacy } from './privacy.js';
 import { notify } from './notify.js';
 import { paymentWebhook } from './webhooks.js';
 import { dispatchOnce } from './dispatch.js';
+import { dispatchMaintenanceSlaEscalations } from './maintenance-sla.js';
 import { dispatchAccountingEvents, enqueueAccountingEvent } from './accounting-outbox.js';
 import { sniff } from './files.js';
 import { getFile, putFile } from './storage.js';
@@ -788,6 +789,19 @@ if (process.env.NOTIFY_WEBHOOK_URL && process.env.NOTIFY_WEBHOOK_SECRET) {
     finally { dispatching = false; }
   }, 30_000).unref();
 }
+
+let maintenanceSlaDispatching = false;
+setInterval(async () => {
+  if (maintenanceSlaDispatching) return;
+  maintenanceSlaDispatching = true;
+  try {
+    await dispatchMaintenanceSlaEscalations(pool);
+  } catch (error) {
+    console.error('maintenance SLA escalation dispatch failed', error instanceof Error ? error.message : error);
+  } finally {
+    maintenanceSlaDispatching = false;
+  }
+}, 60_000).unref();
 
 // Deliver finalized, independently reconciled rent transactions to the separately deployed Accounting service.
 let accountingDispatching = false;

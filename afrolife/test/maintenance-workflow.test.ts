@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canTransitionMaintenance, MAINTENANCE_TRANSITIONS, requiresMaintenanceReview } from '../src/maintenance-workflow.js';
+import { maintenanceSlaEscalationLevels } from '../src/maintenance-sla.js';
 
 test('maintenance lifecycle routes triage, assignment, work and independent review', () => {
   assert.deepEqual(MAINTENANCE_TRANSITIONS.open, ['triaged', 'cancelled']);
@@ -25,4 +26,13 @@ test('only completion decisions require independent review evidence', () => {
   assert.equal(requiresMaintenanceReview('completed'), true);
   assert.equal(requiresMaintenanceReview('rework_required'), true);
   assert.equal(requiresMaintenanceReview('awaiting_review'), false);
+});
+
+test('maintenance SLA escalation levels use the agreed 1, 24, and 72 hour thresholds', () => {
+  const dueAt = new Date('2026-10-26T00:00:00.000Z');
+  assert.deepEqual(maintenanceSlaEscalationLevels(dueAt, new Date('2026-10-26T00:59:59.999Z')), []);
+  assert.deepEqual(maintenanceSlaEscalationLevels(dueAt, new Date('2026-10-26T01:00:00.000Z')), [1]);
+  assert.deepEqual(maintenanceSlaEscalationLevels(dueAt, new Date('2026-10-27T00:00:00.000Z')), [1, 2]);
+  assert.deepEqual(maintenanceSlaEscalationLevels(dueAt, new Date('2026-10-29T00:00:00.000Z')), [1, 2, 3]);
+  assert.throws(() => maintenanceSlaEscalationLevels('not-a-date'), /valid dates/);
 });
