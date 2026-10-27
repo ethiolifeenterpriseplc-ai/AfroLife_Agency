@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toCsv } from '../src/csv.js';
+import { parseCsv, selectCsvRows, toCsv } from '../src/csv.js';
 
 test('plain values, commas, quotes and line breaks are escaped', () => {
   const out = toCsv([{ a: 'x', b: 'hello, "world"', c: 'line1\nline2' }], ['a', 'b', 'c']);
@@ -16,4 +16,24 @@ test('spreadsheet formulas are neutralised', () => {
 test('empty values are blank and an empty table still has its header', () => {
   assert.equal(toCsv([{ a: null, b: undefined }], ['a', 'b']), 'a,b\r\n,\r\n');
   assert.equal(toCsv([], ['a', 'b']), 'a,b\r\n');
+});
+
+test('CSV parsing preserves escaped quotes, embedded newlines, and row ordering', () => {
+  const csv = toCsv([
+    { worker: 'Ada, "A"', note: 'first line\nsecond line' },
+    { worker: 'Bela', note: 'ok' },
+  ], ['worker', 'note']);
+  assert.deepEqual(parseCsv(csv), [
+    ['worker', 'note'],
+    ['Ada, "A"', 'first line\nsecond line'],
+    ['Bela', 'ok'],
+  ]);
+  assert.equal(selectCsvRows(csv, [2]), toCsv([{ worker: 'Bela', note: 'ok' }], ['worker', 'note']));
+});
+
+test('CSV parser rejects malformed quoting and row selections', () => {
+  assert.throws(() => parseCsv('a,b\r\n"unfinished,x'), /unterminated quoted field/);
+  assert.throws(() => parseCsv('a,b\r\nx"y,z'), /quote inside an unquoted field/);
+  assert.throws(() => selectCsvRows('a,b\r\nx,y\r\n', [0]), /unique, valid one-based/);
+  assert.throws(() => selectCsvRows('a,b\r\nx,y\r\n', [1, 1]), /unique, valid one-based/);
 });

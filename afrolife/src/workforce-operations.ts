@@ -1,16 +1,21 @@
-import { createCipheriv, createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { Router, type Request, type Response, type RequestHandler } from 'express';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import { HttpError, invalidateUser, requireActivity, requireRole, withUser } from './core.js';
 import { audit } from './domain.js';
-import { toCsv } from './csv.js';
+import { parseCsv, selectCsvRows, toCsv } from './csv.js';
 import { hasRoleActivityAccess } from './role-activities.js';
 import {
   takeWorkforcePayrollBatch,
   WORKFORCE_PAYABLE_CALCULATION_MAX_ROWS,
   WORKFORCE_PAYROLL_EXPORT_MAX_ROWS,
 } from './workforce-payroll-batch.js';
+import {
+  encryptPayrollExport,
+  readPayrollExportCsv,
+  WORKFORCE_PAYROLL_EXPORT_COLUMNS,
+} from './workforce-payroll-export.js';
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { fn(req, res).catch(next); };
@@ -84,25 +89,6 @@ function payrollEncryptionConfig() {
     throw new HttpError(503, 'Encrypted payroll export is unavailable until WORKFORCE_PAYROLL_EXPORT_KEY and WORKFORCE_PAYROLL_EXPORT_KEY_ID are configured');
   }
   return { key: Buffer.from(keyText, 'hex'), keyId };
-}
-
-function encryptPayrollExport(csv: string, key: Buffer, keyId: string) {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(csv, 'utf8'), cipher.final()]);
-  const controlHash = createHash('sha256').update(csv, 'utf8').digest('hex');
-  return {
-    controlHash,
-    payload: {
-      version: 1,
-      algorithm: 'AES-256-GCM',
-      key_id: keyId,
-      iv: iv.toString('base64'),
-      auth_tag: cipher.getAuthTag().toString('base64'),
-      control_hash: controlHash,
-      ciphertext: encrypted.toString('base64'),
-    },
-  };
 }
 
 workforceOperations.get('/workforce/engagements', requireActivity('workforce.shifts.manage'), h(async (req, res) => {
@@ -836,10 +822,6 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
     if (new Set(rows.map((row) => row.policy_version_id)).size !== 1) {
       throw new HttpError(409, 'This export period spans multiple workforce policy versions; create separate exports per policy version');
     }
-    const columns = [
-      'worker_id','worker_name','worker_type','billing_unit','contract_rate','payable_minutes','payable_hours',
-      'shift_start','shift_end','policy_version',
-    ] as const;
     const csvRows = rows.map((row) => ({
       worker_id: row.worker_id,
       worker_name: row.worker_name,
@@ -852,7 +834,7 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
       shift_end: new Date(row.ends_at).toISOString(),
       policy_version: row.policy_version,
     }));
-    const csv = toCsv(csvRows, columns);
+    const csv = toCsv(csvRows, WORKFORCE_PAYROLL_EXPORT_COLUMNS);
     const encrypted = encryptPayrollExport(csv, key, keyId);
     const totalMinutes = rows.reduce((total, row) => total + Number(row.payable_minutes), 0);
     const record = (await client.query(
@@ -872,10 +854,10 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
        VALUES($1,'generated',$2,$3)`,
       [record.id, 'Encrypted payroll export generated. Provider filing and payment are not verified.', req.user!.id],
     );
-    for (const row of rows) {
+    for (const [index, row] of rows.entries()) {
       await client.query(
-        'INSERT INTO workforce_payroll_export_items(export_id,time_entry_id) VALUES($1,$2)',
-        [record.id, row.time_entry_id],
+        'INSERT INTO workforce_payroll_export_items(export_id,time_entry_id,row_number) VALUES($1,$2,$3)',
+        [record.id, row.time_entry_id, index + 1],
       );
       await client.query(
         `UPDATE workforce_time_entries SET status='exported',updated_at=now() WHERE id=$1 AND status='payable'`,
@@ -908,8 +890,11 @@ workforceOperations.post('/workforce/payroll-exports', requireActivity('workforc
 workforceOperations.get('/workforce/payroll-exports', requireActivity('workforce.payroll.export'), h(async (req, res) => {
   res.json(await withUser(req.user!, async (client) => (await client.query(
     `SELECT id,period_start,period_end,status,row_count,total_payable_minutes,control_hash,
-        mapping_version,encryption_key_id,created_by,created_at,handoff_reason,handoff_reference,handed_off_by,handed_off_at
-     FROM workforce_payroll_exports ORDER BY created_at DESC LIMIT 200`,
+        mapping_version,encryption_key_id,created_by,created_at,handoff_reason,handoff_reference,handed_off_by,handed_off_at,
+        requeue.source_export_id AS requeued_from_export_id
+     FROM workforce_payroll_exports x
+     LEFT JOIN workforce_payroll_export_requeues requeue ON requeue.retry_export_id=x.id
+     ORDER BY x.created_at DESC LIMIT 200`,
   )).rows));
 }));
 
@@ -923,6 +908,58 @@ workforceOperations.get('/workforce/payroll-exports/mine', requireRole('worker')
      WHERE w.phone=$1 ORDER BY x.created_at DESC LIMIT 100`,
     [req.user!.phone],
   )).rows));
+}));
+
+workforceOperations.get('/workforce/payroll-exports/:id/items', requireActivity('workforce.payroll.export'), h(async (req, res) => {
+  const { key, keyId } = payrollEncryptionConfig();
+  const result = await withUser(req.user!, async (client) => {
+    const record = (await client.query(
+      `SELECT x.id,x.status,x.row_count,x.control_hash,p.encrypted_payload
+       FROM workforce_payroll_exports x
+       JOIN workforce_payroll_export_payloads p ON p.export_id=x.id
+       WHERE x.id=$1`,
+      [req.params.id],
+    )).rows[0];
+    if (!record) throw new HttpError(404, 'Payroll export not found');
+    const { rows } = readPayrollExportCsv(record.encrypted_payload, key, keyId, record.control_hash, record.row_count);
+    const itemRows = (await client.query(
+      `SELECT row_number,time_entry_id
+       FROM workforce_payroll_export_items
+       WHERE export_id=$1 ORDER BY row_number`,
+      [record.id],
+    )).rows;
+    if (itemRows.length !== record.row_count
+        || itemRows.some((item, index) => Number(item.row_number) !== index + 1)) {
+      throw new HttpError(409, 'Payroll export row manifest does not match its stored payload');
+    }
+    const previouslyRequeued = (await client.query(
+      `SELECT row_number
+       FROM workforce_payroll_export_requeue_rows
+       WHERE source_export_id=$1`,
+      [record.id],
+    )).rows;
+    const requeuedRows = new Set(previouslyRequeued.map((row) => Number(row.row_number)));
+    await audit(client, req.user!.id, 'workforce_payroll_export_rows_viewed', 'workforce_payroll_export',
+      record.id, null, { row_count: itemRows.length });
+    return {
+      id: record.id,
+      status: record.status,
+      rows: itemRows.map((item, index) => {
+        const values = rows[index + 1];
+        return {
+          row_number: Number(item.row_number),
+          worker_name: values[1],
+          worker_type: values[2],
+          billing_unit: values[3],
+          payable_minutes: Number(values[5]),
+          shift_start: values[7],
+          shift_end: values[8],
+          already_requeued: requeuedRows.has(Number(item.row_number)),
+        };
+      }),
+    };
+  });
+  res.json(result);
 }));
 
 workforceOperations.get('/workforce/payroll-exports/:id/file', requireActivity('workforce.payroll.export'), h(async (req, res) => {
@@ -993,6 +1030,151 @@ workforceOperations.post('/workforce/payroll-exports/:id/handoff', requireActivi
     return updated;
   });
   res.json(row);
+}));
+
+workforceOperations.post('/workforce/payroll-exports/:id/requeue-failed', requireActivity('workforce.payroll.export'), h(async (req, res) => {
+  const body = z.object({
+    failed_row_numbers: z.array(z.number().int().positive()).min(1).max(WORKFORCE_PAYROLL_EXPORT_MAX_ROWS),
+    idempotency_key: z.string().uuid(),
+    reason: z.string().trim().min(10).max(1000),
+    external_reference: z.string().trim().min(3).max(160).optional(),
+  }).strict().parse(req.body);
+  const rowNumbers = [...body.failed_row_numbers].sort((left, right) => left - right);
+  if (new Set(rowNumbers).size !== rowNumbers.length) {
+    throw new HttpError(422, 'Failed payroll row numbers must be unique');
+  }
+  const requestHash = createHash('sha256')
+    .update(JSON.stringify({
+      failed_row_numbers: rowNumbers,
+      reason: body.reason,
+      external_reference: body.external_reference ?? null,
+    }))
+    .digest('hex');
+  const { key, keyId } = payrollEncryptionConfig();
+  const result = await withUser(req.user!, async (client) => {
+    const source = (await client.query(
+      `SELECT id,period_start,period_end,status,row_count,total_payable_minutes,
+          control_hash,encryption_key_id,mapping_version
+       FROM workforce_payroll_exports WHERE id=$1 FOR UPDATE`,
+      [req.params.id],
+    )).rows[0];
+    if (!source) throw new HttpError(404, 'Payroll export not found');
+
+    const previousRequest = (await client.query(
+      `SELECT request_hash,retry_export_id
+       FROM workforce_payroll_export_requeues
+       WHERE source_export_id=$1 AND idempotency_key=$2`,
+      [source.id, body.idempotency_key],
+    )).rows[0];
+    if (previousRequest) {
+      if (previousRequest.request_hash !== requestHash) {
+        throw new HttpError(409, 'This payroll requeue idempotency key was already used with different rows or a different reason');
+      }
+      const previousExport = (await client.query(
+        `SELECT id,period_start,period_end,status,row_count,total_payable_minutes,control_hash,
+            encryption_key_id,mapping_version,created_by,created_at
+         FROM workforce_payroll_exports WHERE id=$1`,
+        [previousRequest.retry_export_id],
+      )).rows[0];
+      if (!previousExport) throw new HttpError(500, 'Recorded payroll retry export is missing');
+      return { record: { ...previousExport, requeued_from_export_id: source.id }, replayed: true };
+    }
+    if (!['handed_off','handoff_failed'].includes(source.status)) {
+      throw new HttpError(409, 'Record an external handoff outcome before requeuing failed payroll rows');
+    }
+
+    const sourceItems = (await client.query(
+      `SELECT row_number,time_entry_id
+       FROM workforce_payroll_export_items
+       WHERE export_id=$1 ORDER BY row_number`,
+      [source.id],
+    )).rows;
+    if (sourceItems.length !== source.row_count
+        || sourceItems.some((item, index) => Number(item.row_number) !== index + 1)
+        || rowNumbers.some((number) => number > sourceItems.length)) {
+      throw new HttpError(422, 'One or more failed row numbers do not belong to this payroll export');
+    }
+    const alreadyRequeuedRows = (await client.query(
+      `SELECT row_number
+       FROM workforce_payroll_export_requeue_rows
+       WHERE source_export_id=$1`,
+      [source.id],
+    )).rows;
+    const requeuedRows = new Set(alreadyRequeuedRows.map((row) => Number(row.row_number)));
+    if (rowNumbers.some((number) => requeuedRows.has(number))) {
+      throw new HttpError(409, 'One or more selected rows have already been requeued from this export');
+    }
+
+    const payload = (await client.query(
+      `SELECT encrypted_payload FROM workforce_payroll_export_payloads WHERE export_id=$1`,
+      [source.id],
+    )).rows[0];
+    if (!payload) throw new HttpError(409, 'Encrypted source payroll export payload is missing');
+    const { csv } = readPayrollExportCsv(payload.encrypted_payload, key, keyId, source.control_hash, source.row_count);
+    let retryCsv: string;
+    try {
+      retryCsv = selectCsvRows(csv, rowNumbers);
+    } catch {
+      throw new HttpError(409, 'Failed payroll rows could not be selected from the authenticated source payload');
+    }
+    const retryRows = parseCsv(retryCsv).slice(1);
+    const payableMinutesIndex = WORKFORCE_PAYROLL_EXPORT_COLUMNS.indexOf('payable_minutes');
+    const totalPayableMinutes = retryRows.reduce((total, row) => {
+      const minutes = Number(row[payableMinutesIndex]);
+      if (!Number.isSafeInteger(minutes) || minutes <= 0) {
+        throw new HttpError(409, 'A failed payroll row has an invalid payable-time value');
+      }
+      return total + minutes;
+    }, 0);
+    if (!Number.isSafeInteger(totalPayableMinutes) || totalPayableMinutes <= 0) {
+      throw new HttpError(409, 'Failed payroll rows have an invalid total payable time');
+    }
+
+    const encrypted = encryptPayrollExport(retryCsv, key, keyId);
+    const retry = (await client.query(
+      `INSERT INTO workforce_payroll_exports(period_start,period_end,policy_version_id,mapping_version,row_count,
+          total_payable_minutes,control_hash,encryption_key_id,created_by)
+       SELECT period_start,period_end,policy_version_id,mapping_version,$2,$3,$4,$5,$6
+       FROM workforce_payroll_exports WHERE id=$1
+       RETURNING id,period_start,period_end,status,row_count,total_payable_minutes,control_hash,
+          encryption_key_id,mapping_version,created_by,created_at`,
+      [source.id, rowNumbers.length, totalPayableMinutes, encrypted.controlHash, keyId, req.user!.id],
+    )).rows[0];
+    await client.query(
+      `INSERT INTO workforce_payroll_export_payloads(export_id,encrypted_payload) VALUES($1,$2)`,
+      [retry.id, encrypted.payload],
+    );
+    await client.query(
+      `INSERT INTO workforce_payroll_export_requeues(
+         source_export_id,retry_export_id,idempotency_key,request_hash,failed_row_numbers,reason,external_reference,actor_id)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [source.id, retry.id, body.idempotency_key, requestHash, rowNumbers, body.reason,
+        body.external_reference ?? null, req.user!.id],
+    );
+    for (const [index, rowNumber] of rowNumbers.entries()) {
+      const sourceItem = sourceItems[rowNumber - 1];
+      await client.query(
+        `INSERT INTO workforce_payroll_export_requeue_rows(source_export_id,row_number,retry_export_id)
+         VALUES($1,$2,$3)`,
+        [source.id, rowNumber, retry.id],
+      );
+      await client.query(
+        `INSERT INTO workforce_payroll_export_items(export_id,time_entry_id,row_number)
+         VALUES($1,$2,$3)`,
+        [retry.id, sourceItem.time_entry_id, index + 1],
+      );
+    }
+    await client.query(
+      `INSERT INTO workforce_payroll_export_events(export_id,event_type,reason,actor_id)
+       VALUES($1,'generated',$2,$3)`,
+      [retry.id, `Encrypted retry export generated for ${rowNumbers.length} explicitly failed row(s) from ${source.id}. Provider filing and payment are not verified.`, req.user!.id],
+    );
+    await audit(client, req.user!.id, 'workforce_payroll_failed_rows_requeued', 'workforce_payroll_export',
+      source.id, { failed_row_numbers: rowNumbers },
+      { retry_export_id: retry.id, reason: body.reason, request_hash: requestHash });
+    return { record: { ...retry, requeued_from_export_id: source.id }, replayed: false };
+  });
+  res.status(result.replayed ? 200 : 201).json(result.record);
 }));
 
 workforceOperations.post('/workforce/workers/:id/offboard', requireActivity('workforce.workers.offboard'), h(async (req, res) => {

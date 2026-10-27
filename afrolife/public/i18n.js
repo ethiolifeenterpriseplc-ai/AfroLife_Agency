@@ -320,6 +320,16 @@ const rows = [
   ['Generate encrypted export', 'በምስጠራ የተጠበቀ ፋይል ፍጠር', 'Faayila iccitii uumii', 'ብምስጢር ዝተሓለወ ፋይል ፍጠር'],
   ['Download encrypted payload', 'በምስጠራ የተጠበቀውን ፋይል አውርድ', 'Faayila iccitii buusi', 'ፋይል ብምስጢር ዝተሓለወ ኣውርድ'],
   ['Record handoff status', 'የማስተላለፊያ ሁኔታ መዝግብ', 'Haala dabarsaa galmeessi', 'ኩነታት ምስግጋር መዝግብ'],
+  ['Review export rows', 'የወጪ ፋይል ረድፎችን ይመርምሩ', 'Tarreewwan faayila alaa gamaaggamaa', 'ረድፊ ፋይል ወጻኢ ገምግሙ'],
+  ['Payroll export rows', 'የደመወዝ ወጪ ፋይል ረድፎች', 'Tarreewwan faayila mindaa', 'ረድፊ ፋይል ደሞዝ'],
+  ['Row {{number}} · {{worker}} · {{start}} · {{minutes}} minutes', 'ረድፍ {{number}} · {{worker}} · {{start}} · {{minutes}} ደቂቃ', 'Tarree {{number}} · {{worker}} · {{start}} · daqiiqaa {{minutes}}', 'ረድፊ {{number}} · {{worker}} · {{start}} · {{minutes}} ደቒቕ'],
+  ['Already requeued', 'አስቀድሞ እንደገና ተልኳል', 'Duraan irra deebi’amee ergameera', 'ድሮ እንደገና ተላኢኹ'],
+  ['Create retry for failed rows', 'ላልተሳኩ ረድፎች እንደገና መላኪያ ፍጠር', 'Tarreewwan kufaniif irra deebi’ii erguu uumi', 'ንዝፈሸሉ ረድፍታት ዳግማይ ምልኣኽ ፍጠር'],
+  ['Select at least one failed row to create a retry export.', 'እንደገና የሚላክ ፋይል ለመፍጠር ቢያንስ አንድ ያልተሳካ ረድፍ ይምረጡ።', 'Faayila irra deebi’amee ergamu uumuuf yoo xiqqaate tarree kufe tokko filadhaa.', 'ዳግማይ ዝለኣኽ ፋይል ንምፍጣር እንተወሓደ ሓደ ዝፈሸለ ረድፊ ምረጹ።'],
+  ['Enter why the external payroll system rejected these rows (at least 10 characters).', 'ውጫዊው የደመወዝ ሥርዓት እነዚህን ረድፎች ለምን እንደከለከለ አስገቡ (ቢያንስ 10 ቁምፊዎች)።', 'Sirni mindaa alaa tarreewwan kana maaliif akka dide galchaa (qubee yoo xiqqaate 10).', 'Sirni mindaa alaa tarreewwan kana maaliif akka dide galchaa (qubee yoo xiqqaate 10).'],
+  ['Enter the external rejection reference, or leave blank.', 'የውጭ ውድቅ ማጣቀሻውን ያስገቡ ወይም ባዶ ይተዉት።', 'Lakkoofsa wabii diddaa alaa galchi, yookaan duwwaa dhiisi.', 'ናይ ወጻኢ መወከሲ ውድቅ ኣእቱ፣ ወይ ባዶ ግደፎ።'],
+  ['External rejection reference must be at least 3 characters.', 'የውጭ ውድቅ ማጣቀሻው ቢያንስ 3 ቁምፊዎች መሆን አለበት።', 'Lakkoofsi wabii diddaa alaa yoo xiqqaate qubee 3 ta’uu qaba.', 'ናይ ወጻኢ መወከሲ ውድቅ እንተወሓደ 3 ቁምፊታት ክኸውን ኣለዎ።'],
+  ['A retry export was created for only the selected failed rows. The export has not been filed or paid.', 'የተመረጡት ያልተሳኩ ረድፎች ብቻ የያዘ ዳግም መላኪያ ፋይል ተፈጥሯል። ፋይሉ አልቀረበም ወይም አልተከፈለም።', 'Faayilli irra deebi’amee ergamu tarreewwan kufan filataman qofaaf uumame. Faayilichi hin dhiyaanne yookaan hin kaffalamne.', 'ፋይል ዳግማይ ምልኣኽ ንዝተመርጹ ዝፈሸሉ ረድፍታት ጥራይ ተፈጢሩ። እቲ ፋይል ኣይቀረበን ወይ ኣይተኸፍለን።'],
   ['Property management', 'የንብረት አስተዳደር', 'Bulchiinsa qabeenyaa', 'ምምሕዳር ንብረት'],
   ['Contract workflow', 'የውል የሥራ ሂደት', 'Adeemsa hojii waliigaltee', 'መስርሕ ውዕሊ'],
   ['Refunds', 'ተመላሽ ክፍያዎች', 'Deebii kaffaltii', 'ምምላስ ክፍሊት'],
@@ -573,6 +583,42 @@ const addedLanguages = {
     'Free': 'Bure', 'Pro': 'Pro', 'Enterprise': 'Biashara', 'Properties': 'Nyumba na mali', 'Workers': 'Wafanyakazi', 'Overview': 'Muhtasari', 'Security': 'Usalama'
   }
 };
+Object.assign(addedLanguages.so, {
+  'Review export rows': 'Dib u eeg safafka faylka mushaharka',
+  'Payroll export rows': 'Safafka faylka mushaharka',
+  'Row {{number}} · {{worker}} · {{start}} · {{minutes}} minutes': 'Safka {{number}} · {{worker}} · {{start}} · {{minutes}} daqiiqo',
+  'Already requeued': 'Hore ayaa dib loogu daray',
+  'Create retry for failed rows': 'Abuur fayl dib loogu diro safafka fashilmay',
+  'Select at least one failed row to create a retry export.': 'Dooro ugu yaraan hal saf oo fashilmay si aad u abuurto fayl dib loogu diro.',
+  'Enter why the external payroll system rejected these rows (at least 10 characters).': 'Geli sababta nidaamka mushaharka dibaddu u diiday safafkan (ugu yaraan 10 xaraf).',
+  'Enter the external rejection reference, or leave blank.': 'Geli tixraaca diidmada dibadda, ama ka tag isagoo bannaan.',
+  'External rejection reference must be at least 3 characters.': 'Tixraaca diidmada dibaddu waa inuu ka koobnaadaa ugu yaraan 3 xaraf.',
+  'A retry export was created for only the selected failed rows. The export has not been filed or paid.': 'Fayl dib loogu diro safafka fashilmay ee la doortay oo keliya ayaa la sameeyay. Faylka lama gudbin, lamana bixin.',
+});
+Object.assign(addedLanguages.ar, {
+  'Review export rows': 'مراجعة صفوف ملف الرواتب',
+  'Payroll export rows': 'صفوف ملف الرواتب',
+  'Row {{number}} · {{worker}} · {{start}} · {{minutes}} minutes': 'الصف {{number}} · {{worker}} · {{start}} · {{minutes}} دقيقة',
+  'Already requeued': 'أعيدت المحاولة بالفعل',
+  'Create retry for failed rows': 'إنشاء إعادة محاولة للصفوف الفاشلة',
+  'Select at least one failed row to create a retry export.': 'اختر صفًا فاشلًا واحدًا على الأقل لإنشاء ملف إعادة المحاولة.',
+  'Enter why the external payroll system rejected these rows (at least 10 characters).': 'أدخل سبب رفض نظام الرواتب الخارجي لهذه الصفوف (10 أحرف على الأقل).',
+  'Enter the external rejection reference, or leave blank.': 'أدخل مرجع الرفض الخارجي أو اتركه فارغًا.',
+  'External rejection reference must be at least 3 characters.': 'يجب ألا يقل مرجع الرفض الخارجي عن 3 أحرف.',
+  'A retry export was created for only the selected failed rows. The export has not been filed or paid.': 'تم إنشاء ملف إعادة محاولة للصفوف الفاشلة المحددة فقط. لم يتم تقديم الملف أو دفع الرواتب.',
+});
+Object.assign(addedLanguages.sw, {
+  'Review export rows': 'Kagua mistari ya faili ya mishahara',
+  'Payroll export rows': 'Mistari ya faili ya mishahara',
+  'Row {{number}} · {{worker}} · {{start}} · {{minutes}} minutes': 'Mstari {{number}} · {{worker}} · {{start}} · dakika {{minutes}}',
+  'Already requeued': 'Tayari umewekwa tena kwenye foleni',
+  'Create retry for failed rows': 'Tengeneza jaribio jipya kwa mistari iliyoshindwa',
+  'Select at least one failed row to create a retry export.': 'Chagua angalau mstari mmoja ulioshindwa ili kutengeneza faili la jaribio jipya.',
+  'Enter why the external payroll system rejected these rows (at least 10 characters).': 'Weka sababu mfumo wa mishahara wa nje ulikataa mistari hii (angalau herufi 10).',
+  'Enter the external rejection reference, or leave blank.': 'Weka rejeleo la kukataliwa kwa nje, au uache wazi.',
+  'External rejection reference must be at least 3 characters.': 'Rejeleo la kukataliwa kwa nje lazima liwe na angalau herufi 3.',
+  'A retry export was created for only the selected failed rows. The export has not been filed or paid.': 'Faili la jaribio jipya limetengenezwa kwa mistari iliyoshindwa uliyochagua pekee. Faili halijawasilishwa wala kulipwa.',
+});
 const planCopy = {
   am: ['ለእርስዎ ሚና የሚገኙ የAfroLife መሠረታዊ መሣሪያዎች፦ ደንበኞች፣ ሠራተኞች፣ ጥያቄዎች፣ ውሎች እና ዝርዝሮች።', 'የPro ዕቅድ ጥያቄ ብቻ ነው። ለወደፊት የሚከፈሉ አገልግሎቶች የክፍያ ሥርዓትና ማግበር ይፈልጋሉ።', 'የEnterprise ዕቅድ ጥያቄ ብቻ ነው። የቡድን ሪፖርት ክፍያና ማግበር እስኪዘጋጅ ድረስ አይሠራም።'],
   om: ['Meeshaalee AfroLife gahee keessaniif jiran: maamiltoota, hojjettoota, gaaffii, waliigaltee fi tarreeffama.', 'Karoora Pro filachuun gaaffii qofa. Tajaajilli kaffaltii gara fuulduraa kaffaltii fi hojii irra oolchuu barbaada.', 'Karoora Enterprise filachuun gaaffii qofa. Gabaasni garee hanga kaffaltii fi hojii irra oolutti hin jiru.'],

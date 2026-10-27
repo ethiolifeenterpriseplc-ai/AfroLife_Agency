@@ -3066,6 +3066,10 @@ function renderWorkforceOperations() {
       item.dataset.payrollExport = record.id;
       item.append(button('Download encrypted payload', 'workforce-payroll-download', 'button button-outline', { id: record.id }));
       item.append(button('View handoff history', 'workforce-payroll-events', 'button button-outline', { id: record.id }));
+      item.append(button('Review export rows', 'workforce-payroll-items', 'button button-outline', { id: record.id }));
+      if (record.status === 'handed_off' || record.status === 'handoff_failed') {
+        item.append(button('Create retry for failed rows', 'workforce-payroll-requeue-failed-rows', 'button button-primary', { id: record.id }));
+      }
       if (record.status !== 'handed_off') item.append(button('Record handoff status', 'workforce-payroll-handoff', 'button button-primary', { id: record.id }));
       list.append(item);
     }
@@ -7396,6 +7400,80 @@ document.addEventListener('click', async (event) => {
         `/workforce/payroll-exports/${encodeURIComponent(id)}/file`,
         `workforce-payroll-${id}.enc.json`,
       );
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-payroll-items') {
+    try {
+      const result = await api(`/workforce/payroll-exports/${encodeURIComponent(id)}/items`);
+      const item = document.querySelector(`[data-payroll-export="${CSS.escape(id)}"]`);
+      if (!item) return;
+      item.querySelector('[data-payroll-row-review]')?.remove();
+      const review = node('section', undefined, 'panel');
+      review.dataset.payrollRowReview = 'true';
+      review.append(node('h4', 'Payroll export rows'));
+      const rows = node('div', undefined, 'list');
+      for (const row of result.rows) {
+        const label = node('label', undefined, 'form-label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.failedPayrollRow = String(row.row_number);
+        checkbox.disabled = row.already_requeued || (result.status !== 'handed_off' && result.status !== 'handoff_failed');
+        label.append(checkbox, document.createTextNode(t(
+          'Row {{number}} · {{worker}} · {{start}} · {{minutes}} minutes',
+          {
+            number: row.row_number,
+            worker: row.worker_name,
+            start: new Date(row.shift_start).toLocaleString(document.documentElement.lang),
+            minutes: row.payable_minutes,
+          },
+        )));
+        if (row.already_requeued) label.append(node('span', t('Already requeued'), 'muted'));
+        rows.append(label);
+      }
+      review.append(rows);
+      item.append(review);
+    } catch (error) { showAlert(error.message, true); }
+    return;
+  }
+  if (name === 'workforce-payroll-requeue-failed-rows') {
+    const item = document.querySelector(`[data-payroll-export="${CSS.escape(id)}"]`);
+    const failedRowNumbers = [...(item?.querySelectorAll('input[data-failed-payroll-row]:checked') ?? [])]
+      .map((checkbox) => Number(checkbox.dataset.failedPayrollRow));
+    if (!failedRowNumbers.length) {
+      showAlert(t('Select at least one failed row to create a retry export.'), true);
+      return;
+    }
+    const reason = window.prompt(t('Enter why the external payroll system rejected these rows (at least 10 characters).'));
+    if (!reason || reason.trim().length < 10) return;
+    const externalReference = window.prompt(t('Enter the external rejection reference, or leave blank.'));
+    if (externalReference === null) return;
+    const normalizedExternalReference = externalReference.trim();
+    if (normalizedExternalReference && normalizedExternalReference.length < 3) {
+      showAlert(t('External rejection reference must be at least 3 characters.'), true);
+      return;
+    }
+    const requestFingerprint = JSON.stringify({
+      failedRowNumbers: [...failedRowNumbers].sort((a, b) => a - b),
+      reason: reason.trim(),
+      externalReference: normalizedExternalReference || null,
+    });
+    if (action.dataset.requestFingerprint !== requestFingerprint) {
+      action.dataset.requestFingerprint = requestFingerprint;
+      action.dataset.idempotencyKey = window.crypto.randomUUID();
+    }
+    try {
+      await api(`/workforce/payroll-exports/${encodeURIComponent(id)}/requeue-failed`, {
+        method: 'POST',
+        body: JSON.stringify({
+          failed_row_numbers: failedRowNumbers,
+          idempotency_key: action.dataset.idempotencyKey,
+          reason: reason.trim(),
+          external_reference: normalizedExternalReference || undefined,
+        }),
+      });
+      await refresh();
+      showAlert('A retry export was created for only the selected failed rows. The export has not been filed or paid.');
     } catch (error) { showAlert(error.message, true); }
     return;
   }

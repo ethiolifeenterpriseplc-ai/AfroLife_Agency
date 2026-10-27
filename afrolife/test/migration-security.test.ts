@@ -43,6 +43,7 @@ const maintenanceVendorFulfillment = readFileSync(new URL('../migrations/101_mai
 const maintenanceSlaDispatcher = readFileSync(new URL('../src/maintenance-sla.ts', import.meta.url), 'utf8');
 const notificationDeliveryRetries = readFileSync(new URL('../migrations/102_notification_delivery_retries.sql', import.meta.url), 'utf8');
 const payrollHandoffHistory = readFileSync(new URL('../migrations/103_workforce_payroll_handoff_history.sql', import.meta.url), 'utf8');
+const payrollFailedRowRequeue = readFileSync(new URL('../migrations/112_workforce_payroll_failed_row_requeue.sql', import.meta.url), 'utf8');
 const propertyRentalApplications = readFileSync(new URL('../migrations/104_property_rental_applications.sql', import.meta.url), 'utf8');
 const propertyTenantSelfService = readFileSync(new URL('../migrations/105_property_tenant_self_service.sql', import.meta.url), 'utf8');
 const propertyOwnerAuthorityReview = readFileSync(new URL('../migrations/106_property_owner_authority_review.sql', import.meta.url), 'utf8');
@@ -633,4 +634,25 @@ test('payroll handoff outcomes are retained as append-only evidence', () => {
   assert.match(payrollHandoffHistory,/app_has_permission\('workforce\.payroll\.export'\)/);
   assert.match(workforceOperations,/INSERT INTO workforce_payroll_export_events/);
   assert.match(workforceOperations,/workforce\/payroll-exports\/:id\/events/);
+});
+
+test('failed payroll rows are retried only from authenticated, immutable source rows', () => {
+  assert.match(payrollFailedRowRequeue,/row_number integer/);
+  assert.match(payrollFailedRowRequeue,/DROP CONSTRAINT workforce_payroll_export_items_time_entry_id_key/);
+  assert.match(payrollFailedRowRequeue,/PRIMARY KEY \(source_export_id,row_number\)/);
+  assert.match(payrollFailedRowRequeue,/workforce_payroll_export_requeue_rows_validate/);
+  assert.match(payrollFailedRowRequeue,/Payroll retry row is not part of the recorded failed-row selection/);
+  assert.match(payrollFailedRowRequeue,/Only an export with recorded handoff status can be requeued/);
+  assert.match(payrollFailedRowRequeue,/Previously exported time can only be reissued for explicitly failed rows/);
+  assert.match(payrollFailedRowRequeue,/DEFERRABLE INITIALLY DEFERRED/);
+  assert.match(payrollFailedRowRequeue,/exactly the explicitly failed source rows/);
+  assert.match(payrollFailedRowRequeue,/Payroll failed-row requeue evidence is append-only/);
+  assert.match(payrollFailedRowRequeue,/ENABLE ROW LEVEL SECURITY/);
+  assert.match(workforceOperations,/workforce\/payroll-exports\/:id\/requeue-failed/);
+  assert.match(workforceOperations,/FOR UPDATE/);
+  assert.match(workforceOperations,/idempotency_key/);
+  assert.match(workforceOperations,/readPayrollExportCsv\(payload\.encrypted_payload/);
+  assert.match(workforceOperations,/selectCsvRows\(csv, rowNumbers\)/);
+  assert.match(workforceOperations,/already been requeued from this export/);
+  assert.match(workforceOperations,/INSERT INTO workforce_payroll_export_requeue_rows/);
 });
